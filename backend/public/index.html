@@ -13,7 +13,7 @@
 
   <link
     rel="stylesheet"
-    href="/styles.css?v=20260812-3"
+    href="/styles.css?v=20260812-4"
   >
 </head>
 
@@ -21,17 +21,11 @@
 
   <main>
 
-    <!-- CABEÇALHO -->
     <header>
 
       <div>
-        <span class="brand">
-          LPSM
-        </span>
-
-        <small>
-          CONTROL
-        </small>
+        <span class="brand">LPSM</span>
+        <small>CONTROL</small>
       </div>
 
       <button
@@ -44,7 +38,6 @@
     </header>
 
 
-    <!-- LOGIN -->
     <section
       id="login"
       class="card login"
@@ -94,13 +87,11 @@
     </section>
 
 
-    <!-- PAINEL -->
     <section
       id="dashboard"
       class="hidden"
     >
 
-      <!-- RESUMO -->
       <div class="hero">
 
         <div>
@@ -127,7 +118,6 @@
       </div>
 
 
-      <!-- ABAS -->
       <nav>
 
         <button
@@ -137,28 +127,21 @@
           Clientes
         </button>
 
-        <button
-          data-tab="playlists"
-        >
+        <button data-tab="playlists">
           Listas M3U
         </button>
 
-        <button
-          data-tab="appearance"
-        >
+        <button data-tab="appearance">
           Aparência
         </button>
 
-        <button
-          data-tab="audit"
-        >
+        <button data-tab="audit">
           Logs
         </button>
 
       </nav>
 
 
-      <!-- CLIENTES -->
       <div
         id="clients"
         class="tab"
@@ -179,9 +162,7 @@
 
           </div>
 
-          <button
-            data-open="clientDialog"
-          >
+          <button data-open="clientDialog">
             Novo cliente
           </button>
 
@@ -195,7 +176,6 @@
       </div>
 
 
-      <!-- LISTAS -->
       <div
         id="playlists"
         class="tab hidden"
@@ -216,9 +196,7 @@
 
           </div>
 
-          <button
-            data-open="playlistDialog"
-          >
+          <button data-open="playlistDialog">
             Nova lista
           </button>
 
@@ -232,7 +210,6 @@
       </div>
 
 
-      <!-- APARÊNCIA -->
       <div
         id="appearance"
         class="tab hidden"
@@ -286,7 +263,6 @@
       </div>
 
 
-      <!-- LOGS -->
       <div
         id="audit"
         class="tab hidden"
@@ -311,10 +287,6 @@
 
   </main>
 
-
-  <!-- ==========================================
-       JANELA DE CLIENTE
-       ========================================== -->
 
   <dialog id="clientDialog">
 
@@ -399,8 +371,8 @@
         </legend>
 
         <p class="meta">
-          Você pode marcar ou desmarcar
-          quais listas este cliente poderá usar.
+          Marque ou desmarque somente as listas
+          que deseja liberar para este cliente.
         </p>
 
         <div id="playlistChecks"></div>
@@ -428,10 +400,6 @@
   </dialog>
 
 
-  <!-- ==========================================
-       JANELA DE LISTA M3U
-       ========================================== -->
-
   <dialog id="playlistDialog">
 
     <form
@@ -444,9 +412,9 @@
       </h2>
 
       <p class="meta">
-        Ao editar uma lista, a configuração
-        antiga continua funcionando até você
-        clicar em Salvar alterações.
+        Ao editar, a configuração antiga continua
+        funcionando até você clicar em
+        Salvar alterações.
       </p>
 
 
@@ -530,9 +498,8 @@
   </dialog>
 
 
-  <!-- VERSÃO ALTERADA PARA EVITAR CACHE ANTIGO -->
   <script
-    src="/app.js?v=20260812-3"
+    src="/app.js?v=20260812-4"
     type="module"
   ></script>
 
