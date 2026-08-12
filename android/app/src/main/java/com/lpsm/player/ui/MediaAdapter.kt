@@ -14,23 +14,27 @@ import com.lpsm.player.model.MediaEntry
 
 class MediaAdapter(
     private val store: SecureStore,
-    private val open: (MediaEntry) -> Unit
+    private val open: (MediaEntry) -> Unit,
+    private val focused: (MediaEntry?) -> Unit = {}
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
-        private const val TYPE_LIVE = 1
+        private const val TYPE_ROW = 1
         private const val TYPE_POSTER = 2
     }
 
     private var data = listOf<MediaEntry>()
     private var epg = emptyMap<String, String>()
+    private var posterMode = true
 
     fun submit(
         items: List<MediaEntry>,
-        guide: Map<String, String>
+        guide: Map<String, String>,
+        usePosters: Boolean = true
     ) {
         data = items
         epg = guide
+        posterMode = usePosters
         notifyDataSetChanged()
     }
 
@@ -39,8 +43,13 @@ class MediaAdapter(
     }
 
     override fun getItemViewType(position: Int): Int {
-        return if (data[position].type == ContentType.LIVE) {
-            TYPE_LIVE
+        val item = data[position]
+
+        return if (
+            item.type == ContentType.LIVE ||
+            !posterMode
+        ) {
+            TYPE_ROW
         } else {
             TYPE_POSTER
         }
@@ -51,27 +60,28 @@ class MediaAdapter(
         viewType: Int
     ): RecyclerView.ViewHolder {
 
-        val inflater = LayoutInflater.from(parent.context)
+        val inflater =
+            LayoutInflater.from(parent.context)
 
-        return if (viewType == TYPE_LIVE) {
+        return if (viewType == TYPE_ROW) {
 
-            val view = inflater.inflate(
-                R.layout.item_media,
-                parent,
-                false
+            RowHolder(
+                inflater.inflate(
+                    R.layout.item_media,
+                    parent,
+                    false
+                )
             )
-
-            LiveHolder(view)
 
         } else {
 
-            val view = inflater.inflate(
-                R.layout.item_media_poster,
-                parent,
-                false
+            PosterHolder(
+                inflater.inflate(
+                    R.layout.item_media_poster,
+                    parent,
+                    false
+                )
             )
-
-            PosterHolder(view)
         }
     }
 
@@ -79,92 +89,83 @@ class MediaAdapter(
         holder: RecyclerView.ViewHolder,
         position: Int
     ) {
-
         val item = data[position]
 
         when (holder) {
+            is RowHolder ->
+                bindRow(holder, item)
 
-            is LiveHolder -> {
-                bindLive(
-                    holder,
-                    item
-                )
-            }
-
-            is PosterHolder -> {
-                bindPoster(
-                    holder,
-                    item
-                )
-            }
+            is PosterHolder ->
+                bindPoster(holder, item)
         }
     }
 
-    private fun bindLive(
-        holder: LiveHolder,
+    private fun bindRow(
+        holder: RowHolder,
         item: MediaEntry
     ) {
 
-        holder.title.text = item.name
+        holder.title.text =
+            item.name
 
         holder.subtitle.text =
-            epg[item.tvgId]?.let { program ->
+            when (item.type) {
 
-                "${item.group} · Agora: $program"
+                ContentType.LIVE -> {
+                    epg[item.tvgId]
+                        ?.let {
+                            "${item.group} · Agora: $it"
+                        }
+                        ?: item.group
+                }
 
-            } ?: item.group
+                ContentType.SERIES -> {
+                    buildEpisodeSubtitle(item)
+                }
+
+                ContentType.VOD -> {
+                    item.group
+                }
+            }
 
         holder.star.text =
-            if (store.isFavorite(item.url)) {
+            if (
+                store.isFavorite(
+                    item.url
+                )
+            ) {
                 "★ Favorito"
             } else {
                 "☆ Favoritar"
             }
 
-        holder.itemView.isFocusable = true
-        holder.itemView.isClickable = true
+        configureItem(
+            holder.itemView,
+            item,
+            1.035f
+        )
 
-        holder.itemView.setOnClickListener {
+        holder.itemView
+            .setOnLongClickListener {
 
-            open(item)
-        }
-
-        holder.itemView.setOnLongClickListener {
-
-            store.toggleFavorite(
-                item.url
-            )
-
-            val currentPosition =
-                holder.bindingAdapterPosition
-
-            if (
-                currentPosition !=
-                RecyclerView.NO_POSITION
-            ) {
-                notifyItemChanged(
-                    currentPosition
+                store.toggleFavorite(
+                    item.url
                 )
+
+                val position =
+                    holder.bindingAdapterPosition
+
+                if (
+                    position !=
+                    RecyclerView.NO_POSITION
+                ) {
+                    notifyItemChanged(
+                        position
+                    )
+                }
+
+                true
             }
-
-            true
-        }
-
-        holder.itemView.setOnFocusChangeListener {
-                view,
-                hasFocus ->
-
-            if (hasFocus) {
-
-                view.scaleX = 1.03f
-                view.scaleY = 1.03f
-
-            } else {
-
-                view.scaleX = 1.0f
-                view.scaleY = 1.0f
-            }
-        }
     }
 
     private fun bindPoster(
@@ -176,80 +177,148 @@ class MediaAdapter(
             item.name
 
         holder.star.text =
-            if (store.isFavorite(item.url)) {
+            if (
+                store.isFavorite(
+                    item.url
+                )
+            ) {
                 "★"
             } else {
                 "☆"
             }
 
-        /*
-         * CAPA DO FILME OU SÉRIE
-         */
-        if (item.logo.isNotBlank()) {
-
+        if (
+            item.logo.isNotBlank()
+        ) {
             holder.poster.load(
                 item.logo
             )
-
         } else {
-
-            holder.poster.setImageResource(
-                android.R.drawable.ic_menu_gallery
-            )
+            holder.poster
+                .setImageResource(
+                    android.R.drawable
+                        .ic_menu_gallery
+                )
         }
 
-        holder.poster.contentDescription =
+        holder.poster
+            .contentDescription =
             "Capa de ${item.name}"
 
-        holder.itemView.isFocusable = true
-        holder.itemView.isClickable = true
+        configureItem(
+            holder.itemView,
+            item,
+            1.075f
+        )
 
-        holder.itemView.setOnClickListener {
+        holder.itemView
+            .setOnLongClickListener {
 
+                store.toggleFavorite(
+                    item.url
+                )
+
+                val position =
+                    holder.bindingAdapterPosition
+
+                if (
+                    position !=
+                    RecyclerView.NO_POSITION
+                ) {
+                    notifyItemChanged(
+                        position
+                    )
+                }
+
+                true
+            }
+    }
+
+    private fun configureItem(
+        view: View,
+        item: MediaEntry,
+        focusScale: Float
+    ) {
+
+        view.isFocusable = true
+        view.isFocusableInTouchMode = false
+        view.isClickable = true
+
+        /*
+         * OK / ENTER do controle remoto
+         * executa o mesmo clique.
+         */
+        view.setOnClickListener {
             open(item)
         }
 
-        holder.itemView.setOnLongClickListener {
-
-            store.toggleFavorite(
-                item.url
-            )
-
-            val currentPosition =
-                holder.bindingAdapterPosition
-
-            if (
-                currentPosition !=
-                RecyclerView.NO_POSITION
-            ) {
-                notifyItemChanged(
-                    currentPosition
-                )
-            }
-
-            true
-        }
-
-        holder.itemView.setOnFocusChangeListener {
-                view,
+        /*
+         * Quando o cliente navega pelas
+         * setas do controle, MainActivity
+         * recebe o item que ganhou foco.
+         */
+        view.setOnFocusChangeListener {
+                itemView,
                 hasFocus ->
 
             if (hasFocus) {
 
-                view.scaleX = 1.06f
-                view.scaleY = 1.06f
-                view.translationZ = 10f
+                itemView.scaleX =
+                    focusScale
+
+                itemView.scaleY =
+                    focusScale
+
+                itemView.translationZ =
+                    12f
+
+                focused(item)
 
             } else {
 
-                view.scaleX = 1.0f
-                view.scaleY = 1.0f
-                view.translationZ = 0f
+                itemView.scaleX =
+                    1.0f
+
+                itemView.scaleY =
+                    1.0f
+
+                itemView.translationZ =
+                    0f
+
+                focused(null)
             }
         }
     }
 
-    class LiveHolder(
+    private fun buildEpisodeSubtitle(
+        item: MediaEntry
+    ): String {
+
+        val parts =
+            mutableListOf<String>()
+
+        item.season?.let {
+            parts +=
+                "Temporada $it"
+        }
+
+        item.episode?.let {
+            parts +=
+                "Episódio $it"
+        }
+
+        if (
+            parts.isEmpty()
+        ) {
+            parts += item.group
+        }
+
+        return parts.joinToString(
+            " • "
+        )
+    }
+
+    class RowHolder(
         view: View
     ) : RecyclerView.ViewHolder(view) {
 
