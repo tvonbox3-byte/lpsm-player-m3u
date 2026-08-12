@@ -53,8 +53,8 @@ const esc = value =>
       })[char]
   );
 
-const formatMac = value => {
-  const raw = String(value || '')
+const normalizeMac = value =>
+  String(value || '')
     .replace(
       /[^0-9a-f]/gi,
       ''
@@ -65,12 +65,14 @@ const formatMac = value => {
       12
     );
 
-  return (
-    raw.match(
-      /.{1,2}/g
-    ) || []
+const formatMac = value =>
+  (
+    normalizeMac(value)
+      .match(
+        /.{1,2}/g
+      ) ||
+    []
   ).join(':');
-};
 
 const fmtDate = value =>
   value
@@ -107,25 +109,8 @@ const isoEndOfDay = value =>
       ).toISOString()
     : null;
 
-function normalizeServer(
-  value
-) {
-  return String(
-    value || ''
-  )
-    .trim()
-    .replace(
-      /\/+$/,
-      ''
-    );
-}
-
-function normalizeText(
-  value
-) {
-  return String(
-    value || ''
-  )
+const normalizeText = value =>
+  String(value || '')
     .trim()
     .toLocaleLowerCase(
       'pt-BR'
@@ -137,7 +122,14 @@ function normalizeText(
       /[\u0300-\u036f]/g,
       ''
     );
-}
+
+const normalizeServer = value =>
+  String(value || '')
+    .trim()
+    .replace(
+      /\/+$/,
+      ''
+    );
 
 function buildXtreamM3uUrl(
   server,
@@ -197,7 +189,6 @@ function parseXtreamUrl(
   value
 ) {
   try {
-
     const url =
       new URL(
         value
@@ -245,7 +236,6 @@ function parseXtreamUrl(
     };
 
   } catch {
-
     return null;
   }
 }
@@ -261,11 +251,9 @@ function sourceTypeOf(
 }
 
 
-/*
- * =========================================
- * COMPATIBILIDADE COM CLIENTES ANTIGOS
- * =========================================
- */
+/* ==============================
+   COMPATIBILIDADE CLIENTES ANTIGOS
+   ============================== */
 
 function collectClientSourceIds(
   client
@@ -298,67 +286,61 @@ function collectClientSourceIds(
         return;
       }
 
-      const id =
+      const text =
         String(
           value
         ).trim();
 
       if (
-        id &&
+        text &&
         !ids.includes(
-          id
+          text
         )
       ) {
         ids.push(
-          id
+          text
         );
       }
     };
-
 
   [
     'playlistIds',
     'sourceIds',
     'listIds'
-  ]
-    .forEach(
-      key => {
+  ].forEach(
+    key => {
 
-        const value =
-          client?.[key];
+      const value =
+        client?.[key];
 
-        if (
-          Array.isArray(
-            value
-          )
-        ) {
-          value.forEach(
-            add
-          );
-        }
+      if (
+        Array.isArray(
+          value
+        )
+      ) {
+        value.forEach(
+          add
+        );
       }
-    );
-
+    }
+  );
 
   [
     'playlistId',
     'sourceId',
     'listId'
-  ]
-    .forEach(
-      key =>
-        add(
-          client?.[key]
-        )
-    );
-
+  ].forEach(
+    key =>
+      add(
+        client?.[key]
+      )
+  );
 
   if (
     Array.isArray(
       client?.playlists
     )
   ) {
-
     client.playlists
       .forEach(
         add
@@ -368,15 +350,37 @@ function collectClientSourceIds(
   return ids;
 }
 
-
 function embeddedLegacySource(
   client
 ) {
+  if (!client) {
+    return null;
+  }
+
+  if (
+    Array.isArray(
+      client.playlists
+    )
+  ) {
+
+    const embedded =
+      client.playlists.find(
+        item =>
+          item &&
+          typeof item ===
+            'object' &&
+          item.url
+      );
+
+    if (embedded) {
+      return embedded;
+    }
+  }
 
   const url =
-    client?.playlistUrl ||
-    client?.m3uUrl ||
-    client?.sourceUrl ||
+    client.playlistUrl ||
+    client.m3uUrl ||
+    client.sourceUrl ||
     '';
 
   if (
@@ -388,30 +392,29 @@ function embeddedLegacySource(
   }
 
   return {
-
     id:
-      client?.playlistId ||
-      client?.sourceId ||
+      client.playlistId ||
+      client.sourceId ||
       '',
 
     name:
       `Fonte de ${
-        client?.name ||
+        client.name ||
         'cliente'
       }`,
 
     url,
 
     xmltvUrl:
-      client?.xmltvUrl ||
-      client?.epgUrl ||
+      client.xmltvUrl ||
+      client.epgUrl ||
       '',
 
     enabled:
       true,
 
     expiresAt:
-      client?.expiresAt ||
+      client.expiresAt ||
       null,
 
     __embeddedLegacy:
@@ -419,25 +422,17 @@ function embeddedLegacySource(
   };
 }
 
-
 function primarySource(
   client
 ) {
-
   if (!client) {
     return null;
   }
 
-
-  /*
-   * Primeiro procura pelos IDs
-   * oficiais vinculados ao cliente.
-   */
   const ids =
     collectClientSourceIds(
       client
     );
-
 
   for (
     const sourceId of ids
@@ -459,70 +454,56 @@ function primarySource(
     }
   }
 
-
-  /*
-   * Compatibilidade com versão
-   * que guardava playlists
-   * dentro do próprio cliente.
-   */
-  if (
-    Array.isArray(
-      client.playlists
-    )
-  ) {
-
-    const embedded =
-      client.playlists.find(
-        item =>
-          item &&
-          typeof item ===
-            'object' &&
-          item.url
-      );
-
-    if (embedded) {
-
-      const matching =
-        embedded.id
-          ? state.playlists.find(
-              item =>
-                String(
-                  item.id
-                ) ===
-                String(
-                  embedded.id
-                )
-            )
-          : null;
-
-      return (
-        matching ||
-        embedded
-      );
-    }
-  }
-
-
-  /*
-   * Compatibilidade com possíveis
-   * campos antigos.
-   */
-  const legacy =
+  const embedded =
     embeddedLegacySource(
       client
     );
 
-  if (legacy) {
-    return legacy;
+  if (embedded) {
+
+    const byId =
+      embedded.id
+        ? state.playlists.find(
+            item =>
+              String(
+                item.id
+              ) ===
+              String(
+                embedded.id
+              )
+          )
+        : null;
+
+    if (byId) {
+      return byId;
+    }
+
+    const byUrl =
+      state.playlists.find(
+        item =>
+          String(
+            item.url ||
+            ''
+          ).trim() ===
+          String(
+            embedded.url ||
+            ''
+          ).trim()
+      );
+
+    return (
+      byUrl ||
+      embedded
+    );
   }
 
+  const clientMac =
+    normalizeMac(
+      client.macAddress ||
+      client.deviceId
+    );
 
-  /*
-   * Procura pelo ID do cliente
-   * ou MAC caso alguma versão
-   * antiga tenha salvo isso na lista.
-   */
-  const byOwnerField =
+  const byOwner =
     state.playlists.filter(
       source =>
         String(
@@ -534,26 +515,23 @@ function primarySource(
           ''
         ) ||
 
-        normalizeText(
-          source.macAddress
-        ) ===
-        normalizeText(
-          client.macAddress ||
-          client.deviceId
+        (
+          clientMac &&
+          normalizeMac(
+            source.macAddress ||
+            source.deviceId
+          ) ===
+          clientMac
         )
     );
 
   if (
-    byOwnerField.length ===
+    byOwner.length ===
     1
   ) {
-    return byOwnerField[0];
+    return byOwner[0];
   }
 
-
-  /*
-   * Procura pelo nome antigo.
-   */
   const clientName =
     normalizeText(
       client.name
@@ -585,32 +563,23 @@ function primarySource(
     return byName[0];
   }
 
-
-  /*
-   * Instalação antiga com
-   * somente 1 cliente e 1 lista.
-   */
   if (
     state.clients.length ===
       1 &&
     state.playlists.length ===
       1
   ) {
-
     return (
       state.playlists[0]
     );
   }
 
-
   return null;
 }
-
 
 function clientsUsingSource(
   sourceId
 ) {
-
   return state.clients.filter(
     client => {
 
@@ -632,22 +601,18 @@ function clientsUsingSource(
   );
 }
 
-
 function sourceDisplayName(
   source
 ) {
-
   const clients =
     clientsUsingSource(
       source.id
     );
 
-
   if (
     clients.length ===
     1
   ) {
-
     return (
       `Fonte de ${
         clients[0].name
@@ -655,18 +620,15 @@ function sourceDisplayName(
     );
   }
 
-
   if (
     clients.length >
     1
   ) {
-
     return (
       `Fonte compartilhada por ` +
       `${clients.length} clientes`
     );
   }
-
 
   return (
     sourceTypeOf(
@@ -678,26 +640,21 @@ function sourceDisplayName(
   );
 }
 
-
 function sourceSummary(
   source
 ) {
-
   const xtream =
     parseXtreamUrl(
       source?.url
     );
 
-
   if (xtream) {
-
     return (
       `Xtream Codes • ` +
       `${xtream.server} • ` +
       `usuário ${xtream.username}`
     );
   }
-
 
   return (
     `M3U URL • ` +
@@ -709,11 +666,9 @@ function sourceSummary(
 }
 
 
-/*
- * =========================================
- * ESTILO COMPLEMENTAR
- * =========================================
- */
+/* ==============================
+   ESTILO COMPLEMENTAR
+   ============================== */
 
 function ensureExtraStyles() {
 
@@ -722,7 +677,6 @@ function ensureExtraStyles() {
   ) {
     return;
   }
-
 
   document.head
     .insertAdjacentHTML(
@@ -831,6 +785,17 @@ function ensureExtraStyles() {
             #332701;
         }
 
+        .mac-help {
+          margin-top:
+            6px;
+
+          font-size:
+            12px;
+
+          opacity:
+            .8;
+        }
+
         .hidden {
           display:
             none !important;
@@ -841,7 +806,6 @@ function ensureExtraStyles() {
     );
 }
 
-
 function ensurePendingArea() {
 
   if (
@@ -850,12 +814,7 @@ function ensurePendingArea() {
     return;
   }
 
-
-  const clientList =
-    $('#clientList');
-
-
-  clientList
+  $('#clientList')
     .insertAdjacentHTML(
       'beforebegin',
       `
@@ -873,8 +832,10 @@ function ensurePendingArea() {
             </h2>
 
             <p class="meta">
-              Abra o APK no aparelho.
-              O MAC aparecerá aqui automaticamente.
+              Quando o APK abrir em um aparelho novo,
+              o MAC aparece aqui como atalho.
+              Você também pode cadastrar um MAC
+              manualmente em Novo cliente.
             </p>
 
           </div>
@@ -891,12 +852,10 @@ function ensurePendingArea() {
     );
 }
 
-
 function ensureClientSourceWarning() {
 
   const fieldset =
     $('#clientForm fieldset');
-
 
   if (
     !fieldset ||
@@ -904,7 +863,6 @@ function ensureClientSourceWarning() {
   ) {
     return;
   }
-
 
   fieldset
     .insertAdjacentHTML(
@@ -918,12 +876,37 @@ function ensureClientSourceWarning() {
     );
 }
 
+function ensureMacHelp() {
 
-/*
- * =========================================
- * CARREGAR PAINEL
- * =========================================
- */
+  const label =
+    $('#fixedMacLabel');
+
+  if (
+    !label ||
+    $('#macHelp')
+  ) {
+    return;
+  }
+
+  label
+    .insertAdjacentHTML(
+      'beforeend',
+      `
+      <div
+        id="macHelp"
+        class="mac-help"
+      >
+        Você pode digitar ou alterar
+        o MAC manualmente.
+      </div>
+      `
+    );
+}
+
+
+/* ==============================
+   CARREGAR
+   ============================== */
 
 async function load() {
 
@@ -932,48 +915,40 @@ async function load() {
       '/api/admin/state'
     );
 
-
   state.pendingDevices =
     state.pendingDevices ||
     [];
-
 
   state.clients =
     state.clients ||
     [];
 
-
   state.playlists =
     state.playlists ||
     [];
-
 
   state.appearance =
     state.appearance ||
     {};
 
-
   state.audit =
     state.audit ||
     [];
-
 
   render();
 }
 
 
-/*
- * =========================================
- * RENDER
- * =========================================
- */
+/* ==============================
+   RENDER
+   ============================== */
 
 function render() {
 
   ensureExtraStyles();
   ensurePendingArea();
   ensureClientSourceWarning();
-
+  ensureMacHelp();
 
   const activeClients =
     state.clients.filter(
@@ -982,7 +957,6 @@ function render() {
         false
     ).length;
 
-
   const activeSources =
     state.playlists.filter(
       source =>
@@ -990,17 +964,12 @@ function render() {
         false
     ).length;
 
-
   $('#summary')
     .textContent =
       `${activeClients} clientes ativos · ` +
       `${activeSources} fontes ativas · ` +
       `${state.pendingDevices.length} MAC(s) aguardando`;
 
-
-  /*
-   * MACS PENDENTES
-   */
   $('#pendingList')
     .innerHTML =
       state.pendingDevices
@@ -1022,7 +991,6 @@ function render() {
 
               </div>
 
-
               <div class="meta">
 
                 MAC:
@@ -1034,7 +1002,6 @@ function render() {
                     )
                   )}
                 </div>
-
 
                 Detectado:
                 ${esc(
@@ -1053,7 +1020,6 @@ function render() {
                 )}
 
               </div>
-
 
               <div class="actions">
 
@@ -1078,14 +1044,9 @@ function render() {
       `
         <p>
           Nenhum MAC aguardando.
-          Abra o APK em um aparelho novo.
         </p>
       `;
 
-
-  /*
-   * CLIENTES
-   */
   $('#clientList')
     .innerHTML =
       state.clients
@@ -1096,7 +1057,6 @@ function render() {
               primarySource(
                 client
               );
-
 
             return `
               <article
@@ -1110,7 +1070,6 @@ function render() {
                       client.name
                     )}
                   </h3>
-
 
                   <span
                     class="pill ${
@@ -1129,7 +1088,6 @@ function render() {
                   </span>
 
                 </div>
-
 
                 <div class="meta">
 
@@ -1180,7 +1138,6 @@ function render() {
 
                 </div>
 
-
                 <div class="actions">
 
                   <button
@@ -1189,7 +1146,6 @@ function render() {
                   >
                     Editar
                   </button>
-
 
                   <button
                     class="ghost toggle"
@@ -1207,7 +1163,6 @@ function render() {
                         : 'Desativar'
                     }
                   </button>
-
 
                   <button
                     class="danger delete"
@@ -1231,10 +1186,6 @@ function render() {
         </p>
       `;
 
-
-  /*
-   * FONTES
-   */
   $('#playlistList')
     .innerHTML =
       state.playlists
@@ -1245,7 +1196,6 @@ function render() {
               clientsUsingSource(
                 source.id
               );
-
 
             return `
               <article
@@ -1261,7 +1211,6 @@ function render() {
                       )
                     )}
                   </h3>
-
 
                   <span
                     class="pill ${
@@ -1281,7 +1230,6 @@ function render() {
 
                 </div>
 
-
                 <div class="meta">
 
                   <span
@@ -1293,7 +1241,6 @@ function render() {
                       )
                     )}
                   </span>
-
 
                   ${esc(
                     sourceSummary(
@@ -1316,7 +1263,6 @@ function render() {
 
                 </div>
 
-
                 <div class="actions">
 
                   <button
@@ -1325,7 +1271,6 @@ function render() {
                   >
                     Editar conexão
                   </button>
-
 
                   <button
                     class="ghost toggle"
@@ -1343,7 +1288,6 @@ function render() {
                         : 'Desativar'
                     }
                   </button>
-
 
                   <button
                     class="danger delete"
@@ -1364,14 +1308,9 @@ function render() {
       `
         <p>
           Nenhuma fonte cadastrada.
-          Cadastre um cliente para criar a primeira.
         </p>
       `;
 
-
-  /*
-   * APARÊNCIA
-   */
   for (
     const [
       key,
@@ -1386,19 +1325,13 @@ function render() {
         `#appearanceForm [name=${key}]`
       );
 
-
     if (element) {
-
       element.value =
         value ||
         '';
     }
   }
 
-
-  /*
-   * LOGS
-   */
   $('#auditList')
     .innerHTML =
       state.audit
@@ -1439,11 +1372,9 @@ function render() {
 }
 
 
-/*
- * =========================================
- * MACS PENDENTES
- * =========================================
- */
+/* ==============================
+   MAC PENDENTE / MANUAL
+   ============================== */
 
 function fillPendingMacOptions(
   selectedMac = ''
@@ -1454,58 +1385,53 @@ function fillPendingMacOptions(
       '#clientForm [name=pendingMac]'
     );
 
+  if (!select) {
+    return;
+  }
+
+  const selected =
+    formatMac(
+      selectedMac
+    );
 
   select.innerHTML =
+    `
+      <option value="">
+        Digitar MAC manualmente
+      </option>
+    ` +
+
     state.pendingDevices
       .map(
-        device => `
-          <option
-            value="${esc(
-              formatMac(
-                device.macAddress
-              )
-            )}"
-            ${
-              formatMac(
-                device.macAddress
-              ) ===
-              formatMac(
-                selectedMac
-              )
-                ? 'selected'
-                : ''
-            }
-          >
-            ${esc(
-              formatMac(
-                device.macAddress
-              )
-            )}
-          </option>
-        `
+        device => {
+
+          const mac =
+            formatMac(
+              device.macAddress
+            );
+
+          return `
+            <option
+              value="${esc(mac)}"
+              ${
+                mac ===
+                selected
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${esc(mac)}
+            </option>
+          `;
+        }
       )
       .join('');
-
-
-  if (
-    !state.pendingDevices.length
-  ) {
-
-    select.innerHTML =
-      `
-        <option value="">
-          Nenhum MAC aguardando
-        </option>
-      `;
-  }
 }
 
 
-/*
- * =========================================
- * CAMPOS M3U / XTREAM
- * =========================================
- */
+/* ==============================
+   CAMPOS M3U / XTREAM
+   ============================== */
 
 function toggleSourceFields(
   prefix,
@@ -1517,12 +1443,10 @@ function toggleSourceFields(
       `#${prefix}M3uFields`
     );
 
-
   const xtream =
     $(
       `#${prefix}XtreamFields`
     );
-
 
   if (m3u) {
 
@@ -1533,7 +1457,6 @@ function toggleSourceFields(
         'M3U'
       );
   }
-
 
   if (xtream) {
 
@@ -1546,66 +1469,33 @@ function toggleSourceFields(
   }
 }
 
-
 function clearSourceFields(
   form
 ) {
 
-  if (
-    form.elements.m3uUrl
-  ) {
+  [
+    'm3uUrl',
+    'xmltvUrl',
+    'xtreamServer',
+    'xtreamUsername',
+    'xtreamPassword'
+  ].forEach(
+    name => {
 
-    form.elements
-      .m3uUrl
-      .value =
-      '';
-  }
+      if (
+        form.elements[
+          name
+        ]
+      ) {
 
-
-  if (
-    form.elements.xmltvUrl
-  ) {
-
-    form.elements
-      .xmltvUrl
-      .value =
-      '';
-  }
-
-
-  if (
-    form.elements.xtreamServer
-  ) {
-
-    form.elements
-      .xtreamServer
-      .value =
-      '';
-  }
-
-
-  if (
-    form.elements.xtreamUsername
-  ) {
-
-    form.elements
-      .xtreamUsername
-      .value =
-      '';
-  }
-
-
-  if (
-    form.elements.xtreamPassword
-  ) {
-
-    form.elements
-      .xtreamPassword
-      .value =
-      '';
-  }
+        form.elements[
+          name
+        ].value =
+          '';
+      }
+    }
+  );
 }
-
 
 function fillSourceFields(
   form,
@@ -1617,12 +1507,10 @@ function fillSourceFields(
     form
   );
 
-
   const type =
     sourceTypeOf(
       source
     );
-
 
   if (
     form.elements
@@ -1635,27 +1523,20 @@ function fillSourceFields(
       type;
   }
 
-
   toggleSourceFields(
     prefix,
     type
   );
 
-
   if (!source) {
     return;
   }
-
 
   const xtream =
     parseXtreamUrl(
       source.url
     );
 
-
-  /*
-   * XTREAM
-   */
   if (xtream) {
 
     form.elements
@@ -1663,35 +1544,24 @@ function fillSourceFields(
       .value =
       xtream.server;
 
-
     form.elements
       .xtreamUsername
       .value =
       xtream.username;
-
 
     form.elements
       .xtreamPassword
       .value =
       xtream.password;
 
-
     return;
   }
 
-
-  /*
-   * M3U ANTIGA OU NOVA
-   *
-   * A URL EXISTENTE É COLOCADA
-   * DIRETAMENTE NO CAMPO.
-   */
   form.elements
     .m3uUrl
     .value =
     source.url ||
     '';
-
 
   form.elements
     .xmltvUrl
@@ -1699,7 +1569,6 @@ function fillSourceFields(
     source.xmltvUrl ||
     '';
 }
-
 
 function sourcePayloadFromForm(
   form
@@ -1709,7 +1578,6 @@ function sourcePayloadFromForm(
     form.elements
       .sourceType
       .value;
-
 
   if (
     type ===
@@ -1722,23 +1590,32 @@ function sourcePayloadFromForm(
         .value
         .trim();
 
-
     const username =
       form.elements
         .xtreamUsername
         .value
         .trim();
 
-
     const password =
       form.elements
         .xtreamPassword
         .value;
 
-
     return {
 
-      type,
+      sourceType:
+        'XTREAM',
+
+      xtreamServer:
+        normalizeServer(
+          server
+        ),
+
+      xtreamUsername:
+        username,
+
+      xtreamPassword:
+        password,
 
       url:
         buildXtreamM3uUrl(
@@ -1756,13 +1633,11 @@ function sourcePayloadFromForm(
     };
   }
 
-
   const url =
     form.elements
       .m3uUrl
       .value
       .trim();
-
 
   if (
     !/^https?:\/\//i.test(
@@ -1775,11 +1650,19 @@ function sourcePayloadFromForm(
     );
   }
 
-
   return {
 
-    type:
+    sourceType:
       'M3U',
+
+    xtreamServer:
+      '',
+
+    xtreamUsername:
+      '',
+
+    xtreamPassword:
+      '',
 
     url,
 
@@ -1791,31 +1674,19 @@ function sourcePayloadFromForm(
   };
 }
 
-
-/*
- * =========================================
- * AVISO DE FONTE
- * =========================================
- */
-
 function showSourceWarning(
   message = ''
 ) {
 
   const box =
-    $(
-      '#clientSourceWarning'
-    );
-
+    $('#clientSourceWarning');
 
   if (!box) {
     return;
   }
 
-
   box.textContent =
     message;
-
 
   box.classList
     .toggle(
@@ -1825,11 +1696,9 @@ function showSourceWarning(
 }
 
 
-/*
- * =========================================
- * ABRIR CLIENTE
- * =========================================
- */
+/* ==============================
+   ABRIR CLIENTE
+   ============================== */
 
 function openClientDialog(
   client = null,
@@ -1839,19 +1708,15 @@ function openClientDialog(
   const form =
     $('#clientForm');
 
-
   form.reset();
-
 
   showSourceWarning(
     ''
   );
 
-
   form.dataset.editId =
     client?.id ||
     '';
-
 
   form
     .querySelector(
@@ -1862,7 +1727,6 @@ function openClientDialog(
       ? 'Editar cliente'
       : 'Novo cliente';
 
-
   form
     .querySelector(
       'button[value=default]'
@@ -1872,23 +1736,19 @@ function openClientDialog(
       ? 'Salvar alterações'
       : 'Criar cliente';
 
-
   const expiry =
     new Date();
-
 
   expiry.setFullYear(
     expiry.getFullYear() +
     1
   );
 
-
   form.elements
     .name
     .value =
     client?.name ||
     '';
-
 
   form.elements
     .enabled
@@ -1897,7 +1757,6 @@ function openClientDialog(
       client?.enabled !==
       false
     );
-
 
   form.elements
     .expiresAt
@@ -1913,9 +1772,8 @@ function openClientDialog(
             10
           );
 
-
   /*
-   * PROCURA A LISTA JÁ EXISTENTE.
+   * BUSCA A LISTA QUE JÁ EXISTE.
    */
   const source =
     client
@@ -1923,7 +1781,6 @@ function openClientDialog(
           client
         )
       : null;
-
 
   if (
     form.elements
@@ -1937,78 +1794,79 @@ function openClientDialog(
       '';
   }
 
+  const pendingLabel =
+    $('#pendingMacLabel');
+
+  const macLabel =
+    $('#fixedMacLabel');
+
+  const macInput =
+    form.elements
+      .macAddress;
 
   /*
-   * EDITAR CLIENTE
+   * MAC AGORA É EDITÁVEL.
    */
+  if (macLabel) {
+
+    macLabel.classList
+      .remove(
+        'hidden'
+      );
+  }
+
+  macInput.readOnly =
+    false;
+
   if (client) {
 
-    $('#pendingMacLabel')
-      .classList.add(
-        'hidden'
-      );
+    if (pendingLabel) {
 
+      pendingLabel.classList
+        .add(
+          'hidden'
+        );
+    }
 
-    $('#fixedMacLabel')
-      .classList.remove(
-        'hidden'
-      );
-
-
-    form.elements
-      .macAddress
-      .value =
+    macInput.value =
       formatMac(
         client.macAddress ||
         client.deviceId
       );
 
-
-    /*
-     * Só mostra aviso se realmente
-     * não encontrar nenhuma lista.
-     */
     if (
       !source &&
       state.playlists.length
     ) {
 
       showSourceWarning(
-        'Este cliente antigo não possui uma fonte vinculada por ID. A URL ficará em branco para evitar alterar a lista errada.'
+        'Não encontrei automaticamente a fonte deste cliente antigo. A conexão ficou vazia para não alterar outra lista por engano.'
       );
     }
 
   } else {
 
-    /*
-     * CLIENTE NOVO
-     */
-    $('#pendingMacLabel')
-      .classList.remove(
-        'hidden'
-      );
+    if (pendingLabel) {
 
-
-    $('#fixedMacLabel')
-      .classList.add(
-        'hidden'
-      );
-
+      pendingLabel.classList
+        .remove(
+          'hidden'
+        );
+    }
 
     fillPendingMacOptions(
       pendingMac
     );
 
-
-    form.elements
-      .macAddress
-      .value =
-      '';
+    macInput.value =
+      formatMac(
+        pendingMac
+      );
   }
 
-
   /*
-   * AQUI PREENCHE A URL ANTIGA.
+   * PREENCHE M3U OU XTREAM
+   * COM OS DADOS EXISTENTES.
    */
   fillSourceFields(
     form,
@@ -2016,17 +1874,14 @@ function openClientDialog(
     'client'
   );
 
-
   $('#clientDialog')
     .showModal();
 }
 
 
-/*
- * =========================================
- * EDITAR FONTE
- * =========================================
- */
+/* ==============================
+   ABRIR FONTE
+   ============================== */
 
 function openSourceDialog(
   source
@@ -2035,15 +1890,12 @@ function openSourceDialog(
   const form =
     $('#sourceForm');
 
-
   form.reset();
-
 
   form.elements
     .sourceId
     .value =
     source.id;
-
 
   form.elements
     .enabled
@@ -2053,7 +1905,6 @@ function openSourceDialog(
       false
     );
 
-
   form.elements
     .expiresAt
     .value =
@@ -2061,127 +1912,118 @@ function openSourceDialog(
       source.expiresAt
     );
 
-
   fillSourceFields(
     form,
     source,
     'source'
   );
 
-
   $('#sourceDialog')
     .showModal();
 }
 
 
-/*
- * =========================================
- * ATUALIZAR OU CRIAR FONTE
- * =========================================
- */
+/* ==============================
+   SALVAR FONTE EXISTENTE
+   ============================== */
 
-async function ensureClientSource(
-  client,
-  sourcePayload
+async function saveExistingSource(
+  source,
+  payload
 ) {
 
-  const current =
-    primarySource(
-      client
-    );
+  return request(
+    `/api/admin/playlists/${source.id}`,
+    {
+      method:
+        'PUT',
 
+      body:
+        JSON.stringify({
 
-  /*
-   * SE A LISTA JÁ EXISTE,
-   * EDITA A MESMA.
-   */
-  if (
-    current?.id &&
-    !current.__embeddedLegacy
-  ) {
+          url:
+            payload.url,
 
-    await request(
-      `/api/admin/playlists/${current.id}`,
-      {
-        method:
-          'PUT',
+          xmltvUrl:
+            payload.xmltvUrl,
 
-        body:
-          JSON.stringify({
+          sourceType:
+            payload.sourceType,
 
-            url:
-              sourcePayload.url,
+          xtreamServer:
+            payload.xtreamServer,
 
-            xmltvUrl:
-              sourcePayload.xmltvUrl,
+          xtreamUsername:
+            payload.xtreamUsername,
 
-            enabled:
-              current.enabled !==
-              false,
-
-            expiresAt:
-              client.expiresAt ||
-              current.expiresAt ||
-              null
-          })
-      }
-    );
-
-
-    return current.id;
-  }
-
-
-  /*
-   * SÓ CRIA UMA NOVA SE
-   * REALMENTE NÃO EXISTIR.
-   */
-  const created =
-    await request(
-      '/api/admin/playlists',
-      {
-        method:
-          'POST',
-
-        body:
-          JSON.stringify({
-
-            name:
-              `Fonte de ${client.name}`,
-
-            url:
-              sourcePayload.url,
-
-            xmltvUrl:
-              sourcePayload.xmltvUrl,
-
-            enabled:
-              true,
-
-            expiresAt:
-              client.expiresAt ||
-              null
-          })
-      }
-    );
-
-
-  return created.id;
+          xtreamPassword:
+            payload.xtreamPassword
+        })
+    }
+  );
 }
 
 
-/*
- * =========================================
- * LOGIN
- * =========================================
- */
+/* ==============================
+   CRIAR FONTE PARA CLIENTE ANTIGO
+   ============================== */
+
+async function createSourceForClient(
+  client,
+  payload
+) {
+
+  return request(
+    '/api/admin/playlists',
+    {
+      method:
+        'POST',
+
+      body:
+        JSON.stringify({
+
+          name:
+            `Fonte de ${client.name}`,
+
+          url:
+            payload.url,
+
+          xmltvUrl:
+            payload.xmltvUrl,
+
+          sourceType:
+            payload.sourceType,
+
+          xtreamServer:
+            payload.xtreamServer,
+
+          xtreamUsername:
+            payload.xtreamUsername,
+
+          xtreamPassword:
+            payload.xtreamPassword,
+
+          enabled:
+            true,
+
+          expiresAt:
+            client.expiresAt ||
+            null
+        })
+    }
+  );
+}
+
+
+/* ==============================
+   LOGIN
+   ============================== */
 
 $('#loginForm')
   .onsubmit =
   async event => {
 
     event.preventDefault();
-
 
     try {
 
@@ -2191,7 +2033,6 @@ $('#loginForm')
             event.target
           )
         );
-
 
       localStorage.lpsmToken =
         (
@@ -2209,7 +2050,6 @@ $('#loginForm')
           )
         ).token;
 
-
       await enter();
 
     } catch (
@@ -2222,25 +2062,21 @@ $('#loginForm')
     }
   };
 
-
 async function enter() {
 
   try {
 
     await load();
 
-
     $('#login')
       .classList.add(
         'hidden'
       );
 
-
     $('#dashboard')
       .classList.remove(
         'hidden'
       );
-
 
     $('#logout')
       .classList.remove(
@@ -2256,14 +2092,11 @@ async function enter() {
   }
 }
 
-
 if (
   localStorage.lpsmToken
 ) {
-
   enter();
 }
-
 
 $('#logout')
   .onclick =
@@ -2274,21 +2107,17 @@ $('#logout')
         'lpsmToken'
       );
 
-
     location.reload();
   };
-
 
 $('#refresh')
   .onclick =
   load;
 
 
-/*
- * =========================================
- * ABAS
- * =========================================
- */
+/* ==============================
+   ABAS
+   ============================== */
 
 $$('nav button')
   .forEach(
@@ -2308,7 +2137,6 @@ $$('nav button')
                   )
             );
 
-
           $$('.tab')
             .forEach(
               tab =>
@@ -2324,11 +2152,9 @@ $$('nav button')
   );
 
 
-/*
- * =========================================
- * ALTERAR M3U / XTREAM
- * =========================================
- */
+/* ==============================
+   TROCAR M3U / XTREAM
+   ============================== */
 
 $('#clientSourceType')
   .onchange =
@@ -2339,7 +2165,6 @@ $('#clientSourceType')
       event.target.value
     );
   };
-
 
 $('#sourceType')
   .onchange =
@@ -2352,11 +2177,68 @@ $('#sourceType')
   };
 
 
-/*
- * =========================================
- * NOVO CLIENTE
- * =========================================
- */
+/* ==============================
+   FORMATAÇÃO DO MAC
+   ============================== */
+
+const clientMacInput =
+  $(
+    '#clientForm [name=macAddress]'
+  );
+
+if (
+  clientMacInput
+) {
+
+  clientMacInput
+    .addEventListener(
+      'input',
+      () => {
+
+        clientMacInput.value =
+          formatMac(
+            clientMacInput.value
+          );
+      }
+    );
+}
+
+
+/* ==============================
+   MAC DA FILA PREENCHE CAMPO
+   ============================== */
+
+const pendingMacSelect =
+  $(
+    '#clientForm [name=pendingMac]'
+  );
+
+if (
+  pendingMacSelect
+) {
+
+  pendingMacSelect
+    .addEventListener(
+      'change',
+      () => {
+
+        if (
+          pendingMacSelect.value
+        ) {
+
+          clientMacInput.value =
+            formatMac(
+              pendingMacSelect.value
+            );
+        }
+      }
+    );
+}
+
+
+/* ==============================
+   NOVO CLIENTE
+   ============================== */
 
 $$('[data-open]')
   .forEach(
@@ -2366,37 +2248,24 @@ $$('[data-open]')
         () => {
 
           if (
-            button.dataset.open !==
+            button.dataset.open ===
             'clientDialog'
           ) {
-            return;
+
+            /*
+             * NÃO PRECISA MAIS
+             * TER MAC NA ESPERA.
+             */
+            openClientDialog();
           }
-
-
-          if (
-            !state.pendingDevices.length
-          ) {
-
-            alert(
-              'Nenhum MAC aguardando autorização. Abra o APK no aparelho novo e aguarde o MAC aparecer.'
-            );
-
-
-            return;
-          }
-
-
-          openClientDialog();
         };
     }
   );
 
 
-/*
- * =========================================
- * CANCELAR
- * =========================================
- */
+/* ==============================
+   CANCELAR
+   ============================== */
 
 $$('.close')
   .forEach(
@@ -2414,11 +2283,9 @@ $$('.close')
   );
 
 
-/*
- * =========================================
- * SALVAR CLIENTE
- * =========================================
- */
+/* ==============================
+   SALVAR CLIENTE
+   ============================== */
 
 $('#clientForm')
   .onsubmit =
@@ -2426,30 +2293,19 @@ $('#clientForm')
 
     event.preventDefault();
 
-
     const form =
       event.target;
-
 
     const submit =
       event.submitter;
 
-
     const editId =
       form.dataset.editId;
-
 
     submit.disabled =
       true;
 
-
     try {
-
-      const sourcePayload =
-        sourcePayloadFromForm(
-          form
-        );
-
 
       const name =
         form.elements
@@ -2457,14 +2313,18 @@ $('#clientForm')
           .value
           .trim();
 
-
-      if (!name) {
-
-        throw Error(
-          'Informe o nome do cliente.'
+      const macAddress =
+        formatMac(
+          form.elements
+            .macAddress
+            .value
         );
-      }
 
+      const enabled =
+        form.elements
+          .enabled
+          .value ===
+        'true';
 
       const expiresAt =
         isoEndOfDay(
@@ -2473,36 +2333,36 @@ $('#clientForm')
             .value
         );
 
+      const sourcePayload =
+        sourcePayloadFromForm(
+          form
+        );
 
-      const enabled =
-        form.elements
-          .enabled
-          .value ===
-        'true';
+      if (!name) {
+
+        throw Error(
+          'Informe o nome do cliente.'
+        );
+      }
+
+      if (
+        normalizeMac(
+          macAddress
+        ).length !==
+        12
+      ) {
+
+        throw Error(
+          'Informe um MAC válido com 12 caracteres.'
+        );
+      }
 
 
-      /*
-       * =====================================
-       * CLIENTE NOVO
-       * =====================================
-       */
+      /* ==========================
+         CLIENTE NOVO
+         ========================== */
+
       if (!editId) {
-
-        const macAddress =
-          formatMac(
-            form.elements
-              .pendingMac
-              .value
-          );
-
-
-        if (!macAddress) {
-
-          throw Error(
-            'Nenhum MAC foi selecionado. Abra o APK no aparelho primeiro.'
-          );
-        }
-
 
         await request(
           '/api/admin/clients',
@@ -2533,7 +2393,19 @@ $('#clientForm')
                     sourcePayload.url,
 
                   xmltvUrl:
-                    sourcePayload.xmltvUrl
+                    sourcePayload.xmltvUrl,
+
+                  sourceType:
+                    sourcePayload.sourceType,
+
+                  xtreamServer:
+                    sourcePayload.xtreamServer,
+
+                  xtreamUsername:
+                    sourcePayload.xtreamUsername,
+
+                  xtreamPassword:
+                    sourcePayload.xtreamPassword
                 }
               })
           }
@@ -2541,18 +2413,17 @@ $('#clientForm')
 
       } else {
 
-        /*
-         * =====================================
-         * EDITAR CLIENTE
-         * =====================================
-         */
+
+        /* ==========================
+           EDITAR CLIENTE
+           ========================== */
+
         const client =
           state.clients.find(
             item =>
               item.id ===
               editId
           );
-
 
         if (!client) {
 
@@ -2561,39 +2432,69 @@ $('#clientForm')
           );
         }
 
+        let source =
+          primarySource(
+            client
+          );
+
+        let sourceId =
+          source?.id ||
+          '';
 
         /*
-         * USA A LISTA QUE JÁ EXISTE.
+         * SE JÁ TEM LISTA,
+         * ALTERA A MESMA.
          */
-        const sourceId =
-          await ensureClientSource(
-            {
-              ...client,
-              name,
-              expiresAt
-            },
+        if (
+          source?.id &&
+          !source.__embeddedLegacy
+        ) {
 
+          await saveExistingSource(
+            source,
             sourcePayload
           );
 
+        } else {
+
+          /*
+           * CLIENTE MUITO ANTIGO
+           * SEM VÍNCULO.
+           */
+          const created =
+            await createSourceForClient(
+              {
+                ...client,
+                name,
+                expiresAt
+              },
+
+              sourcePayload
+            );
+
+          sourceId =
+            created.id;
+        }
 
         const currentIds =
           collectClientSourceIds(
             client
           );
 
-
         const playlistIds =
-          currentIds.includes(
-            sourceId
-          )
-            ? currentIds
-            : [
-                sourceId,
-                ...currentIds
-              ];
+          sourceId
+            ? [
+                ...new Set([
+                  sourceId,
+                  ...currentIds
+                ])
+              ]
+            : currentIds;
 
-
+        /*
+         * MAC É SALVO MESMO
+         * QUE TENHA SIDO ALTERADO.
+         */
         await request(
           `/api/admin/clients/${editId}`,
           {
@@ -2605,9 +2506,7 @@ $('#clientForm')
 
                 name,
 
-                macAddress:
-                  client.macAddress ||
-                  client.deviceId,
+                macAddress,
 
                 enabled,
 
@@ -2619,21 +2518,18 @@ $('#clientForm')
         );
       }
 
-
       form
         .closest(
           'dialog'
         )
         .close();
 
-
       await load();
-
 
       alert(
         editId
           ? 'Cliente atualizado com sucesso.'
-          : 'Cliente criado e fonte vinculada com sucesso.'
+          : 'Cliente criado com sucesso.'
       );
 
     } catch (
@@ -2652,11 +2548,9 @@ $('#clientForm')
   };
 
 
-/*
- * =========================================
- * SALVAR FONTE
- * =========================================
- */
+/* ==============================
+   SALVAR FONTE
+   ============================== */
 
 $('#sourceForm')
   .onsubmit =
@@ -2664,18 +2558,14 @@ $('#sourceForm')
 
     event.preventDefault();
 
-
     const form =
       event.target;
-
 
     const submit =
       event.submitter;
 
-
     submit.disabled =
       true;
-
 
     try {
 
@@ -2684,12 +2574,10 @@ $('#sourceForm')
           .sourceId
           .value;
 
-
-      const sourcePayload =
+      const payload =
         sourcePayloadFromForm(
           form
         );
-
 
       await request(
         `/api/admin/playlists/${sourceId}`,
@@ -2701,10 +2589,22 @@ $('#sourceForm')
             JSON.stringify({
 
               url:
-                sourcePayload.url,
+                payload.url,
 
               xmltvUrl:
-                sourcePayload.xmltvUrl,
+                payload.xmltvUrl,
+
+              sourceType:
+                payload.sourceType,
+
+              xtreamServer:
+                payload.xtreamServer,
+
+              xtreamUsername:
+                payload.xtreamUsername,
+
+              xtreamPassword:
+                payload.xtreamPassword,
 
               enabled:
                 form.elements
@@ -2722,16 +2622,13 @@ $('#sourceForm')
         }
       );
 
-
       form
         .closest(
           'dialog'
         )
         .close();
 
-
       await load();
-
 
       alert(
         'Fonte atualizada com sucesso.'
@@ -2753,18 +2650,15 @@ $('#sourceForm')
   };
 
 
-/*
- * =========================================
- * APARÊNCIA
- * =========================================
- */
+/* ==============================
+   APARÊNCIA
+   ============================== */
 
 $('#appearanceForm')
   .onsubmit =
   async event => {
 
     event.preventDefault();
-
 
     await request(
       '/api/admin/appearance',
@@ -2783,28 +2677,21 @@ $('#appearanceForm')
       }
     );
 
-
     await load();
   };
 
 
-/*
- * =========================================
- * BOTÕES DOS CARDS
- * =========================================
- */
+/* ==============================
+   BOTÕES DOS CARDS
+   ============================== */
 
 document.body.onclick =
   async event => {
 
-    /*
-     * CADASTRAR MAC
-     */
     const authorize =
       event.target.closest(
         '.authorize-mac'
       );
-
 
     if (authorize) {
 
@@ -2813,19 +2700,13 @@ document.body.onclick =
         authorize.dataset.mac
       );
 
-
       return;
     }
 
-
-    /*
-     * EDITAR CLIENTE
-     */
     const editClient =
       event.target.closest(
         '.edit-client'
       );
-
 
     if (editClient) {
 
@@ -2836,7 +2717,6 @@ document.body.onclick =
             editClient.dataset.id
         );
 
-
       if (client) {
 
         openClientDialog(
@@ -2844,19 +2724,13 @@ document.body.onclick =
         );
       }
 
-
       return;
     }
 
-
-    /*
-     * EDITAR CONEXÃO
-     */
     const editSource =
       event.target.closest(
         '.edit-source'
       );
-
 
     if (editSource) {
 
@@ -2867,7 +2741,6 @@ document.body.onclick =
             editSource.dataset.id
         );
 
-
       if (source) {
 
         openSourceDialog(
@@ -2875,68 +2748,70 @@ document.body.onclick =
         );
       }
 
-
       return;
     }
 
-
-    /*
-     * ATIVAR / DESATIVAR / EXCLUIR
-     */
     const button =
       event.target.closest(
         '.toggle,.delete'
       );
 
-
     if (!button) {
       return;
     }
 
-
-    if (
-      button.classList
-        .contains(
-          'delete'
-        )
-    ) {
+    try {
 
       if (
-        !confirm(
-          'Excluir este item?'
-        )
+        button.classList
+          .contains(
+            'delete'
+          )
       ) {
-        return;
+
+        if (
+          !confirm(
+            'Excluir este item?'
+          )
+        ) {
+          return;
+        }
+
+        await request(
+          `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
+          {
+            method:
+              'DELETE'
+          }
+        );
+
+      } else {
+
+        await request(
+          `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
+          {
+            method:
+              'PUT',
+
+            body:
+              JSON.stringify({
+
+                enabled:
+                  button.dataset.enabled ===
+                  'true'
+              })
+          }
+        );
       }
 
+      await load();
 
-      await request(
-        `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
-        {
-          method:
-            'DELETE'
-        }
-      );
+    } catch (
+      error
+    ) {
 
-    } else {
-
-      await request(
-        `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
-        {
-          method:
-            'PUT',
-
-          body:
-            JSON.stringify({
-
-              enabled:
-                button.dataset.enabled ===
-                'true'
-            })
-        }
+      alert(
+        error.message
       );
     }
-
-
-    await load();
   };
