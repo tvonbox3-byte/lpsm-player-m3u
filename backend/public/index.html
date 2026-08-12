@@ -1,508 +1,278 @@
 <!doctype html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="utf-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  >
-
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>LPSM Control</title>
-
-  <link
-    rel="stylesheet"
-    href="/styles.css?v=20260812-4"
-  >
+  <link rel="stylesheet" href="/styles.css?v=20260812-5">
 </head>
-
 <body>
+<main>
+  <header>
+    <div>
+      <span class="brand">LPSM</span>
+      <small>CONTROL</small>
+    </div>
+    <button id="logout" class="ghost hidden">Sair</button>
+  </header>
 
-  <main>
+  <section id="login" class="card login">
+    <h1>Painel de controle</h1>
+    <p>Gerencie clientes, dispositivos e a fonte de conteúdo de cada cliente.</p>
+    <form id="loginForm">
+      <label>Usuário<input name="user" autocomplete="username" required value="admin"></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+      <button>Entrar</button>
+      <output></output>
+    </form>
+  </section>
 
-    <header>
-
+  <section id="dashboard" class="hidden">
+    <div class="hero">
       <div>
-        <span class="brand">LPSM</span>
-        <small>CONTROL</small>
+        <p class="eyebrow">VISÃO GERAL</p>
+        <h1>Operação LPSM</h1>
+        <p id="summary"></p>
+      </div>
+      <button id="refresh" class="ghost">Atualizar</button>
+    </div>
+
+    <nav>
+      <button data-tab="clients" class="active">Clientes</button>
+      <button data-tab="playlists">Fontes</button>
+      <button data-tab="appearance">Aparência</button>
+      <button data-tab="audit">Logs</button>
+    </nav>
+
+    <div id="clients" class="tab">
+      <div class="section-title">
+        <div>
+          <h2>Clientes e dispositivos</h2>
+          <p class="meta">
+            O MAC aparece automaticamente quando o APK é aberto.
+            Cadastre o cliente e escolha M3U URL ou Xtream Codes.
+          </p>
+        </div>
+        <button data-open="clientDialog">Novo cliente</button>
       </div>
 
-      <button
-        id="logout"
-        class="ghost hidden"
-      >
-        Sair
-      </button>
+      <div id="clientList" class="grid"></div>
+    </div>
 
-    </header>
+    <div id="playlists" class="tab hidden">
+      <div class="section-title">
+        <div>
+          <h2>Fontes dos clientes</h2>
+          <p class="meta">
+            O nome da fonte é automático. Aqui você altera somente a conexão,
+            status ou vencimento.
+          </p>
+        </div>
+      </div>
 
+      <div id="playlistList" class="grid"></div>
+    </div>
 
-    <section
-      id="login"
-      class="card login"
-    >
+    <div id="appearance" class="tab hidden">
+      <div class="section-title">
+        <h2>Identidade visual</h2>
+      </div>
 
-      <h1>
-        Painel de controle
-      </h1>
+      <form id="appearanceForm" class="card form-grid">
+        <label>URL do banner<input name="bannerUrl" type="url"></label>
+        <label>URL do papel de parede<input name="wallpaperUrl" type="url"></label>
+        <label class="wide">Mensagem de suporte<input name="supportMessage"></label>
+        <button>Salvar aparência</button>
+      </form>
+    </div>
 
-      <p>
-        Gerencie clientes, aparelhos,
-        listas M3U e aparência do aplicativo.
-      </p>
+    <div id="audit" class="tab hidden">
+      <div class="section-title">
+        <h2>Atividade recente</h2>
+      </div>
+      <div id="auditList" class="card"></div>
+    </div>
+  </section>
+</main>
 
-      <form id="loginForm">
+<!-- CLIENTE: criar e editar usam a MESMA tela -->
+<dialog id="clientDialog">
+  <form id="clientForm" method="dialog">
+    <h2>Novo cliente</h2>
+
+    <p class="meta">
+      Ao editar, os dados atuais continuam valendo até você clicar em Salvar alterações.
+    </p>
+
+    <label>
+      Nome do cliente
+      <input name="name" required>
+    </label>
+
+    <label id="pendingMacLabel">
+      Aparelho aguardando ativação
+      <select name="pendingMac"></select>
+    </label>
+
+    <label id="fixedMacLabel" class="hidden">
+      MAC do aparelho
+      <input name="macAddress" readonly>
+    </label>
+
+    <label>
+      Status
+      <select name="enabled">
+        <option value="true">Ativo</option>
+        <option value="false">Inativo</option>
+      </select>
+    </label>
+
+    <label>
+      Data de expiração
+      <input name="expiresAt" type="date">
+    </label>
+
+    <fieldset>
+      <legend>Fonte de conteúdo</legend>
+
+      <label>
+        Tipo de conexão
+        <select name="sourceType" id="clientSourceType">
+          <option value="M3U">M3U por URL</option>
+          <option value="XTREAM">Xtream Codes</option>
+        </select>
+      </label>
+
+      <div id="clientM3uFields">
+        <label>
+          URL da lista M3U / M3U8
+          <input
+            name="m3uUrl"
+            type="url"
+            placeholder="https://servidor/lista.m3u"
+          >
+        </label>
+
+        <label>
+          URL XMLTV (opcional)
+          <input
+            name="xmltvUrl"
+            type="url"
+            placeholder="https://servidor/epg.xml"
+          >
+        </label>
+      </div>
+
+      <div id="clientXtreamFields" class="hidden">
+        <label>
+          URL do servidor
+          <input
+            name="xtreamServer"
+            type="url"
+            placeholder="http://servidor:porta"
+          >
+        </label>
 
         <label>
           Usuário
-
           <input
-            name="user"
-            autocomplete="username"
-            required
-            value="admin"
+            name="xtreamUsername"
+            autocomplete="off"
           >
         </label>
 
         <label>
           Senha
-
           <input
-            name="password"
+            name="xtreamPassword"
             type="password"
-            autocomplete="current-password"
-            required
+            autocomplete="off"
           >
         </label>
 
-        <button>
-          Entrar
-        </button>
-
-        <output></output>
-
-      </form>
-
-    </section>
-
-
-    <section
-      id="dashboard"
-      class="hidden"
-    >
-
-      <div class="hero">
-
-        <div>
-
-          <p class="eyebrow">
-            VISÃO GERAL
-          </p>
-
-          <h1>
-            Operação LPSM
-          </h1>
-
-          <p id="summary"></p>
-
-        </div>
-
-        <button
-          id="refresh"
-          class="ghost"
-        >
-          Atualizar
-        </button>
-
-      </div>
-
-
-      <nav>
-
-        <button
-          data-tab="clients"
-          class="active"
-        >
-          Clientes
-        </button>
-
-        <button data-tab="playlists">
-          Listas M3U
-        </button>
-
-        <button data-tab="appearance">
-          Aparência
-        </button>
-
-        <button data-tab="audit">
-          Logs
-        </button>
-
-      </nav>
-
-
-      <div
-        id="clients"
-        class="tab"
-      >
-
-        <div class="section-title">
-
-          <div>
-
-            <h2>
-              Clientes e dispositivos
-            </h2>
-
-            <p class="meta">
-              Os aparelhos que abrirem o APK
-              aparecerão aguardando autorização.
-            </p>
-
-          </div>
-
-          <button data-open="clientDialog">
-            Novo cliente
-          </button>
-
-        </div>
-
-        <div
-          id="clientList"
-          class="grid"
-        ></div>
-
-      </div>
-
-
-      <div
-        id="playlists"
-        class="tab hidden"
-      >
-
-        <div class="section-title">
-
-          <div>
-
-            <h2>
-              Listas M3U
-            </h2>
-
-            <p class="meta">
-              Crie, edite, ative ou desative
-              as listas vinculadas aos clientes.
-            </p>
-
-          </div>
-
-          <button data-open="playlistDialog">
-            Nova lista
-          </button>
-
-        </div>
-
-        <div
-          id="playlistList"
-          class="grid"
-        ></div>
-
-      </div>
-
-
-      <div
-        id="appearance"
-        class="tab hidden"
-      >
-
-        <div class="section-title">
-
-          <h2>
-            Identidade visual
-          </h2>
-
-        </div>
-
-        <form
-          id="appearanceForm"
-          class="card form-grid"
-        >
-
-          <label>
-            URL do banner
-
-            <input
-              name="bannerUrl"
-              type="url"
-            >
-          </label>
-
-          <label>
-            URL do papel de parede
-
-            <input
-              name="wallpaperUrl"
-              type="url"
-            >
-          </label>
-
-          <label class="wide">
-            Mensagem de suporte
-
-            <input
-              name="supportMessage"
-            >
-          </label>
-
-          <button>
-            Salvar aparência
-          </button>
-
-        </form>
-
-      </div>
-
-
-      <div
-        id="audit"
-        class="tab hidden"
-      >
-
-        <div class="section-title">
-
-          <h2>
-            Atividade recente
-          </h2>
-
-        </div>
-
-        <div
-          id="auditList"
-          class="card"
-        ></div>
-
-      </div>
-
-    </section>
-
-  </main>
-
-
-  <dialog id="clientDialog">
-
-    <form
-      id="clientForm"
-      method="dialog"
-    >
-
-      <h2>
-        Novo cliente
-      </h2>
-
-      <p class="meta">
-        Ao editar, os dados atuais continuam
-        funcionando até você clicar em
-        Salvar alterações.
-      </p>
-
-
-      <label>
-        Nome do cliente
-
-        <input
-          name="name"
-          required
-        >
-      </label>
-
-
-      <label>
-        MAC do aparelho
-
-        <input
-          name="deviceId"
-          required
-          placeholder="AA:BB:CC:DD:EE:FF"
-        >
-      </label>
-
-
-      <label>
-        Código de ativação
-
-        <input
-          name="activationCode"
-          placeholder="Gerado automaticamente"
-        >
-      </label>
-
-
-      <label>
-        Status
-
-        <select name="enabled">
-
-          <option value="true">
-            Ativo
-          </option>
-
-          <option value="false">
-            Inativo
-          </option>
-
-        </select>
-      </label>
-
-
-      <label>
-        Data de expiração
-
-        <input
-          name="expiresAt"
-          type="date"
-        >
-      </label>
-
-
-      <fieldset>
-
-        <legend>
-          Listas M3U vinculadas
-        </legend>
-
         <p class="meta">
-          Marque ou desmarque somente as listas
-          que deseja liberar para este cliente.
+          O LPSM cria automaticamente a URL M3U Plus usada pelo aplicativo.
         </p>
-
-        <div id="playlistChecks"></div>
-
-      </fieldset>
-
-
-      <div class="actions">
-
-        <button
-          type="button"
-          class="ghost close"
-        >
-          Cancelar
-        </button>
-
-        <button value="default">
-          Criar
-        </button>
-
       </div>
+    </fieldset>
 
-    </form>
+    <input type="hidden" name="sourceId">
 
-  </dialog>
+    <div class="actions">
+      <button type="button" class="ghost close">Cancelar</button>
+      <button value="default">Criar cliente</button>
+    </div>
+  </form>
+</dialog>
 
+<!-- EDIÇÃO DA FONTE: sem campo para renomear -->
+<dialog id="sourceDialog">
+  <form id="sourceForm" method="dialog">
+    <h2>Editar fonte</h2>
 
-  <dialog id="playlistDialog">
+    <p class="meta">
+      A conexão antiga continua funcionando até você clicar em Salvar alterações.
+    </p>
 
-    <form
-      id="playlistForm"
-      method="dialog"
-    >
+    <label>
+      Tipo de conexão
+      <select name="sourceType" id="sourceType">
+        <option value="M3U">M3U por URL</option>
+        <option value="XTREAM">Xtream Codes</option>
+      </select>
+    </label>
 
-      <h2>
-        Nova lista M3U
-      </h2>
-
-      <p class="meta">
-        Ao editar, a configuração antiga continua
-        funcionando até você clicar em
-        Salvar alterações.
-      </p>
-
-
+    <div id="sourceM3uFields">
       <label>
-        Nome da lista
-
-        <input
-          name="name"
-          required
-        >
+        URL da lista M3U / M3U8
+        <input name="m3uUrl" type="url">
       </label>
 
-
       <label>
-        URL M3U / M3U8
+        URL XMLTV (opcional)
+        <input name="xmltvUrl" type="url">
+      </label>
+    </div>
 
-        <input
-          name="url"
-          type="url"
-          required
-          placeholder="https://servidor/lista.m3u"
-        >
+    <div id="sourceXtreamFields" class="hidden">
+      <label>
+        URL do servidor
+        <input name="xtreamServer" type="url">
       </label>
 
-
       <label>
-        URL XMLTV
-
-        <input
-          name="xmltvUrl"
-          type="url"
-          placeholder="Opcional"
-        >
+        Usuário
+        <input name="xtreamUsername" autocomplete="off">
       </label>
 
-
       <label>
-        Status da lista
-
-        <select name="enabled">
-
-          <option value="true">
-            Ativa
-          </option>
-
-          <option value="false">
-            Inativa
-          </option>
-
-        </select>
+        Senha
+        <input name="xtreamPassword" type="password" autocomplete="off">
       </label>
+    </div>
 
+    <label>
+      Status da fonte
+      <select name="enabled">
+        <option value="true">Ativa</option>
+        <option value="false">Inativa</option>
+      </select>
+    </label>
 
-      <label>
-        Data de expiração
+    <label>
+      Data de expiração
+      <input name="expiresAt" type="date">
+    </label>
 
-        <input
-          name="expiresAt"
-          type="date"
-        >
-      </label>
+    <input type="hidden" name="sourceId">
 
+    <div class="actions">
+      <button type="button" class="ghost close">Cancelar</button>
+      <button value="default">Salvar alterações</button>
+    </div>
+  </form>
+</dialog>
 
-      <div class="actions">
-
-        <button
-          type="button"
-          class="ghost close"
-        >
-          Cancelar
-        </button>
-
-        <button value="default">
-          Criar
-        </button>
-
-      </div>
-
-    </form>
-
-  </dialog>
-
-
-  <script
-    src="/app.js?v=20260812-4"
-    type="module"
-  ></script>
-
+<script src="/app.js?v=20260812-5" type="module"></script>
 </body>
-
 </html>
