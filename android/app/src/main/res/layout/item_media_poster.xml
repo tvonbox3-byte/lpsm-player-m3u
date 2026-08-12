@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="190dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="6dp"
+    android:focusable="true"
+    android:clickable="true">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="270dp">
+
+        <ImageView
+            android:id="@+id/poster"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="Capa do conteúdo" />
+
+        <TextView
+            android:id="@+id/posterStar"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="top|end"
+            android:gravity="center"
+            android:text="☆"
+            android:textSize="26sp"
+            android:textColor="@android:color/white"
+            android:background="#99000000" />
+
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/posterTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="7dp"
+        android:paddingBottom="4dp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:text="Nome"
+        android:textSize="16sp"
+        android:textColor="@android:color/white" />
+
+</LinearLayout>
