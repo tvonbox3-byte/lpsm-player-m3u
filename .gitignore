@@ -1,0 +1,11 @@
+backend/data/*.json
+!backend/data/.gitkeep
+backend/.env
+deploy/.env
+android/.gradle/
+android/local.properties
+android/**/build/
+*.jks
+*.keystore
+.idea/
+.DS_Store
