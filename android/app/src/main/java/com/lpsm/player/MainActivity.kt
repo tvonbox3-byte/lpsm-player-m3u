@@ -708,6 +708,121 @@ class MainActivity : AppCompatActivity() {
 
     /*
      * =====================================================
+     * POSIÇÃO DO PREVIEW
+     * =====================================================
+     *
+     * TV ao vivo: preview lateral, como já estava funcionando.
+     * Filmes e Séries: preview compacto no topo, ao lado da busca,
+     * para liberar a área inferior para capas e episódios.
+     */
+    private fun updatePreviewPosition() {
+        when (filter) {
+            ContentType.LIVE -> {
+                movePreviewTo(
+                    host = b.previewSideHost,
+                    compact = false
+                )
+
+                b.previewTopHost.visibility = View.GONE
+                b.previewSideHost.visibility = View.VISIBLE
+            }
+
+            ContentType.VOD,
+            ContentType.SERIES -> {
+                b.previewTopHost.visibility = View.VISIBLE
+
+                movePreviewTo(
+                    host = b.previewTopHost,
+                    compact = true
+                )
+
+                b.previewSideHost.visibility = View.GONE
+            }
+
+            else -> {
+                movePreviewTo(
+                    host = b.previewSideHost,
+                    compact = false
+                )
+
+                b.previewTopHost.visibility = View.GONE
+                b.previewSideHost.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun movePreviewTo(
+        host: FrameLayout,
+        compact: Boolean
+    ) {
+        val currentParent =
+            b.previewPanel.parent as? FrameLayout
+
+        if (currentParent !== host) {
+            currentParent?.removeView(
+                b.previewPanel
+            )
+
+            host.removeAllViews()
+
+            host.addView(
+                b.previewPanel,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+
+        val videoFrame =
+            b.previewPanel.getChildAt(0)
+
+        videoFrame?.layoutParams =
+            videoFrame?.layoutParams?.apply {
+                height = dp(
+                    if (compact) 128 else 197
+                )
+            }
+
+        if (compact) {
+            b.previewPanel.setPadding(
+                0, 0, 0, 0
+            )
+
+            b.previewWatch.visibility =
+                View.GONE
+
+            b.previewTitle.textSize =
+                16f
+
+            b.previewGroup.textSize =
+                12f
+
+        } else {
+            b.previewPanel.setPadding(
+                dp(10), 0, 0, 0
+            )
+
+            b.previewWatch.visibility =
+                View.VISIBLE
+
+            b.previewTitle.textSize =
+                20f
+
+            b.previewGroup.textSize =
+                14f
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return (
+            value *
+                resources.displayMetrics.density
+            ).toInt()
+    }
+
+    /*
+     * =====================================================
      * PLAYER PEQUENO
      * =====================================================
      */
@@ -1649,6 +1764,124 @@ class MainActivity : AppCompatActivity() {
 
     /*
      * =====================================================
+     * ORDEM DAS CATEGORIAS DE TV
+     * =====================================================
+     *
+     * Coloca primeiro os canais mais comuns/locais e deixa
+     * categorias adultas por último. O bloqueio por PIN será
+     * ligado ao painel para que a senha seja escolhida pelo
+     * administrador, em vez de ficar fixa dentro do APK.
+     */
+    private fun orderedCategoryEntries(
+        indexedGroups: Map<String, List<MediaEntry>>
+    ): List<Map.Entry<String, List<MediaEntry>>> {
+
+        if (filter != ContentType.LIVE) {
+            return indexedGroups
+                .entries
+                .sortedBy {
+                    it.key.lowercase()
+                }
+        }
+
+        return indexedGroups
+            .entries
+            .sortedWith(
+                Comparator { first, second ->
+                    val priority =
+                        liveCategoryPriority(
+                            first.key
+                        ).compareTo(
+                            liveCategoryPriority(
+                                second.key
+                            )
+                        )
+
+                    if (priority != 0) {
+                        priority
+                    } else {
+                        first.key.compareTo(
+                            second.key,
+                            ignoreCase = true
+                        )
+                    }
+                }
+            )
+    }
+
+    private fun liveCategoryPriority(
+        category: String
+    ): Int {
+        val value =
+            category.lowercase()
+
+        return when {
+            isAdultCategory(value) -> 1000
+
+            listOf(
+                "rio grande do sul",
+                "rio grande",
+                "rbs",
+                "gaucho",
+                "gaúcho",
+                "rs |",
+                "| rs",
+                " rs "
+            ).any { it in value } -> 0
+
+            listOf(
+                "canais abertos",
+                "tv aberta",
+                "abertos"
+            ).any { it in value } -> 10
+
+            "globo" in value -> 20
+            "sbt" in value -> 30
+            "record" in value -> 40
+            "band" in value -> 50
+
+            listOf(
+                "rede tv",
+                "redetv"
+            ).any { it in value } -> 60
+
+            listOf(
+                "noticia",
+                "notícia",
+                "news"
+            ).any { it in value } -> 100
+
+            listOf(
+                "esporte",
+                "sport"
+            ).any { it in value } -> 110
+
+            else -> 500
+        }
+    }
+
+    private fun isAdultCategory(
+        category: String
+    ): Boolean {
+        val value =
+            category.lowercase()
+
+        return listOf(
+            "adult",
+            "adulto",
+            "adultos",
+            "+18",
+            "18+",
+            "xxx",
+            "erótico",
+            "erotico"
+        ).any {
+            it in value
+        }
+    }
+
+    /*
+     * =====================================================
      * RENDER PRINCIPAL
      * =====================================================
      */
@@ -1717,21 +1950,17 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
 
-                indexedGroups
-                    .entries
-                    .sortedBy {
-                        it.key
-                            .lowercase()
-                    }
-                    .forEach {
+                orderedCategoryEntries(
+                    indexedGroups
+                ).forEach { entry ->
 
-                        add(
-                            CategoryRow(
-                                it.key,
-                                it.value.size
-                            )
+                    add(
+                        CategoryRow(
+                            entry.key,
+                            entry.value.size
                         )
-                    }
+                    )
+                }
             }
 
         (
@@ -1788,9 +2017,11 @@ class MainActivity : AppCompatActivity() {
             }
 
         /*
-         * O quadrado pequeno fica
-         * visível em TV, Filmes e Séries.
+         * O quadrado pequeno fica visível, mas muda de posição:
+         * TV ao vivo = lateral. Filmes/Séries = topo.
          */
+        updatePreviewPosition()
+
         b.previewPanel.visibility =
             View.VISIBLE
 
@@ -2118,6 +2349,8 @@ class MainActivity : AppCompatActivity() {
                 false
             )
 
+        updatePreviewPosition()
+
         b.previewPanel.visibility =
             View.VISIBLE
 
@@ -2355,6 +2588,12 @@ class MainActivity : AppCompatActivity() {
         b.previewWatch.text =
             "ASSISTIR"
 
+        b.previewTopHost.visibility =
+            View.GONE
+
+        b.previewSideHost.visibility =
+            View.GONE
+
         b.homeLive
             .requestFocus()
     }
@@ -2393,6 +2632,8 @@ class MainActivity : AppCompatActivity() {
             "ASSISTIR"
 
         resetPreviewText()
+
+        updatePreviewPosition()
 
         render()
 
