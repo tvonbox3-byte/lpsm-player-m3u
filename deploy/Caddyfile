@@ -1,0 +1,9 @@
+{$LPSM_DOMAIN} {
+  encode zstd gzip
+  reverse_proxy lpsm:8080
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Referrer-Policy "no-referrer"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+}
