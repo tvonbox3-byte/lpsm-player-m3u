@@ -57,15 +57,12 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
-    // Player
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
 
-    // Interface
     implementation("com.google.android.material:material:1.12.0")
 
-    // Capas de filmes e séries
-    implementation("io.coil-kt.coil3:coil:3.5.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
+    implementation("io.coil-kt.coil3:coil:3.0.4")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
 }
