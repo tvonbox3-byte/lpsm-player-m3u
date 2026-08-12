@@ -1,9 +1,19 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+  extname,
+  join,
+  normalize
+} from 'node:path';
+import {
+  fileURLToPath
+} from 'node:url';
 
-import { Store, id } from './store.js';
+import {
+  Store,
+  id
+} from './store.js';
+
 import {
   passwordHash,
   passwordMatches,
@@ -11,14 +21,30 @@ import {
   verifyToken
 } from './auth.js';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
+
+const root =
+  fileURLToPath(
+    new URL(
+      '../',
+      import.meta.url
+    )
+  );
+
 
 const config = {
-  port: Number(process.env.PORT || 8080),
+
+  port:
+    Number(
+      process.env.PORT ||
+      8080
+    ),
 
   dataFile:
     process.env.DATA_FILE ||
-    join(root, 'data/lpsm.json'),
+    join(
+      root,
+      'data/lpsm.json'
+    ),
 
   adminUser:
     process.env.ADMIN_USER ||
@@ -33,133 +59,27 @@ const config = {
     'development-only-change-me'
 };
 
+
 const store =
-  new Store(config.dataFile);
+  new Store(
+    config.dataFile
+  );
+
 
 await store.load();
 
-/*
- * Garante compatibilidade com bancos
- * criados antes da lista de MACs pendentes.
- */
-if (
-  !Array.isArray(
-    store.data.pendingDevices
-  )
-) {
-  await store.mutate(data => {
-    data.pendingDevices = [];
-  });
-}
 
 /*
- * Credenciais do Render continuam
- * sendo a fonte oficial do administrador.
+ * ==========================================
+ * MAC
+ * ==========================================
  */
-const adminNeedsSync =
-  !store.data.admin ||
-  store.data.admin.user !==
-    config.adminUser ||
-  !passwordMatches(
-    config.adminPassword,
-    store.data.admin.hash
-  );
-
-if (adminNeedsSync) {
-  await store.mutate(data => {
-    data.admin = {
-      user: config.adminUser,
-      hash: passwordHash(
-        config.adminPassword
-      )
-    };
-  });
-}
-
-const json = (
-  res,
-  status,
-  data
-) => {
-  res.writeHead(
-    status,
-    {
-      'content-type':
-        'application/json; charset=utf-8',
-
-      'cache-control':
-        'no-store'
-    }
-  );
-
-  res.end(
-    JSON.stringify(data)
-  );
-};
-
-const body =
-  async req => {
-    const chunks = [];
-
-    let total = 0;
-
-    for await (
-      const chunk of req
-    ) {
-      chunks.push(chunk);
-
-      total += chunk.length;
-
-      if (
-        total >
-        1_000_000
-      ) {
-        throw Error(
-          'Payload muito grande'
-        );
-      }
-    }
-
-    if (
-      chunks.length === 0
-    ) {
-      return {};
-    }
-
-    return JSON.parse(
-      Buffer.concat(chunks)
-    );
-  };
-
-const token =
-  req =>
-    verifyToken(
-      (
-        req.headers
-          .authorization ||
-        ''
-      ).replace(
-        /^Bearer /,
-        ''
-      ),
-
-      config.secret
-    );
-
-const active =
-  item =>
-    item.enabled !== false &&
-    (
-      !item.expiresAt ||
-      new Date(
-        item.expiresAt
-      ) > new Date()
-    );
 
 const normalizeMac =
   value =>
     String(
-      value || ''
+      value ||
+      ''
     )
       .replace(
         /[^0-9a-f]/gi,
@@ -167,23 +87,718 @@ const normalizeMac =
       )
       .toUpperCase();
 
+
 const formatMac =
   value => {
+
     const raw =
-      normalizeMac(value);
+      normalizeMac(
+        value
+      )
+        .slice(
+          0,
+          12
+        );
+
 
     return (
       raw.match(
         /.{1,2}/g
-      ) || []
+      ) ||
+      []
     ).join(':');
   };
 
+
+/*
+ * ==========================================
+ * STATUS
+ * ==========================================
+ */
+
+const active =
+  item =>
+    item?.enabled !==
+      false &&
+
+    (
+      !item?.expiresAt ||
+
+      new Date(
+        item.expiresAt
+      ) >
+      new Date()
+    );
+
+
+/*
+ * ==========================================
+ * URL
+ * ==========================================
+ */
+
+const cleanUrl =
+  value =>
+    String(
+      value ||
+      ''
+    ).trim();
+
+
+const isHttpUrl =
+  value =>
+    /^https?:\/\//i
+      .test(
+        cleanUrl(
+          value
+        )
+      );
+
+
+/*
+ * ==========================================
+ * COMPATIBILIDADE COM CLIENTES ANTIGOS
+ * ==========================================
+ */
+
+function normalizePlaylistIds(
+  client,
+  playlists
+) {
+
+  const ids = [];
+
+
+  const add =
+    value => {
+
+      if (
+        value ===
+          null ||
+        value ===
+          undefined
+      ) {
+        return;
+      }
+
+
+      if (
+        typeof value ===
+        'object'
+      ) {
+
+        if (
+          value.id
+        ) {
+
+          add(
+            value.id
+          );
+        }
+
+        return;
+      }
+
+
+      const text =
+        String(
+          value
+        ).trim();
+
+
+      if (
+        text &&
+        !ids.includes(
+          text
+        )
+      ) {
+
+        ids.push(
+          text
+        );
+      }
+    };
+
+
+  if (
+    Array.isArray(
+      client?.playlistIds
+    )
+  ) {
+
+    client.playlistIds
+      .forEach(
+        add
+      );
+  }
+
+
+  if (
+    Array.isArray(
+      client?.sourceIds
+    )
+  ) {
+
+    client.sourceIds
+      .forEach(
+        add
+      );
+  }
+
+
+  if (
+    Array.isArray(
+      client?.listIds
+    )
+  ) {
+
+    client.listIds
+      .forEach(
+        add
+      );
+  }
+
+
+  if (
+    Array.isArray(
+      client?.playlists
+    )
+  ) {
+
+    client.playlists
+      .forEach(
+        add
+      );
+  }
+
+
+  add(
+    client?.playlistId
+  );
+
+  add(
+    client?.sourceId
+  );
+
+  add(
+    client?.listId
+  );
+
+
+  const known =
+    new Set(
+      playlists.map(
+        item =>
+          String(
+            item.id
+          )
+      )
+    );
+
+
+  return ids.filter(
+    value =>
+      known.has(
+        String(
+          value
+        )
+      )
+  );
+}
+
+
+/*
+ * Tenta encontrar a lista de um
+ * cliente criado em versão antiga.
+ */
+function findLegacyPlaylistForClient(
+  client,
+  playlists
+) {
+
+  const legacyUrl =
+    cleanUrl(
+
+      client?.playlistUrl ||
+
+      client?.m3uUrl ||
+
+      client?.sourceUrl ||
+
+      ''
+    );
+
+
+  /*
+   * Procura pela URL antiga.
+   */
+  if (
+    legacyUrl
+  ) {
+
+    const byUrl =
+      playlists.find(
+        item =>
+          cleanUrl(
+            item.url
+          ) ===
+          legacyUrl
+      );
+
+
+    if (
+      byUrl
+    ) {
+
+      return byUrl;
+    }
+  }
+
+
+  /*
+   * Procura pelo nome.
+   */
+  const clientName =
+    String(
+      client?.name ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  if (
+    clientName
+  ) {
+
+    const byName =
+      playlists.filter(
+        item => {
+
+          const name =
+            String(
+              item?.name ||
+              ''
+            )
+              .trim()
+              .toLowerCase();
+
+
+          return (
+            name ===
+              clientName ||
+
+            name ===
+              `fonte de ${clientName}`
+          );
+        }
+      );
+
+
+    if (
+      byName.length ===
+      1
+    ) {
+
+      return byName[0];
+    }
+  }
+
+
+  /*
+   * Se só existe uma lista no painel,
+   * usa ela para o cliente antigo.
+   */
+  if (
+    playlists.length ===
+    1
+  ) {
+
+    return playlists[0];
+  }
+
+
+  return null;
+}
+
+
+/*
+ * ==========================================
+ * REPARO AUTOMÁTICO DO BANCO
+ * ==========================================
+ *
+ * Corrige clientes antigos que ficaram
+ * sem playlistIds.
+ *
+ * Isto também faz a URL antiga voltar
+ * a aparecer no botão EDITAR CLIENTE.
+ */
+
+await store.mutate(
+  data => {
+
+    data.clients =
+      Array.isArray(
+        data.clients
+      )
+        ? data.clients
+        : [];
+
+
+    data.playlists =
+      Array.isArray(
+        data.playlists
+      )
+        ? data.playlists
+        : [];
+
+
+    data.pendingDevices =
+      Array.isArray(
+        data.pendingDevices
+      )
+        ? data.pendingDevices
+        : [];
+
+
+    data.audit =
+      Array.isArray(
+        data.audit
+      )
+        ? data.audit
+        : [];
+
+
+    data.appearance =
+      data.appearance ||
+      {
+
+        bannerUrl:
+          '',
+
+        wallpaperUrl:
+          '',
+
+        supportMessage:
+          'Use apenas conteúdo autorizado.'
+      };
+
+
+    /*
+     * Normaliza fontes.
+     */
+    data.playlists
+      .forEach(
+        playlist => {
+
+          playlist.name =
+            String(
+              playlist.name ||
+              'Fonte'
+            );
+
+
+          playlist.url =
+            cleanUrl(
+              playlist.url
+            );
+
+
+          playlist.xmltvUrl =
+            cleanUrl(
+              playlist.xmltvUrl
+            );
+
+
+          playlist.enabled =
+            playlist.enabled !==
+            false;
+
+
+          playlist.expiresAt =
+            playlist.expiresAt ||
+            null;
+
+
+          playlist.sourceType =
+            String(
+
+              playlist.sourceType ||
+
+              (
+                String(
+                  playlist.url
+                )
+                  .includes(
+                    '/get.php?'
+                  )
+                    ? 'XTREAM'
+                    : 'M3U'
+              )
+            )
+              .toUpperCase();
+        }
+      );
+
+
+    /*
+     * Normaliza clientes e
+     * restaura vínculos antigos.
+     */
+    data.clients
+      .forEach(
+        client => {
+
+          const mac =
+            normalizeMac(
+
+              client.macAddress ||
+
+              client.deviceId
+            );
+
+
+          if (
+            mac.length ===
+            12
+          ) {
+
+            client.macAddress =
+              formatMac(
+                mac
+              );
+          }
+
+
+          let ids =
+            normalizePlaylistIds(
+              client,
+              data.playlists
+            );
+
+
+          /*
+           * Se ficou sem vínculo,
+           * procura a lista antiga.
+           */
+          if (
+            ids.length ===
+            0
+          ) {
+
+            const legacy =
+              findLegacyPlaylistForClient(
+                client,
+                data.playlists
+              );
+
+
+            if (
+              legacy
+            ) {
+
+              ids = [
+                legacy.id
+              ];
+            }
+          }
+
+
+          client.playlistIds =
+            ids;
+
+
+          client.enabled =
+            client.enabled !==
+            false;
+
+
+          client.expiresAt =
+            client.expiresAt ||
+            null;
+        }
+      );
+  }
+);
+
+
+/*
+ * ==========================================
+ * ADMIN
+ * ==========================================
+ */
+
+const adminNeedsSync =
+
+  !store.data.admin ||
+
+  store.data.admin.user !==
+    config.adminUser ||
+
+  !passwordMatches(
+    config.adminPassword,
+    store.data.admin.hash
+  );
+
+
+if (
+  adminNeedsSync
+) {
+
+  await store.mutate(
+    data => {
+
+      data.admin = {
+
+        user:
+          config.adminUser,
+
+        hash:
+          passwordHash(
+            config.adminPassword
+          )
+      };
+    }
+  );
+}
+
+
+/*
+ * ==========================================
+ * RESPOSTA JSON
+ * ==========================================
+ */
+
+const json =
+  (
+    res,
+    status,
+    data
+  ) => {
+
+    res.writeHead(
+      status,
+      {
+
+        'content-type':
+          'application/json; charset=utf-8',
+
+        'cache-control':
+          'no-store'
+      }
+    );
+
+
+    res.end(
+      JSON.stringify(
+        data
+      )
+    );
+  };
+
+
+/*
+ * ==========================================
+ * BODY
+ * ==========================================
+ */
+
+const body =
+  async req => {
+
+    const chunks = [];
+
+    let total = 0;
+
+
+    for await (
+      const chunk of req
+    ) {
+
+      chunks.push(
+        chunk
+      );
+
+
+      total +=
+        chunk.length;
+
+
+      if (
+        total >
+        1_000_000
+      ) {
+
+        throw Error(
+          'Payload muito grande'
+        );
+      }
+    }
+
+
+    if (
+      !chunks.length
+    ) {
+
+      return {};
+    }
+
+
+    return JSON.parse(
+
+      Buffer
+        .concat(
+          chunks
+        )
+        .toString(
+          'utf8'
+        )
+    );
+  };
+
+
+/*
+ * ==========================================
+ * TOKEN
+ * ==========================================
+ */
+
+const token =
+  req =>
+
+    verifyToken(
+
+      String(
+        req.headers
+          .authorization ||
+        ''
+      )
+        .replace(
+          /^Bearer /,
+          ''
+        ),
+
+      config.secret
+    );
+
+
+/*
+ * ==========================================
+ * PLAYLIST SEGURA PARA APK
+ * ==========================================
+ */
+
 const safePlaylist =
   playlist => ({
-    id: playlist.id,
-    name: playlist.name,
-    url: playlist.url,
+
+    id:
+      playlist.id,
+
+    name:
+      playlist.name,
+
+    url:
+      playlist.url,
 
     xmltvUrl:
       playlist.xmltvUrl ||
@@ -197,277 +812,542 @@ const safePlaylist =
       null
   });
 
+
+/*
+ * ==========================================
+ * LOCALIZAR CLIENTE PELO MAC
+ * ==========================================
+ */
+
 function findClientByMac(
   macAddress
 ) {
+
+  const target =
+    normalizeMac(
+      macAddress
+    );
+
+
   return store.data.clients
-    .find(client =>
-      normalizeMac(
-        client.macAddress ||
-        client.deviceId
-      ) === macAddress
+    .find(
+      client =>
+
+        normalizeMac(
+
+          client.macAddress ||
+
+          client.deviceId
+
+        ) ===
+        target
     );
 }
+
+
+/*
+ * ==========================================
+ * LOCALIZAR MAC PENDENTE
+ * ==========================================
+ */
 
 function findPendingMac(
   macAddress
 ) {
+
+  const target =
+    normalizeMac(
+      macAddress
+    );
+
+
   return (
-    store.data.pendingDevices ||
+    store.data
+      .pendingDevices ||
     []
-  ).find(
-    device =>
-      normalizeMac(
-        device.macAddress
-      ) === macAddress
-  );
+  )
+    .find(
+      device =>
+
+        normalizeMac(
+          device.macAddress
+        ) ===
+        target
+    );
 }
 
+
 /*
- * Registra um MAC somente quando
- * ele realmente faz contato pelo APK.
+ * ==========================================
+ * REGISTRAR MAC DO APK
+ * ==========================================
  */
+
 async function rememberPendingDevice(
   req,
   macAddress
 ) {
-  const pending =
-    findPendingMac(
+
+  const target =
+    normalizeMac(
       macAddress
     );
+
 
   const now =
     new Date();
 
+
+  const pending =
+    findPendingMac(
+      target
+    );
+
+
   /*
-   * O APK tenta ativar periodicamente.
-   * Evitamos escrever no banco a
-   * cada poucos segundos.
+   * Evita salvar no Supabase
+   * a cada poucos segundos.
    */
-  if (pending) {
+  if (
+    pending
+  ) {
+
     const last =
       new Date(
         pending.lastSeenAt ||
         0
       );
 
+
     if (
       now.getTime() -
       last.getTime() <
       60_000
     ) {
+
       return;
     }
   }
 
-  await store.mutate(data => {
-    data.pendingDevices =
-      Array.isArray(
+
+  await store.mutate(
+    data => {
+
+      data.pendingDevices =
+        Array.isArray(
+          data.pendingDevices
+        )
+          ? data.pendingDevices
+          : [];
+
+
+      const existing =
         data.pendingDevices
-      )
-        ? data.pendingDevices
-        : [];
+          .find(
+            device =>
 
-    const existing =
-      data.pendingDevices
-        .find(device =>
-          normalizeMac(
-            device.macAddress
-          ) === macAddress
-        );
+              normalizeMac(
+                device.macAddress
+              ) ===
+              target
+          );
 
-    if (existing) {
-      existing.lastSeenAt =
-        now.toISOString();
 
-      existing.userAgent =
-        String(
-          req.headers[
-            'user-agent'
-          ] || ''
-        );
+      if (
+        existing
+      ) {
 
-      return;
-    }
+        existing.lastSeenAt =
+          now.toISOString();
 
-    data.pendingDevices
-      .unshift({
-        id: id(),
 
-        macAddress:
-          formatMac(
-            macAddress
-          ),
-
-        firstSeenAt:
-          now.toISOString(),
-
-        lastSeenAt:
-          now.toISOString(),
-
-        userAgent:
+        existing.userAgent =
           String(
+
             req.headers[
               'user-agent'
-            ] || ''
-          )
-      });
+            ] ||
 
-    data.pendingDevices =
+            ''
+          );
+
+
+        return;
+      }
+
+
       data.pendingDevices
-        .slice(
-          0,
-          500
-        );
-  });
+        .unshift({
+
+          id:
+            id(),
+
+          macAddress:
+            formatMac(
+              target
+            ),
+
+          firstSeenAt:
+            now.toISOString(),
+
+          lastSeenAt:
+            now.toISOString(),
+
+          userAgent:
+            String(
+
+              req.headers[
+                'user-agent'
+              ] ||
+
+              ''
+            )
+        });
+
+
+      data.pendingDevices =
+        data.pendingDevices
+          .slice(
+            0,
+            500
+          );
+    }
+  );
 }
+
+
+/*
+ * ==========================================
+ * NORMALIZAR FONTE
+ * ==========================================
+ */
+
+function normalizeSource(
+  data,
+  fallbackName =
+    'Fonte'
+) {
+
+  const url =
+    cleanUrl(
+      data?.url
+    );
+
+
+  if (
+    !isHttpUrl(
+      url
+    )
+  ) {
+
+    throw new Error(
+      'URL HTTP(S) obrigatória'
+    );
+  }
+
+
+  return {
+
+    name:
+      String(
+
+        data?.name ||
+
+        fallbackName
+      ),
+
+    url,
+
+    xmltvUrl:
+      cleanUrl(
+        data?.xmltvUrl
+      ),
+
+    sourceType:
+      String(
+
+        data?.sourceType ||
+
+        'M3U'
+      )
+        .toUpperCase(),
+
+    xtreamServer:
+      cleanUrl(
+        data?.xtreamServer
+      ),
+
+    xtreamUsername:
+      String(
+        data?.xtreamUsername ||
+        ''
+      ),
+
+    xtreamPassword:
+      String(
+        data?.xtreamPassword ||
+        ''
+      ),
+
+    enabled:
+      data?.enabled !==
+      false,
+
+    expiresAt:
+      data?.expiresAt ||
+      null
+  };
+}
+
+
+/*
+ * ==========================================
+ * VERIFICAR MAC REPETIDO
+ * ==========================================
+ */
+
+function uniqueMacConflict(
+  macAddress,
+  ignoreClientId =
+    ''
+) {
+
+  const target =
+    normalizeMac(
+      macAddress
+    );
+
+
+  return store.data.clients
+    .find(
+      client =>
+
+        client.id !==
+          ignoreClientId &&
+
+        normalizeMac(
+
+          client.macAddress ||
+
+          client.deviceId
+
+        ) ===
+        target
+    );
+}
+
+
+/*
+ * ==========================================
+ * API
+ * ==========================================
+ */
 
 async function api(
   req,
   res,
   path
 ) {
+
   /*
    * SAÚDE
    */
   if (
-    req.method === 'GET' &&
+    req.method ===
+      'GET' &&
+
     path ===
       '/api/health'
   ) {
+
     return json(
       res,
       200,
       {
-        ok: true,
+
+        ok:
+          true,
+
         service:
           'lpsm-control'
       }
     );
   }
 
+
   /*
+   * ========================================
    * LOGIN ADMIN
+   * ========================================
    */
+
   if (
-    req.method === 'POST' &&
+    req.method ===
+      'POST' &&
+
     path ===
       '/api/admin/login'
   ) {
+
     const data =
-      await body(req);
+      await body(
+        req
+      );
+
 
     if (
+
       data.user !==
         store.data.admin.user ||
+
       !passwordMatches(
+
         data.password,
+
         store.data.admin.hash
       )
+
     ) {
+
       return json(
         res,
         401,
         {
+
           error:
             'Credenciais inválidas'
         }
       );
     }
 
+
     return json(
       res,
       200,
       {
+
         token:
           signToken(
+
             {
-              role: 'admin'
+              role:
+                'admin'
             },
 
             config.secret,
 
-            8 * 3600
+            8 *
+            3600
           )
       }
     );
   }
 
+
   /*
-   * =====================================================
-   * APK -> PAINEL
-   * =====================================================
+   * ========================================
+   * APK -> ATIVAÇÃO
+   * ========================================
    */
 
   if (
-    req.method === 'POST' &&
+    req.method ===
+      'POST' &&
+
     path ===
       '/api/device/activate'
   ) {
+
     const data =
-      await body(req);
+      await body(
+        req
+      );
+
 
     const macAddress =
       normalizeMac(
         data.macAddress
       );
 
+
     if (
-      macAddress.length !== 12
+      macAddress.length !==
+      12
     ) {
+
       return json(
         res,
         400,
         {
+
           error:
             'MAC inválido'
         }
       );
     }
 
+
     const client =
       findClientByMac(
         macAddress
       );
 
+
     /*
-     * MAC ainda não cadastrado:
-     * aparece como pendente no painel.
+     * MAC ainda não cadastrado.
+     * Continua aparecendo como
+     * sugestão no painel.
      */
-    if (!client) {
+    if (
+      !client
+    ) {
+
       await rememberPendingDevice(
         req,
         macAddress
       );
 
+
       return json(
         res,
         403,
         {
+
           error:
             'MAC aguardando autorização no painel'
         }
       );
     }
 
-    if (!active(client)) {
+
+    if (
+      !active(
+        client
+      )
+    ) {
+
       return json(
         res,
         403,
         {
+
           error:
             'Cliente inativo ou expirado'
         }
       );
     }
 
+
     return json(
       res,
       200,
       {
+
         token:
           signToken(
+
             {
+
               role:
                 'device',
 
@@ -479,75 +1359,174 @@ async function api(
 
             config.secret,
 
-            30 * 86400
+            30 *
+            86400
           )
       }
     );
   }
 
+
   /*
+   * ========================================
    * CONFIGURAÇÃO DO APK
+   * ========================================
    */
+
   if (
-    req.method === 'GET' &&
+    req.method ===
+      'GET' &&
+
     path ===
       '/api/device/config'
   ) {
+
     const deviceToken =
-      token(req);
+      token(
+        req
+      );
+
 
     if (
+
       !deviceToken ||
+
       deviceToken.role !==
         'device'
+
     ) {
+
       return json(
         res,
         401,
         {
+
           error:
             'Não autorizado'
         }
       );
     }
 
+
     const client =
       store.data.clients
-        .find(item =>
-          item.id ===
-            deviceToken.clientId &&
-          normalizeMac(
-            item.macAddress ||
-            item.deviceId
-          ) ===
-            deviceToken.macAddress
+        .find(
+          item =>
+
+            item.id ===
+              deviceToken.clientId &&
+
+            normalizeMac(
+
+              item.macAddress ||
+
+              item.deviceId
+
+            ) ===
+              deviceToken.macAddress
         );
 
+
     if (
+
       !client ||
-      !active(client)
+
+      !active(
+        client
+      )
+
     ) {
+
       return json(
         res,
         403,
         {
+
           error:
             'Cliente inativo ou expirado'
         }
       );
     }
 
+
+    /*
+     * Procura as listas vinculadas.
+     */
+    let ids =
+      normalizePlaylistIds(
+
+        client,
+
+        store.data.playlists
+      );
+
+
+    /*
+     * Última tentativa de reparo
+     * para cliente muito antigo.
+     */
+    if (
+      !ids.length
+    ) {
+
+      const legacy =
+        findLegacyPlaylistForClient(
+
+          client,
+
+          store.data.playlists
+        );
+
+
+      if (
+        legacy
+      ) {
+
+        ids = [
+          legacy.id
+        ];
+
+
+        await store.mutate(
+          data => {
+
+            const current =
+              data.clients
+                .find(
+                  item =>
+                    item.id ===
+                    client.id
+                );
+
+
+            if (
+              current
+            ) {
+
+              current.playlistIds =
+                ids;
+            }
+          }
+        );
+      }
+    }
+
+
     const allowed =
       new Set(
-        client.playlistIds ||
-        []
+        ids.map(
+          String
+        )
       );
+
 
     return json(
       res,
       200,
       {
+
         client: {
+
           name:
             client.name,
 
@@ -556,20 +1535,29 @@ async function api(
             null
         },
 
+
         appearance:
-          store.data.appearance,
+          store.data.appearance ||
+          {},
+
 
         playlists:
           store.data.playlists
+
             .filter(
               playlist =>
+
                 allowed.has(
-                  playlist.id
+                  String(
+                    playlist.id
+                  )
                 ) &&
+
                 active(
                   playlist
                 )
             )
+
             .map(
               safePlaylist
             )
@@ -577,39 +1565,59 @@ async function api(
     );
   }
 
+
   /*
-   * Daqui para baixo:
-   * somente administrador.
+   * ========================================
+   * ADMIN DAQUI PARA BAIXO
+   * ========================================
    */
+
   const admin =
-    token(req);
+    token(
+      req
+    );
+
 
   if (
+
     !admin ||
-    admin.role !== 'admin'
+
+    admin.role !==
+      'admin'
+
   ) {
+
     return json(
       res,
       401,
       {
+
         error:
           'Não autorizado'
       }
     );
   }
 
+
   /*
+   * ========================================
    * ESTADO DO PAINEL
+   * ========================================
    */
+
   if (
-    req.method === 'GET' &&
+    req.method ===
+      'GET' &&
+
     path ===
       '/api/admin/state'
   ) {
+
     return json(
       res,
       200,
       {
+
         ...store.data,
 
         pendingDevices:
@@ -623,51 +1631,84 @@ async function api(
     );
   }
 
+
   /*
+   * ========================================
    * APARÊNCIA
+   * ========================================
    */
+
   if (
-    req.method === 'PUT' &&
+    req.method ===
+      'PUT' &&
+
     path ===
       '/api/admin/appearance'
   ) {
+
     const data =
-      await body(req);
+      await body(
+        req
+      );
+
 
     await store.mutate(
       state => {
+
         state.appearance = {
+
+          ...state.appearance,
+
           bannerUrl:
             String(
+
               data.bannerUrl ||
+
               ''
             ),
 
           wallpaperUrl:
             String(
+
               data.wallpaperUrl ||
+
               ''
             ),
 
           supportMessage:
             String(
+
               data.supportMessage ||
+
               ''
             )
         };
 
-        state.audit.unshift({
-          id: id(),
 
-          at:
-            new Date()
-              .toISOString(),
+        state.audit
+          .unshift({
 
-          action:
-            'appearance.update'
-        });
+            id:
+              id(),
+
+            at:
+              new Date()
+                .toISOString(),
+
+            action:
+              'appearance.update'
+          });
+
+
+        state.audit =
+          state.audit
+            .slice(
+              0,
+              200
+            );
       }
     );
+
 
     return json(
       res,
@@ -676,70 +1717,79 @@ async function api(
     );
   }
 
+
   /*
-   * CRIAR LISTA
+   * ========================================
+   * CRIAR FONTE
+   * ========================================
    */
+
   if (
-    req.method === 'POST' &&
+    req.method ===
+      'POST' &&
+
     path ===
       '/api/admin/playlists'
   ) {
-    const data =
-      await body(req);
 
-    if (
-      !/^https?:\/\//i.test(
-        data.url || ''
-      )
+    const data =
+      await body(
+        req
+      );
+
+
+    let normalized;
+
+
+    try {
+
+      normalized =
+        normalizeSource(
+
+          data,
+
+          'Fonte'
+        );
+
+    } catch (
+      error
     ) {
+
       return json(
         res,
         400,
         {
+
           error:
-            'URL HTTP(S) obrigatória'
+            error.message
         }
       );
     }
 
+
     const playlist = {
-      id: id(),
 
-      name:
-        String(
-          data.name ||
-          'Lista'
-        ),
+      id:
+        id(),
 
-      url:
-        String(
-          data.url
-        ),
-
-      xmltvUrl:
-        String(
-          data.xmltvUrl ||
-          ''
-        ),
-
-      enabled:
-        data.enabled !== false,
-
-      expiresAt:
-        data.expiresAt ||
-        null
+      ...normalized
     };
+
 
     await store.mutate(
       state => {
+
         state.playlists
           .push(
             playlist
           );
 
+
         state.audit
           .unshift({
-            id: id(),
+
+            id:
+              id(),
 
             at:
               new Date()
@@ -751,8 +1801,17 @@ async function api(
             detail:
               playlist.name
           });
+
+
+        state.audit =
+          state.audit
+            .slice(
+              0,
+              200
+            );
       }
     );
+
 
     return json(
       res,
@@ -761,160 +1820,205 @@ async function api(
     );
   }
 
+
   /*
+   * ========================================
    * CRIAR CLIENTE
+   * ========================================
+   *
+   * AGORA O MAC NÃO PRECISA ESTAR
+   * NA FILA DE ESPERA.
+   *
+   * PODE SER DIGITADO MANUALMENTE.
    */
+
   if (
-    req.method === 'POST' &&
+    req.method ===
+      'POST' &&
+
     path ===
       '/api/admin/clients'
   ) {
+
     const data =
-      await body(req);
+      await body(
+        req
+      );
+
 
     const macAddress =
       normalizeMac(
+
         data.macAddress ||
+
         data.deviceId
       );
 
+
     if (
-      macAddress.length !== 12
+      macAddress.length !==
+      12
     ) {
+
       return json(
         res,
         400,
         {
+
           error:
             'MAC inválido'
         }
       );
     }
 
+
     /*
-     * Não permite cadastrar MAC
-     * inventado/manual.
+     * Só impede MAC duplicado.
      */
-    const pending =
-      findPendingMac(
-        macAddress
-      );
-
-    if (!pending) {
-      return json(
-        res,
-        400,
-        {
-          error:
-            'MAC não reconhecido. Abra o APK neste aparelho primeiro e aguarde o MAC aparecer no painel.'
-        }
-      );
-    }
-
     if (
-      findClientByMac(
+      uniqueMacConflict(
         macAddress
       )
     ) {
+
       return json(
         res,
         409,
         {
+
           error:
             'Este MAC já está cadastrado'
         }
       );
     }
 
+
     const defaultExpiry =
       new Date();
 
-    defaultExpiry.setFullYear(
-      defaultExpiry
-        .getFullYear() +
-      1
-    );
+
+    defaultExpiry
+      .setFullYear(
+
+        defaultExpiry
+          .getFullYear() +
+        1
+      );
+
 
     const playlistIds =
       Array.isArray(
         data.playlistIds
       )
         ? [
-            ...data.playlistIds
+            ...new Set(
+
+              data.playlistIds
+                .map(
+                  String
+                )
+            )
           ]
         : [];
+
 
     let createdPlaylist =
       null;
 
+
     /*
-     * Permite continuar criando
-     * uma lista junto do cliente.
+     * Fonte criada junto
+     * com o cliente.
      */
     if (
       data.inlinePlaylist
         ?.url
     ) {
-      if (
-        !/^https?:\/\//i.test(
-          data.inlinePlaylist
-            .url
-        )
+
+      let normalized;
+
+
+      try {
+
+        normalized =
+          normalizeSource(
+
+            data.inlinePlaylist,
+
+            `Fonte de ${
+              String(
+                data.name ||
+                'Cliente'
+              )
+            }`
+          );
+
+      } catch (
+        error
       ) {
+
         return json(
           res,
           400,
           {
+
             error:
-              'URL M3U HTTP(S) obrigatória'
+              error.message
           }
         );
       }
 
+
       createdPlaylist = {
-        id: id(),
 
+        id:
+          id(),
+
+        ...normalized,
+
+        /*
+         * Nome interno automático.
+         * Não aparece para renomear.
+         */
         name:
-          String(
-            data.inlinePlaylist
-              .name ||
-            data.name ||
-            'Lista'
-          ),
-
-        url:
-          String(
-            data.inlinePlaylist
-              .url
-          ),
-
-        xmltvUrl:
-          String(
-            data.inlinePlaylist
-              .xmltvUrl ||
-            ''
-          ),
+          `Fonte de ${
+            String(
+              data.name ||
+              'Cliente'
+            )
+          }`,
 
         enabled:
           true,
 
         expiresAt:
+
           data.expiresAt ||
+
+          normalized.expiresAt ||
+
           defaultExpiry
             .toISOString()
       };
 
-      playlistIds.push(
-        createdPlaylist.id
-      );
+
+      playlistIds
+        .unshift(
+          createdPlaylist.id
+        );
     }
 
+
     const client = {
-      id: id(),
+
+      id:
+        id(),
 
       name:
         String(
+
           data.name ||
+
           'Cliente'
         ),
 
@@ -925,19 +2029,35 @@ async function api(
 
       activationCode:
         String(
-          data.activationCode ||
-          Math.random()
-            .toString(36)
-            .slice(2, 8)
-        ).toUpperCase(),
 
-      playlistIds,
+          data.activationCode ||
+
+          Math.random()
+            .toString(
+              36
+            )
+            .slice(
+              2,
+              8
+            )
+        )
+          .toUpperCase(),
+
+      playlistIds:
+        [
+          ...new Set(
+            playlistIds
+          )
+        ],
 
       enabled:
-        data.enabled !== false,
+        data.enabled !==
+        false,
 
       expiresAt:
+
         data.expiresAt ||
+
         defaultExpiry
           .toISOString(),
 
@@ -946,41 +2066,51 @@ async function api(
           .toISOString()
     };
 
+
     await store.mutate(
       state => {
+
         if (
           createdPlaylist
         ) {
+
           state.playlists
             .push(
               createdPlaylist
             );
         }
 
+
         state.clients
           .push(
             client
           );
 
+
         /*
-         * Sai da fila de pendentes
-         * quando for autorizado.
+         * Se o MAC estava na fila,
+         * remove depois do cadastro.
          */
         state.pendingDevices =
           (
             state.pendingDevices ||
             []
-          ).filter(
-            device =>
-              normalizeMac(
-                device.macAddress
-              ) !==
-              macAddress
-          );
+          )
+            .filter(
+              device =>
+
+                normalizeMac(
+                  device.macAddress
+                ) !==
+                macAddress
+            );
+
 
         state.audit
           .unshift({
-            id: id(),
+
+            id:
+              id(),
 
             at:
               new Date()
@@ -992,231 +2122,401 @@ async function api(
             detail:
               client.name
           });
+
+
+        state.audit =
+          state.audit
+            .slice(
+              0,
+              200
+            );
       }
     );
+
 
     return json(
       res,
       201,
       {
+
         ...client,
+
         createdPlaylist
       }
     );
   }
+
+
+  /*
+   * ========================================
+   * CLIENTE OU FONTE POR ID
+   * ========================================
+   */
 
   const match =
     path.match(
       /^\/api\/admin\/(clients|playlists)\/([^/]+)$/
     );
 
+
   /*
-   * EDITAR CLIENTE OU LISTA
+   * ========================================
+   * EDITAR
+   * ========================================
    */
+
   if (
+
     match &&
-    req.method === 'PUT'
+
+    req.method ===
+      'PUT'
+
   ) {
+
     const [
       ,
       kind,
       itemId
     ] = match;
 
-    const key = kind;
 
     const data =
-      await body(req);
+      await body(
+        req
+      );
 
-    let updated;
+
+    const collection =
+      store.data[
+        kind
+      ];
+
+
+    const existing =
+      collection
+        .find(
+          item =>
+            item.id ===
+            itemId
+        );
+
+
+    if (
+      !existing
+    ) {
+
+      return json(
+        res,
+        404,
+        {
+
+          error:
+            'Não encontrado'
+        }
+      );
+    }
+
 
     /*
-     * Validação da URL
-     * ao editar M3U.
+     * ======================================
+     * EDITAR MAC
+     * ======================================
+     *
+     * AGORA NÃO PRECISA ESTAR PENDENTE.
+     */
+
+    if (
+
+      kind ===
+        'clients' &&
+
+      'macAddress' in
+        data
+
+    ) {
+
+      const macAddress =
+        normalizeMac(
+          data.macAddress
+        );
+
+
+      if (
+        macAddress.length !==
+        12
+      ) {
+
+        return json(
+          res,
+          400,
+          {
+
+            error:
+              'MAC inválido'
+          }
+        );
+      }
+
+
+      /*
+       * Continua impedindo MAC
+       * de outro cliente.
+       */
+      if (
+        uniqueMacConflict(
+
+          macAddress,
+
+          itemId
+        )
+      ) {
+
+        return json(
+          res,
+          409,
+          {
+
+            error:
+              'Este MAC já pertence a outro cliente'
+          }
+        );
+      }
+    }
+
+
+    /*
+     * Valida URL da fonte.
      */
     if (
-      key ===
+
+      kind ===
         'playlists' &&
+
       'url' in data &&
-      !/^https?:\/\//i.test(
-        data.url || ''
+
+      !isHttpUrl(
+        data.url
       )
+
     ) {
+
       return json(
         res,
         400,
         {
+
           error:
             'URL HTTP(S) obrigatória'
         }
       );
     }
 
-    /*
-     * Se trocar MAC de um cliente,
-     * o novo MAC também precisa ter
-     * aparecido realmente no APK.
-     */
-    if (
-      key === 'clients' &&
-      'macAddress' in data
-    ) {
-      const existingClient =
-        store.data.clients
-          .find(
-            item =>
-              item.id ===
-              itemId
-          );
 
-      if (
-        existingClient
-      ) {
-        const oldMac =
-          normalizeMac(
-            existingClient
-              .macAddress
-          );
+    let updated;
 
-        const newMac =
-          normalizeMac(
-            data.macAddress
-          );
-
-        if (
-          newMac.length !== 12
-        ) {
-          return json(
-            res,
-            400,
-            {
-              error:
-                'MAC inválido'
-            }
-          );
-        }
-
-        if (
-          newMac !== oldMac &&
-          !findPendingMac(
-            newMac
-          )
-        ) {
-          return json(
-            res,
-            400,
-            {
-              error:
-                'Novo MAC não reconhecido pelo APK'
-            }
-          );
-        }
-
-        const duplicate =
-          store.data.clients
-            .find(
-              item =>
-                item.id !==
-                  itemId &&
-                normalizeMac(
-                  item.macAddress
-                ) ===
-                  newMac
-            );
-
-        if (duplicate) {
-          return json(
-            res,
-            409,
-            {
-              error:
-                'Este MAC já pertence a outro cliente'
-            }
-          );
-        }
-      }
-    }
 
     await store.mutate(
       state => {
+
         const index =
-          state[key]
+          state[
+            kind
+          ]
             .findIndex(
               item =>
                 item.id ===
                 itemId
             );
 
+
         if (
-          index < 0
+          index <
+          0
         ) {
+
           return;
         }
 
+
+        /*
+         * Campos permitidos.
+         */
         const allowed =
-          key === 'clients'
+
+          kind ===
+            'clients'
+
             ? [
+
                 'name',
+
                 'macAddress',
+
                 'activationCode',
+
                 'playlistIds',
+
                 'enabled',
+
                 'expiresAt'
               ]
+
             : [
+
                 'name',
+
                 'url',
+
                 'xmltvUrl',
+
                 'enabled',
-                'expiresAt'
+
+                'expiresAt',
+
+                'sourceType',
+
+                'xtreamServer',
+
+                'xtreamUsername',
+
+                'xtreamPassword'
               ];
 
+
         for (
-          const field of allowed
+          const field of
+          allowed
         ) {
+
           if (
-            field in data
+            !(
+              field in
+              data
+            )
           ) {
-            state[key][index][field] =
-              field ===
-                'macAddress'
-                ? formatMac(
-                    data[field]
-                  )
-                : data[field];
+
+            continue;
+          }
+
+
+          if (
+            field ===
+            'macAddress'
+          ) {
+
+            state[
+              kind
+            ][
+              index
+            ][
+              field
+            ] =
+              formatMac(
+                data[
+                  field
+                ]
+              );
+
+          } else if (
+            field ===
+            'playlistIds'
+          ) {
+
+            state[
+              kind
+            ][
+              index
+            ][
+              field
+            ] =
+
+              Array.isArray(
+                data[
+                  field
+                ]
+              )
+
+                ? [
+                    ...new Set(
+
+                      data[
+                        field
+                      ]
+                        .map(
+                          String
+                        )
+                    )
+                  ]
+
+                : [];
+
+          } else {
+
+            state[
+              kind
+            ][
+              index
+            ][
+              field
+            ] =
+              data[
+                field
+              ];
           }
         }
 
-        updated =
-          state[key][index];
 
+        updated =
+          state[
+            kind
+          ][
+            index
+          ];
+
+
+        /*
+         * Se alterou o MAC,
+         * remove esse MAC da
+         * fila de pendentes.
+         */
         if (
-          key ===
+
+          kind ===
             'clients' &&
+
           'macAddress' in
             data
+
         ) {
+
           const newMac =
             normalizeMac(
               data.macAddress
             );
 
+
           state.pendingDevices =
             (
               state.pendingDevices ||
               []
-            ).filter(
-              device =>
-                normalizeMac(
-                  device.macAddress
-                ) !==
-                newMac
-            );
+            )
+              .filter(
+                device =>
+
+                  normalizeMac(
+                    device.macAddress
+                  ) !==
+                  newMac
+              );
         }
+
 
         state.audit
           .unshift({
-            id: id(),
+
+            id:
+              id(),
 
             at:
               new Date()
@@ -1228,72 +2528,102 @@ async function api(
             detail:
               itemId
           });
+
+
+        state.audit =
+          state.audit
+            .slice(
+              0,
+              200
+            );
       }
     );
 
-    return updated
-      ? json(
-          res,
-          200,
-          updated
-        )
-      : json(
-          res,
-          404,
-          {
-            error:
-              'Não encontrado'
-          }
-        );
+
+    return json(
+      res,
+      200,
+      updated
+    );
   }
 
+
   /*
+   * ========================================
    * EXCLUIR
+   * ========================================
    */
+
   if (
+
     match &&
-    req.method === 'DELETE'
+
+    req.method ===
+      'DELETE'
+
   ) {
+
     const [
       ,
       kind,
       itemId
     ] = match;
 
+
     await store.mutate(
       state => {
-        state[kind] =
-          state[kind]
+
+        state[
+          kind
+        ] =
+          state[
+            kind
+          ]
             .filter(
               item =>
                 item.id !==
                 itemId
             );
 
+
+        /*
+         * Ao apagar uma fonte,
+         * remove o ID dos clientes.
+         */
         if (
           kind ===
           'playlists'
         ) {
+
           state.clients
             .forEach(
               client => {
+
                 client.playlistIds =
                   (
-                    client
-                      .playlistIds ||
+                    client.playlistIds ||
                     []
-                  ).filter(
-                    playlistId =>
-                      playlistId !==
-                      itemId
-                  );
+                  )
+                    .filter(
+                      playlistId =>
+
+                        String(
+                          playlistId
+                        ) !==
+                        String(
+                          itemId
+                        )
+                    );
               }
             );
         }
 
+
         state.audit
           .unshift({
-            id: id(),
+
+            id:
+              id(),
 
             at:
               new Date()
@@ -1305,29 +2635,50 @@ async function api(
             detail:
               itemId
           });
+
+
+        state.audit =
+          state.audit
+            .slice(
+              0,
+              200
+            );
       }
     );
+
 
     return json(
       res,
       200,
       {
-        ok: true
+
+        ok:
+          true
       }
     );
   }
+
 
   return json(
     res,
     404,
     {
+
       error:
         'Rota não encontrada'
     }
   );
 }
 
+
+/*
+ * ==========================================
+ * ARQUIVOS DO PAINEL
+ * ==========================================
+ */
+
 const mime = {
+
   '.html':
     'text/html; charset=utf-8',
 
@@ -1338,80 +2689,158 @@ const mime = {
     'text/css; charset=utf-8',
 
   '.svg':
-    'image/svg+xml'
+    'image/svg+xml',
+
+  '.png':
+    'image/png',
+
+  '.jpg':
+    'image/jpeg',
+
+  '.jpeg':
+    'image/jpeg',
+
+  '.webp':
+    'image/webp'
 };
+
+
+/*
+ * ==========================================
+ * SERVIDOR
+ * ==========================================
+ */
 
 const server =
   http.createServer(
+
     async (
       req,
       res
     ) => {
+
       try {
+
         const url =
           new URL(
+
             req.url,
+
             'http://localhost'
           );
 
+
+        /*
+         * API
+         */
         if (
           url.pathname
             .startsWith(
               '/api/'
             )
         ) {
+
           return await api(
+
             req,
+
             res,
+
             url.pathname
           );
         }
 
+
+        /*
+         * ARQUIVOS ESTÁTICOS
+         */
         const rel =
-          url.pathname === '/'
+
+          url.pathname ===
+          '/'
+
             ? 'index.html'
+
             : url.pathname
-                .slice(1);
+                .slice(
+                  1
+                );
+
 
         const file =
           normalize(
+
             join(
+
               root,
+
               'public',
+
               rel
             )
           );
 
+
         const publicRoot =
           normalize(
+
             join(
+
               root,
+
               'public'
             )
           );
+
 
         if (
           !file.startsWith(
             publicRoot
           )
         ) {
-          res.writeHead(403);
+
+          res.writeHead(
+            403
+          );
+
           return res.end();
         }
+
 
         const data =
           await readFile(
             file
           );
 
+
+        /*
+         * SEM CACHE.
+         *
+         * Assim Ctrl+F5 não fica
+         * preso no app.js antigo.
+         */
         res.writeHead(
           200,
           {
+
             'content-type':
+
               mime[
-                extname(file)
+                extname(
+                  file
+                )
               ] ||
+
               'application/octet-stream',
+
+            'cache-control':
+              'no-store, no-cache, must-revalidate',
+
+            pragma:
+              'no-cache',
+
+            expires:
+              '0',
 
             'x-content-type-options':
               'nosniff',
@@ -1421,42 +2850,64 @@ const server =
           }
         );
 
-        res.end(data);
 
-      } catch (error) {
+        res.end(
+          data
+        );
+
+      } catch (
+        error
+      ) {
+
         if (
           error.code ===
           'ENOENT'
         ) {
-          res.writeHead(404);
+
+          res.writeHead(
+            404
+          );
+
+
           res.end(
             'Não encontrado'
           );
 
-        } else {
-          console.error(
-            error
-          );
 
-          json(
-            res,
-            500,
-            {
-              error:
-                'Erro interno'
-            }
-          );
+          return;
         }
+
+
+        console.error(
+          error
+        );
+
+
+        json(
+          res,
+          500,
+          {
+
+            error:
+              'Erro interno'
+          }
+        );
       }
     }
   );
 
+
 server.listen(
   config.port,
-  () =>
+  () => {
+
     console.log(
       `LPSM Control em http://localhost:${config.port}`
-    )
+    );
+  }
 );
 
-export { server };
+
+export {
+  server
+};
