@@ -1,38 +1,99 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_margin="6dp"
+    android:layout_height="118dp"
+    android:layout_marginStart="6dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginEnd="6dp"
+    android:layout_marginBottom="6dp"
     android:background="@drawable/tv_item_background"
     android:clickable="true"
     android:focusable="true"
     android:focusableInTouchMode="false"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="6dp">
 
-    <TextView
-        android:id="@+id/title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/text"
-        android:textSize="17sp"
-        android:textStyle="bold"/>
+    <!--
+        IMAGEM DO CANAL / EPISÓDIO
+    -->
+    <FrameLayout
+        android:id="@+id/mediaImageContainer"
+        android:layout_width="175dp"
+        android:layout_height="106dp">
 
-    <TextView
-        android:id="@+id/subtitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="2"
-        android:paddingTop="4dp"
-        android:textColor="@color/muted"/>
+        <ImageView
+            android:id="@+id/mediaImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="Imagem do conteúdo"
+            android:scaleType="centerCrop" />
 
-    <TextView
-        android:id="@+id/star"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:textColor="@color/accent"/>
+        <!-- Número do episódio -->
+        <TextView
+            android:id="@+id/episodeBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start|top"
+            android:layout_margin="8dp"
+            android:background="#B8000000"
+            android:paddingStart="7dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="7dp"
+            android:paddingBottom="3dp"
+            android:text="1"
+            android:textColor="#FFFF00"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    <!--
+        INFORMAÇÕES
+    -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="14dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:paddingEnd="10dp">
+
+        <!-- Ex.: Silo S01E01 -->
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/text"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- Temporada / episódio / categoria -->
+        <TextView
+            android:id="@+id/subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@color/muted"
+            android:textSize="14sp" />
+
+        <!-- Favorito -->
+        <TextView
+            android:id="@+id/star"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:textColor="@color/accent"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
 </LinearLayout>
