@@ -1,16 +1,5 @@
-const $ =
-  selector =>
-    document.querySelector(
-      selector
-    );
-
-const $$ =
-  selector =>
-    [
-      ...document.querySelectorAll(
-        selector
-      )
-    ];
+const $ = selector => document.querySelector(selector);
+const $$ = selector => [...document.querySelectorAll(selector)];
 
 let state = {
   clients: [],
@@ -20,113 +9,415 @@ let state = {
   audit: []
 };
 
-const request =
-  async (
-    path,
-    options = {}
-  ) => {
-
-    const response =
-      await fetch(
-        path,
-        {
-          ...options,
-
-          headers: {
-            'content-type':
-              'application/json',
-
-            authorization:
-              `Bearer ${
-                localStorage.lpsmToken ||
-                ''
-              }`,
-
-            ...options.headers
-          }
-        }
-      );
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-      throw Error(
-        data.error ||
-        'Falha'
-      );
+const request = async (path, options = {}) => {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${localStorage.lpsmToken || ''}`,
+      ...options.headers
     }
+  });
 
-    return data;
-  };
+  const raw = await response.text();
+  let data = {};
 
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {
+      error: raw || `Erro ${response.status}`
+    };
+  }
 
-const esc =
-  value =>
-    String(
-      value ?? ''
-    ).replace(
-      /[&<>"']/g,
-      char =>
-        ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;'
-        })[char]
+  if (!response.ok) {
+    throw Error(
+      data.error ||
+      `Erro ${response.status}`
+    );
+  }
+
+  return data;
+};
+
+const esc = value =>
+  String(value ?? '').replace(
+    /[&<>"']/g,
+    char =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]
+  );
+
+const formatMac = value => {
+  const raw = String(value || '')
+    .replace(
+      /[^0-9a-f]/gi,
+      ''
+    )
+    .toUpperCase()
+    .slice(
+      0,
+      12
     );
 
+  return (
+    raw.match(
+      /.{1,2}/g
+    ) || []
+  ).join(':');
+};
 
-const formatMac =
-  value => {
-
-    const raw =
-      String(
-        value || ''
+const fmtDate = value =>
+  value
+    ? new Date(
+        value
+      ).toLocaleDateString(
+        'pt-BR'
       )
-        .replace(
-          /[^0-9a-f]/gi,
-          ''
+    : 'Sem expiração';
+
+const fmtDateTime = value =>
+  value
+    ? new Date(
+        value
+      ).toLocaleString(
+        'pt-BR'
+      )
+    : '';
+
+const toDateInput = value =>
+  value
+    ? String(
+        value
+      ).slice(
+        0,
+        10
+      )
+    : '';
+
+const isoEndOfDay = value =>
+  value
+    ? new Date(
+        `${value}T23:59:59`
+      ).toISOString()
+    : null;
+
+function normalizeServer(
+  value
+) {
+  return String(
+    value || ''
+  )
+    .trim()
+    .replace(
+      /\/+$/,
+      ''
+    );
+}
+
+function buildXtreamM3uUrl(
+  server,
+  username,
+  password
+) {
+  const base =
+    normalizeServer(
+      server
+    );
+
+  if (
+    !/^https?:\/\//i.test(
+      base
+    )
+  ) {
+    throw Error(
+      'Informe uma URL válida do servidor Xtream.'
+    );
+  }
+
+  if (
+    !username ||
+    !password
+  ) {
+    throw Error(
+      'Informe usuário e senha do Xtream.'
+    );
+  }
+
+  return (
+    `${base}/get.php` +
+    `?username=${encodeURIComponent(username)}` +
+    `&password=${encodeURIComponent(password)}` +
+    `&type=m3u_plus&output=ts`
+  );
+}
+
+function buildXtreamXmltvUrl(
+  server,
+  username,
+  password
+) {
+  const base =
+    normalizeServer(
+      server
+    );
+
+  return (
+    `${base}/xmltv.php` +
+    `?username=${encodeURIComponent(username)}` +
+    `&password=${encodeURIComponent(password)}`
+  );
+}
+
+function parseXtreamUrl(
+  value
+) {
+  try {
+    const url =
+      new URL(
+        value
+      );
+
+    const username =
+      url.searchParams.get(
+        'username'
+      ) || '';
+
+    const password =
+      url.searchParams.get(
+        'password'
+      ) || '';
+
+    if (
+      !username ||
+      !password ||
+      !url.pathname
+        .toLowerCase()
+        .endsWith(
+          '/get.php'
         )
-        .toUpperCase()
-        .slice(
-          0,
-          12
+    ) {
+      return null;
+    }
+
+    const pathname =
+      url.pathname.replace(
+        /\/get\.php$/i,
+        ''
+      );
+
+    const server =
+      `${url.protocol}//${url.host}${pathname}`
+        .replace(
+          /\/+$/,
+          ''
         );
 
+    return {
+      server,
+      username,
+      password
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sourceTypeOf(
+  playlist
+) {
+  return parseXtreamUrl(
+    playlist?.url
+  )
+    ? 'XTREAM'
+    : 'M3U';
+}
+
+function primarySource(
+  client
+) {
+  const ids =
+    client?.playlistIds ||
+    [];
+
+  for (
+    const sourceId of ids
+  ) {
+    const source =
+      state.playlists.find(
+        item =>
+          item.id ===
+          sourceId
+      );
+
+    if (source) {
+      return source;
+    }
+  }
+
+  return null;
+}
+
+function clientsUsingSource(
+  sourceId
+) {
+  return state.clients.filter(
+    client =>
+      (
+        client.playlistIds ||
+        []
+      ).includes(
+        sourceId
+      )
+  );
+}
+
+function sourceDisplayName(
+  source
+) {
+  const clients =
+    clientsUsingSource(
+      source.id
+    );
+
+  if (
+    clients.length === 1
+  ) {
+    return `Fonte de ${clients[0].name}`;
+  }
+
+  if (
+    clients.length > 1
+  ) {
     return (
-      raw.match(
-        /.{1,2}/g
-      ) || []
-    ).join(':');
-  };
+      `Fonte compartilhada por ` +
+      `${clients.length} clientes`
+    );
+  }
 
+  return (
+    sourceTypeOf(
+      source
+    ) === 'XTREAM'
+      ? 'Fonte Xtream'
+      : 'Fonte M3U'
+  );
+}
 
-const fmt =
-  value =>
-    value
-      ? new Date(
-          value
-        ).toLocaleDateString(
-          'pt-BR'
-        )
-      : 'Sem expiração';
+function sourceSummary(
+  source
+) {
+  const xtream =
+    parseXtreamUrl(
+      source?.url
+    );
 
+  if (xtream) {
+    return (
+      `Xtream Codes • ` +
+      `${xtream.server} • ` +
+      `usuário ${xtream.username}`
+    );
+  }
 
-const fmtDateTime =
-  value =>
-    value
-      ? new Date(
-          value
-        ).toLocaleString(
-          'pt-BR'
-        )
-      : '';
+  return (
+    `M3U URL • ` +
+    `${source?.url || 'sem URL'}`
+  );
+}
 
+function ensureExtraStyles() {
+  if (
+    $('#lpsmExtraStyles')
+  ) {
+    return;
+  }
+
+  document.head
+    .insertAdjacentHTML(
+      'beforeend',
+      `
+      <style id="lpsmExtraStyles">
+
+        .pending-area {
+          margin-bottom: 28px;
+          padding-bottom: 22px;
+          border-bottom:
+            1px solid #24364a;
+        }
+
+        .pending-card {
+          border:
+            1px solid #47e6a5 !important;
+        }
+
+        .mac-code {
+          color: #ffe500;
+          font-size: 18px;
+          font-weight: 700;
+          letter-spacing: 1px;
+        }
+
+        dialog form fieldset {
+          margin: 18px 0;
+          padding: 16px;
+          border:
+            1px solid #30445b;
+          border-radius: 12px;
+        }
+
+        dialog form fieldset legend {
+          padding: 0 8px;
+          color: #47e6a5;
+          font-weight: 700;
+        }
+
+        dialog select,
+        dialog input {
+          width: 100%;
+          box-sizing:
+            border-box;
+        }
+
+        #clientDialog,
+        #sourceDialog {
+          width:
+            min(
+              620px,
+              92vw
+            );
+
+          max-height: 92vh;
+          overflow: auto;
+        }
+
+        .source-type {
+          display: inline-block;
+          margin-top: 6px;
+          padding: 4px 9px;
+          border-radius: 999px;
+          background: #142438;
+          color: #47e6a5;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .hidden {
+          display:
+            none !important;
+        }
+
+      </style>
+      `
+    );
+}
 
 function ensurePendingArea() {
-
   if (
     $('#pendingDevices')
   ) {
@@ -136,9 +427,10 @@ function ensurePendingArea() {
   const clientList =
     $('#clientList');
 
-  clientList.insertAdjacentHTML(
-    'beforebegin',
-    `
+  clientList
+    .insertAdjacentHTML(
+      'beforebegin',
+      `
       <section
         id="pendingDevices"
         class="pending-area"
@@ -153,8 +445,8 @@ function ensurePendingArea() {
             </h2>
 
             <p class="meta">
-              Estes aparelhos abriram o APK
-              e estão aguardando cadastro.
+              Abra o APK no aparelho.
+              O MAC aparecerá aqui automaticamente.
             </p>
 
           </div>
@@ -167,67 +459,11 @@ function ensurePendingArea() {
         ></div>
 
       </section>
-    `
-  );
-
-  document.head
-    .insertAdjacentHTML(
-      'beforeend',
-      `
-      <style>
-
-        .pending-area {
-          margin-bottom: 30px;
-          padding-bottom: 25px;
-          border-bottom:
-            1px solid #24364a;
-        }
-
-        .pending-card {
-          border:
-            1px solid #47e6a5 !important;
-        }
-
-        .mac-code {
-          color: #ffe500;
-          font-size: 19px;
-          font-weight: 700;
-          letter-spacing: 1px;
-        }
-
-        .inline-playlist {
-          margin-top: 22px;
-          padding: 18px;
-          background: #0a1624;
-          border:
-            1px solid #30445b;
-          border-radius: 12px;
-        }
-
-        .inline-playlist h3 {
-          margin-top: 0;
-          color: #47e6a5;
-        }
-
-        #clientDialog,
-        #playlistDialog {
-          max-height: 92vh;
-          overflow: auto;
-        }
-
-        input[readonly] {
-          opacity: .85;
-          cursor: not-allowed;
-        }
-
-      </style>
       `
     );
 }
 
-
 async function load() {
-
   state =
     await request(
       '/api/admin/state'
@@ -237,369 +473,395 @@ async function load() {
     state.pendingDevices ||
     [];
 
+  state.clients =
+    state.clients ||
+    [];
+
+  state.playlists =
+    state.playlists ||
+    [];
+
+  state.appearance =
+    state.appearance ||
+    {};
+
+  state.audit =
+    state.audit ||
+    [];
+
   render();
 }
 
-
 function render() {
-
+  ensureExtraStyles();
   ensurePendingArea();
 
+  const activeClients =
+    state.clients.filter(
+      client =>
+        client.enabled !==
+        false
+    ).length;
 
-  state.clients.forEach(
-    client => {
-
-      client.deviceId =
-        formatMac(
-          client.macAddress ||
-          client.deviceId
-        );
-    }
-  );
-
+  const activeSources =
+    state.playlists.filter(
+      source =>
+        source.enabled !==
+        false
+    ).length;
 
   $('#summary')
     .textContent =
-      `${
-        state.clients.filter(
-          client =>
-            client.enabled
-        ).length
-      } clientes ativos · ${
-        state.playlists.filter(
-          playlist =>
-            playlist.enabled
-        ).length
-      } listas disponíveis · ${
-        state.pendingDevices.length
-      } MAC(s) aguardando`;
+      `${activeClients} clientes ativos · ` +
+      `${activeSources} fontes ativas · ` +
+      `${state.pendingDevices.length} MAC(s) aguardando`;
 
-
-  /*
-   * MACS AGUARDANDO
-   */
   $('#pendingList')
     .innerHTML =
       state.pendingDevices
         .map(
           device => `
-            <article
-              class="card item pending-card"
-            >
+          <article
+            class="card item pending-card"
+          >
 
-              <div class="row">
+            <div class="row">
 
-                <h3>
-                  Novo aparelho
-                </h3>
+              <h3>
+                Novo aparelho
+              </h3>
 
-                <span class="pill">
-                  AGUARDANDO
-                </span>
+              <span class="pill">
+                AGUARDANDO
+              </span>
 
-              </div>
+            </div>
 
-              <div class="meta">
+            <div class="meta">
 
-                MAC:
+              MAC:
 
-                <div class="mac-code">
-                  ${esc(
-                    formatMac(
-                      device.macAddress
-                    )
-                  )}
-                </div>
-
-                Detectado:
+              <div class="mac-code">
                 ${esc(
-                  fmtDateTime(
-                    device.firstSeenAt
+                  formatMac(
+                    device.macAddress
                   )
                 )}
+              </div>
 
-                <br>
+              Detectado:
+              ${esc(
+                fmtDateTime(
+                  device.firstSeenAt
+                )
+              )}
 
-                Último contato:
-                ${esc(
-                  fmtDateTime(
-                    device.lastSeenAt
+              <br>
+
+              Último contato:
+              ${esc(
+                fmtDateTime(
+                  device.lastSeenAt
+                )
+              )}
+
+            </div>
+
+            <div class="actions">
+
+              <button
+                class="authorize-mac"
+                data-mac="${esc(
+                  formatMac(
+                    device.macAddress
                   )
-                )}
+                )}"
+              >
+                Cadastrar cliente
+              </button>
 
-              </div>
+            </div>
 
-              <div class="actions">
-
-                <button
-                  class="authorize-mac"
-                  data-mac="${esc(
-                    formatMac(
-                      device.macAddress
-                    )
-                  )}"
-                >
-                  Cadastrar cliente
-                </button>
-
-              </div>
-
-            </article>
+          </article>
           `
         )
         .join('') ||
       `
         <p>
           Nenhum MAC aguardando.
-          Abra o APK no aparelho para
-          ele aparecer aqui.
+          Abra o APK em um aparelho novo.
         </p>
       `;
 
-
-  /*
-   * CLIENTES
-   */
   $('#clientList')
     .innerHTML =
       state.clients
         .map(
-          client => `
-            <article class="card item">
+          client => {
 
-              <div class="row">
+            const source =
+              primarySource(
+                client
+              );
 
-                <h3>
+            return `
+              <article
+                class="card item"
+              >
+
+                <div class="row">
+
+                  <h3>
+                    ${esc(
+                      client.name
+                    )}
+                  </h3>
+
+                  <span
+                    class="pill ${
+                      client.enabled ===
+                      false
+                        ? 'off'
+                        : ''
+                    }"
+                  >
+                    ${
+                      client.enabled ===
+                      false
+                        ? 'INATIVO'
+                        : 'ATIVO'
+                    }
+                  </span>
+
+                </div>
+
+                <div class="meta">
+
+                  MAC:
                   ${esc(
-                    client.name
+                    formatMac(
+                      client.macAddress ||
+                      client.deviceId
+                    )
                   )}
-                </h3>
 
-                <span
-                  class="pill ${
-                    client.enabled
-                      ? ''
-                      : 'off'
-                  }"
-                >
+                  <br>
+
+                  Expira:
+                  ${fmtDate(
+                    client.expiresAt
+                  )}
+
+                  <br>
+
                   ${
-                    client.enabled
-                      ? 'ATIVO'
-                      : 'INATIVO'
+                    source
+                      ? `
+                        <span
+                          class="source-type"
+                        >
+                          ${esc(
+                            sourceTypeOf(
+                              source
+                            )
+                          )}
+                        </span>
+
+                        ${esc(
+                          sourceSummary(
+                            source
+                          )
+                        )}
+                      `
+                      : `
+                        <span
+                          class="source-type"
+                        >
+                          SEM FONTE
+                        </span>
+                      `
                   }
-                </span>
 
-              </div>
+                </div>
 
-              <div class="meta">
+                <div class="actions">
 
-                MAC:
-                ${esc(
-                  formatMac(
-                    client.macAddress ||
-                    client.deviceId
-                  )
-                )}
+                  <button
+                    class="ghost edit-client"
+                    data-id="${client.id}"
+                  >
+                    Editar
+                  </button>
 
-                <br>
+                  <button
+                    class="ghost toggle"
+                    data-kind="clients"
+                    data-id="${client.id}"
+                    data-enabled="${
+                      client.enabled ===
+                      false
+                    }"
+                  >
+                    ${
+                      client.enabled ===
+                      false
+                        ? 'Ativar'
+                        : 'Desativar'
+                    }
+                  </button>
 
-                Expira:
-                ${fmt(
-                  client.expiresAt
-                )}
+                  <button
+                    class="danger delete"
+                    data-kind="clients"
+                    data-id="${client.id}"
+                  >
+                    Excluir
+                  </button>
 
-                <br>
+                </div>
 
-                ${
-                  (
-                    client.playlistIds ||
-                    []
-                  ).length
-                } lista(s)
-
-              </div>
-
-              <div class="actions">
-
-                <button
-                  class="ghost edit-client"
-                  data-id="${client.id}"
-                >
-                  Editar
-                </button>
-
-                <button
-                  class="ghost toggle"
-                  data-kind="clients"
-                  data-id="${client.id}"
-                  data-enabled="${
-                    !client.enabled
-                  }"
-                >
-                  ${
-                    client.enabled
-                      ? 'Desativar'
-                      : 'Ativar'
-                  }
-                </button>
-
-                <button
-                  class="danger delete"
-                  data-kind="clients"
-                  data-id="${client.id}"
-                >
-                  Excluir
-                </button>
-
-              </div>
-
-            </article>
-          `
+              </article>
+            `;
+          }
         )
         .join('') ||
-      '<p>Nenhum cliente cadastrado.</p>';
+      `
+        <p>
+          Nenhum cliente cadastrado.
+        </p>
+      `;
 
-
-  /*
-   * LISTAS M3U
-   */
   $('#playlistList')
     .innerHTML =
       state.playlists
         .map(
-          playlist => `
-            <article class="card item">
+          source => {
 
-              <div class="row">
+            const usedBy =
+              clientsUsingSource(
+                source.id
+              );
 
-                <h3>
-                  ${esc(
-                    playlist.name
-                  )}
-                </h3>
-
-                <span
-                  class="pill ${
-                    playlist.enabled
-                      ? ''
-                      : 'off'
-                  }"
-                >
-                  ${
-                    playlist.enabled
-                      ? 'ATIVA'
-                      : 'INATIVA'
-                  }
-                </span>
-
-              </div>
-
-              <div class="meta">
-
-                ${esc(
-                  playlist.url
-                )}
-
-                <br>
-
-                XMLTV:
-                ${
-                  playlist.xmltvUrl
-                    ? 'configurado'
-                    : 'não configurado'
-                }
-
-                <br>
-
-                Expira:
-                ${fmt(
-                  playlist.expiresAt
-                )}
-
-              </div>
-
-              <div class="actions">
-
-                <button
-                  class="ghost edit-playlist"
-                  data-id="${playlist.id}"
-                >
-                  Editar
-                </button>
-
-                <button
-                  class="ghost toggle"
-                  data-kind="playlists"
-                  data-id="${playlist.id}"
-                  data-enabled="${
-                    !playlist.enabled
-                  }"
-                >
-                  ${
-                    playlist.enabled
-                      ? 'Desativar'
-                      : 'Ativar'
-                  }
-                </button>
-
-                <button
-                  class="danger delete"
-                  data-kind="playlists"
-                  data-id="${playlist.id}"
-                >
-                  Excluir
-                </button>
-
-              </div>
-
-            </article>
-          `
-        )
-        .join('') ||
-      '<p>Nenhuma lista cadastrada.</p>';
-
-
-  /*
-   * CHECKBOXES DAS LISTAS DO CLIENTE
-   */
-  $('#playlistChecks')
-    .className =
-      'checks';
-
-  $('#playlistChecks')
-    .innerHTML =
-      state.playlists
-        .map(
-          playlist => `
-            <label>
-
-              <input
-                type="checkbox"
-                name="playlistIds"
-                value="${playlist.id}"
+            return `
+              <article
+                class="card item"
               >
 
-              ${esc(
-                playlist.name
-              )}
+                <div class="row">
 
-            </label>
-          `
+                  <h3>
+                    ${esc(
+                      sourceDisplayName(
+                        source
+                      )
+                    )}
+                  </h3>
+
+                  <span
+                    class="pill ${
+                      source.enabled ===
+                      false
+                        ? 'off'
+                        : ''
+                    }"
+                  >
+                    ${
+                      source.enabled ===
+                      false
+                        ? 'INATIVA'
+                        : 'ATIVA'
+                    }
+                  </span>
+
+                </div>
+
+                <div class="meta">
+
+                  <span
+                    class="source-type"
+                  >
+                    ${esc(
+                      sourceTypeOf(
+                        source
+                      )
+                    )}
+                  </span>
+
+                  ${esc(
+                    sourceSummary(
+                      source
+                    )
+                  )}
+
+                  <br>
+
+                  Expira:
+                  ${fmtDate(
+                    source.expiresAt
+                  )}
+
+                  <br>
+
+                  Vinculada a
+                  ${usedBy.length}
+                  cliente(s)
+
+                </div>
+
+                <div class="actions">
+
+                  <button
+                    class="ghost edit-source"
+                    data-id="${source.id}"
+                  >
+                    Editar conexão
+                  </button>
+
+                  <button
+                    class="ghost toggle"
+                    data-kind="playlists"
+                    data-id="${source.id}"
+                    data-enabled="${
+                      source.enabled ===
+                      false
+                    }"
+                  >
+                    ${
+                      source.enabled ===
+                      false
+                        ? 'Ativar'
+                        : 'Desativar'
+                    }
+                  </button>
+
+                  <button
+                    class="danger delete"
+                    data-kind="playlists"
+                    data-id="${source.id}"
+                  >
+                    Excluir
+                  </button>
+
+                </div>
+
+              </article>
+            `;
+          }
         )
         .join('') ||
-      'Cadastre uma lista primeiro.';
+      `
+        <p>
+          Nenhuma fonte cadastrada.
+          Cadastre um cliente para criar a primeira.
+        </p>
+      `;
 
-
-  /*
-   * APARÊNCIA
-   */
   for (
     const [
       key,
       value
     ] of Object.entries(
-      state.appearance ||
-      {}
+      state.appearance
     )
   ) {
 
@@ -610,14 +872,11 @@ function render() {
 
     if (element) {
       element.value =
-        value || '';
+        value ||
+        '';
     }
   }
 
-
-  /*
-   * LOGS
-   */
   $('#auditList')
     .innerHTML =
       state.audit
@@ -656,54 +915,560 @@ function render() {
       'Sem atividade.';
 }
 
+function fillPendingMacOptions(
+  selectedMac = ''
+) {
+  const select =
+    $(
+      '#clientForm [name=pendingMac]'
+    );
 
-/*
- * LOGIN
- */
-$('#loginForm')
-  .onsubmit =
-    async event => {
+  select.innerHTML =
+    state.pendingDevices
+      .map(
+        device => `
+          <option
+            value="${esc(
+              formatMac(
+                device.macAddress
+              )
+            )}"
+            ${
+              formatMac(
+                device.macAddress
+              ) ===
+              formatMac(
+                selectedMac
+              )
+                ? 'selected'
+                : ''
+            }
+          >
+            ${esc(
+              formatMac(
+                device.macAddress
+              )
+            )}
+          </option>
+        `
+      )
+      .join('');
 
-      event.preventDefault();
+  if (
+    !state.pendingDevices.length
+  ) {
+    select.innerHTML =
+      `
+        <option value="">
+          Nenhum MAC aguardando
+        </option>
+      `;
+  }
+}
 
-      try {
+function toggleSourceFields(
+  prefix,
+  type
+) {
+  const m3u =
+    $(
+      `#${prefix}M3uFields`
+    );
 
-        const data =
-          Object.fromEntries(
-            new FormData(
-              event.target
-            )
+  const xtream =
+    $(
+      `#${prefix}XtreamFields`
+    );
+
+  m3u.classList
+    .toggle(
+      'hidden',
+      type !==
+      'M3U'
+    );
+
+  xtream.classList
+    .toggle(
+      'hidden',
+      type !==
+      'XTREAM'
+    );
+}
+
+function fillSourceFields(
+  form,
+  source,
+  prefix
+) {
+  const type =
+    sourceTypeOf(
+      source
+    );
+
+  form.elements
+    .sourceType
+    .value =
+    type;
+
+  toggleSourceFields(
+    prefix,
+    type
+  );
+
+  if (!source) {
+
+    form.elements
+      .m3uUrl
+      .value =
+      '';
+
+    form.elements
+      .xmltvUrl
+      .value =
+      '';
+
+    form.elements
+      .xtreamServer
+      .value =
+      '';
+
+    form.elements
+      .xtreamUsername
+      .value =
+      '';
+
+    form.elements
+      .xtreamPassword
+      .value =
+      '';
+
+    return;
+  }
+
+  const xtream =
+    parseXtreamUrl(
+      source.url
+    );
+
+  if (xtream) {
+
+    form.elements
+      .xtreamServer
+      .value =
+      xtream.server;
+
+    form.elements
+      .xtreamUsername
+      .value =
+      xtream.username;
+
+    form.elements
+      .xtreamPassword
+      .value =
+      xtream.password;
+
+    form.elements
+      .m3uUrl
+      .value =
+      '';
+
+    form.elements
+      .xmltvUrl
+      .value =
+      '';
+
+  } else {
+
+    form.elements
+      .m3uUrl
+      .value =
+      source.url ||
+      '';
+
+    form.elements
+      .xmltvUrl
+      .value =
+      source.xmltvUrl ||
+      '';
+
+    form.elements
+      .xtreamServer
+      .value =
+      '';
+
+    form.elements
+      .xtreamUsername
+      .value =
+      '';
+
+    form.elements
+      .xtreamPassword
+      .value =
+      '';
+  }
+}
+
+function sourcePayloadFromForm(
+  form
+) {
+  const type =
+    form.elements
+      .sourceType
+      .value;
+
+  if (
+    type ===
+    'XTREAM'
+  ) {
+
+    const server =
+      form.elements
+        .xtreamServer
+        .value
+        .trim();
+
+    const username =
+      form.elements
+        .xtreamUsername
+        .value
+        .trim();
+
+    const password =
+      form.elements
+        .xtreamPassword
+        .value;
+
+    return {
+      type,
+
+      url:
+        buildXtreamM3uUrl(
+          server,
+          username,
+          password
+        ),
+
+      xmltvUrl:
+        buildXtreamXmltvUrl(
+          server,
+          username,
+          password
+        )
+    };
+  }
+
+  const url =
+    form.elements
+      .m3uUrl
+      .value
+      .trim();
+
+  if (
+    !/^https?:\/\//i.test(
+      url
+    )
+  ) {
+    throw Error(
+      'Informe a URL da lista M3U.'
+    );
+  }
+
+  return {
+    type: 'M3U',
+
+    url,
+
+    xmltvUrl:
+      form.elements
+        .xmltvUrl
+        .value
+        .trim()
+  };
+}
+
+function openClientDialog(
+  client = null,
+  pendingMac = ''
+) {
+  const form =
+    $('#clientForm');
+
+  form.reset();
+
+  form.dataset.editId =
+    client?.id ||
+    '';
+
+  form
+    .querySelector(
+      'h2'
+    )
+    .textContent =
+    client
+      ? 'Editar cliente'
+      : 'Novo cliente';
+
+  form
+    .querySelector(
+      'button[value=default]'
+    )
+    .textContent =
+    client
+      ? 'Salvar alterações'
+      : 'Criar cliente';
+
+  const expiry =
+    new Date();
+
+  expiry.setFullYear(
+    expiry.getFullYear() +
+    1
+  );
+
+  form.elements
+    .name
+    .value =
+    client?.name ||
+    '';
+
+  form.elements
+    .enabled
+    .value =
+    String(
+      client?.enabled !==
+      false
+    );
+
+  form.elements
+    .expiresAt
+    .value =
+    client?.expiresAt
+      ? toDateInput(
+          client.expiresAt
+        )
+      : expiry
+          .toISOString()
+          .slice(
+            0,
+            10
           );
 
-        localStorage.lpsmToken =
-          (
-            await request(
-              '/api/admin/login',
-              {
-                method:
-                  'POST',
+  const source =
+    client
+      ? primarySource(
+          client
+        )
+      : null;
 
-                body:
-                  JSON.stringify(
-                    data
-                  )
-              }
-            )
-          ).token;
+  form.elements
+    .sourceId
+    .value =
+    source?.id ||
+    '';
 
-        await enter();
+  if (client) {
 
-      } catch (error) {
+    $('#pendingMacLabel')
+      .classList.add(
+        'hidden'
+      );
 
-        $('output')
-          .textContent =
-            error.message;
+    $('#fixedMacLabel')
+      .classList.remove(
+        'hidden'
+      );
+
+    form.elements
+      .macAddress
+      .value =
+      formatMac(
+        client.macAddress ||
+        client.deviceId
+      );
+
+  } else {
+
+    $('#pendingMacLabel')
+      .classList.remove(
+        'hidden'
+      );
+
+    $('#fixedMacLabel')
+      .classList.add(
+        'hidden'
+      );
+
+    fillPendingMacOptions(
+      pendingMac
+    );
+
+    form.elements
+      .macAddress
+      .value =
+      '';
+  }
+
+  fillSourceFields(
+    form,
+    source,
+    'client'
+  );
+
+  $('#clientDialog')
+    .showModal();
+}
+
+function openSourceDialog(
+  source
+) {
+  const form =
+    $('#sourceForm');
+
+  form.reset();
+
+  form.elements
+    .sourceId
+    .value =
+    source.id;
+
+  form.elements
+    .enabled
+    .value =
+    String(
+      source.enabled !==
+      false
+    );
+
+  form.elements
+    .expiresAt
+    .value =
+    toDateInput(
+      source.expiresAt
+    );
+
+  fillSourceFields(
+    form,
+    source,
+    'source'
+  );
+
+  $('#sourceDialog')
+    .showModal();
+}
+
+async function ensureClientSource(
+  client,
+  sourcePayload
+) {
+  const current =
+    primarySource(
+      client
+    );
+
+  if (current) {
+
+    await request(
+      `/api/admin/playlists/${current.id}`,
+      {
+        method:
+          'PUT',
+
+        body:
+          JSON.stringify({
+            url:
+              sourcePayload.url,
+
+            xmltvUrl:
+              sourcePayload.xmltvUrl,
+
+            enabled:
+              true,
+
+            expiresAt:
+              client.expiresAt ||
+              null
+          })
       }
-    };
+    );
 
+    return current.id;
+  }
+
+  const created =
+    await request(
+      '/api/admin/playlists',
+      {
+        method:
+          'POST',
+
+        body:
+          JSON.stringify({
+            name:
+              `Fonte de ${client.name}`,
+
+            url:
+              sourcePayload.url,
+
+            xmltvUrl:
+              sourcePayload.xmltvUrl,
+
+            enabled:
+              true,
+
+            expiresAt:
+              client.expiresAt ||
+              null
+          })
+      }
+    );
+
+  return created.id;
+}
+
+$('#loginForm')
+  .onsubmit =
+  async event => {
+
+    event.preventDefault();
+
+    try {
+
+      const data =
+        Object.fromEntries(
+          new FormData(
+            event.target
+          )
+        );
+
+      localStorage.lpsmToken =
+        (
+          await request(
+            '/api/admin/login',
+            {
+              method:
+                'POST',
+
+              body:
+                JSON.stringify(
+                  data
+                )
+            }
+          )
+        ).token;
+
+      await enter();
+
+    } catch (
+      error
+    ) {
+
+      $('output')
+        .textContent =
+        error.message;
+    }
+  };
 
 async function enter() {
-
   try {
 
     await load();
@@ -732,38 +1497,32 @@ async function enter() {
   }
 }
 
-
 if (
   localStorage.lpsmToken
 ) {
   enter();
 }
 
-
 $('#logout')
   .onclick =
-    () => {
+  () => {
 
-      localStorage
-        .removeItem(
-          'lpsmToken'
-        );
+    localStorage
+      .removeItem(
+        'lpsmToken'
+      );
 
-      location.reload();
-    };
-
+    location.reload();
+  };
 
 $('#refresh')
   .onclick =
-    load;
+  load;
 
-
-/*
- * ABAS
- */
 $$('nav button')
   .forEach(
-    button =>
+    button => {
+
       button.onclick =
         () => {
 
@@ -774,7 +1533,7 @@ $$('nav button')
                   .toggle(
                     'active',
                     item ===
-                      button
+                    button
                   )
             );
 
@@ -785,701 +1544,381 @@ $$('nav button')
                   .toggle(
                     'hidden',
                     tab.id !==
-                      button.dataset.tab
+                    button.dataset.tab
                   )
             );
-        }
-  );
-
-
-/*
- * CAMPO MAC
- */
-const macInput =
-  $(
-    '#clientForm [name=deviceId]'
-  );
-
-macInput.name =
-  'macAddress';
-
-macInput.placeholder =
-  'AA:BB:CC:DD:EE:FF';
-
-macInput.maxLength =
-  17;
-
-macInput.parentElement
-  .childNodes[0]
-  .textContent =
-    'MAC exibido no aplicativo';
-
-
-macInput
-  .addEventListener(
-    'input',
-    () => {
-
-      macInput.value =
-        formatMac(
-          macInput.value
-        );
+        };
     }
   );
 
+$('#clientSourceType')
+  .onchange =
+  event => {
 
-/*
- * ESCONDE CÓDIGO ANTIGO
- */
-const activationCodeInput =
-  $('#clientForm [name=activationCode]');
-
-if (
-  activationCodeInput
-) {
-
-  activationCodeInput
-    .parentElement
-    .classList
-    .add(
-      'hidden'
+    toggleSourceFields(
+      'client',
+      event.target.value
     );
-}
+  };
 
+$('#sourceType')
+  .onchange =
+  event => {
 
-/*
- * CRIAR LISTA JUNTO DO NOVO CLIENTE
- */
-$('#clientForm fieldset')
-  .insertAdjacentHTML(
-    'beforebegin',
-    `
-      <div class="inline-playlist">
-
-        <h3>
-          Playlist deste cliente
-        </h3>
-
-        <label>
-          Título da lista
-
-          <input
-            name="playlistName"
-            placeholder="Ex.: TV Sala"
-          >
-        </label>
-
-        <label>
-          URL M3U/M3U8
-
-          <input
-            name="playlistUrl"
-            type="url"
-            placeholder="https://servidor/lista.m3u"
-          >
-        </label>
-
-        <label>
-          URL XMLTV (opcional)
-
-          <input
-            name="inlineXmltvUrl"
-            type="url"
-          >
-        </label>
-
-        <p class="meta">
-          Ao criar um novo cliente,
-          você pode criar uma lista junto dele.
-        </p>
-
-      </div>
-    `
-  );
-
-
-/*
- * ABRIR CLIENTE
- */
-function openClientDialog(
-  client = null,
-  pendingMac = ''
-) {
-
-  const form =
-    $('#clientForm');
-
-  form.reset();
-
-  form.dataset.editId =
-    client?.id || '';
-
-  form
-    .querySelector('h2')
-    .textContent =
-      client
-        ? 'Editar cliente'
-        : 'Novo cliente';
-
-  form
-    .querySelector(
-      'button[value=default]'
-    )
-    .textContent =
-      client
-        ? 'Salvar alterações'
-        : 'Criar';
-
-
-  const expiry =
-    new Date();
-
-  expiry.setFullYear(
-    expiry.getFullYear() +
-    1
-  );
-
-
-  form.elements.name
-    .value =
-      client?.name ||
-      '';
-
-
-  form.elements.macAddress
-    .value =
-      formatMac(
-        client?.macAddress ||
-        pendingMac ||
-        ''
-      );
-
-
-  /*
-   * NOVO CLIENTE:
-   * MAC VEM DO APK.
-   *
-   * EDITANDO:
-   * PERMITE ALTERAÇÃO.
-   */
-  form.elements.macAddress
-    .readOnly =
-      !client;
-
-
-  form.elements.expiresAt
-    .value =
-      client?.expiresAt
-        ? String(
-            client.expiresAt
-          ).slice(
-            0,
-            10
-          )
-        : expiry
-            .toISOString()
-            .slice(
-              0,
-              10
-            );
-
-
-  form.elements.enabled
-    .value =
-      String(
-        client?.enabled !==
-        false
-      );
-
-
-  /*
-   * MARCA AS LISTAS QUE
-   * O CLIENTE JÁ POSSUI.
-   */
-  $$('#playlistChecks input')
-    .forEach(
-      input => {
-
-        input.checked =
-          !!client?.playlistIds
-            ?.includes(
-              input.value
-            );
-      }
+    toggleSourceFields(
+      'source',
+      event.target.value
     );
+  };
 
-
-  /*
-   * CRIAR LISTA JUNTO:
-   * SÓ APARECE EM CLIENTE NOVO.
-   */
-  const inline =
-    form.querySelector(
-      '.inline-playlist'
-    );
-
-  if (inline) {
-
-    inline.classList
-      .toggle(
-        'hidden',
-        !!client
-      );
-  }
-
-
-  $('#clientDialog')
-    .showModal();
-}
-
-
-/*
- * ABRIR LISTA M3U
- */
-function openPlaylistDialog(
-  playlist = null
-) {
-
-  const form =
-    $('#playlistForm');
-
-  form.reset();
-
-  form.dataset.editId =
-    playlist?.id || '';
-
-
-  form
-    .querySelector('h2')
-    .textContent =
-      playlist
-        ? 'Editar lista M3U'
-        : 'Nova lista M3U';
-
-
-  form
-    .querySelector(
-      'button[value=default]'
-    )
-    .textContent =
-      playlist
-        ? 'Salvar alterações'
-        : 'Criar';
-
-
-  /*
-   * MANTÉM TODOS OS DADOS ANTIGOS
-   * VISÍVEIS DURANTE A EDIÇÃO.
-   */
-  form.elements.name
-    .value =
-      playlist?.name ||
-      '';
-
-
-  form.elements.url
-    .value =
-      playlist?.url ||
-      '';
-
-
-  form.elements.xmltvUrl
-    .value =
-      playlist?.xmltvUrl ||
-      '';
-
-
-  form.elements.enabled
-    .value =
-      String(
-        playlist?.enabled !==
-        false
-      );
-
-
-  form.elements.expiresAt
-    .value =
-      playlist?.expiresAt
-        ? String(
-            playlist.expiresAt
-          ).slice(
-            0,
-            10
-          )
-        : '';
-
-
-  $('#playlistDialog')
-    .showModal();
-}
-
-
-/*
- * BOTÕES NOVO CLIENTE / NOVA LISTA
- */
 $$('[data-open]')
   .forEach(
-    button =>
+    button => {
+
       button.onclick =
         () => {
 
           if (
-            button.dataset.open ===
+            button.dataset.open !==
             'clientDialog'
           ) {
+            return;
+          }
 
-            const firstPending =
-              state.pendingDevices?.[0];
-
-            if (!firstPending) {
-
-              alert(
-                'Nenhum MAC reconhecido aguardando autorização. Abra o APK no aparelho primeiro.'
-              );
-
-              return;
-            }
-
-            openClientDialog(
-              null,
-              firstPending.macAddress
-            );
-
-          } else if (
-            button.dataset.open ===
-            'playlistDialog'
+          if (
+            !state.pendingDevices.length
           ) {
 
-            openPlaylistDialog();
+            alert(
+              'Nenhum MAC aguardando autorização. Abra o APK no aparelho novo e aguarde o MAC aparecer.'
+            );
+
+            return;
           }
-        }
+
+          openClientDialog();
+        };
+    }
   );
 
-
-/*
- * CANCELAR JANELAS
- */
 $$('.close')
   .forEach(
-    button =>
+    button => {
+
       button.onclick =
         () =>
           button
             .closest(
               'dialog'
             )
-            .close()
+            .close();
+    }
   );
 
-
-/*
- * SALVAR LISTA
- */
-$('#playlistForm')
-  .onsubmit =
-    async event => {
-
-      event.preventDefault();
-
-
-      const form =
-        event.target;
-
-
-      const editId =
-        form.dataset.editId;
-
-
-      const submit =
-        event.submitter;
-
-
-      submit.disabled =
-        true;
-
-
-      try {
-
-        const data =
-          Object.fromEntries(
-            new FormData(
-              form
-            )
-          );
-
-
-        data.enabled =
-          data.enabled ===
-          'true';
-
-
-        data.expiresAt =
-          data.expiresAt
-            ? new Date(
-                data.expiresAt +
-                'T23:59:59'
-              ).toISOString()
-            : null;
-
-
-        await request(
-          editId
-            ? `/api/admin/playlists/${editId}`
-            : '/api/admin/playlists',
-
-          {
-            method:
-              editId
-                ? 'PUT'
-                : 'POST',
-
-            body:
-              JSON.stringify(
-                data
-              )
-          }
-        );
-
-
-        form
-          .closest(
-            'dialog'
-          )
-          .close();
-
-
-        form.reset();
-
-
-        form.dataset.editId =
-          '';
-
-
-        await load();
-
-
-        alert(
-          editId
-            ? 'Lista atualizada com sucesso.'
-            : 'Lista criada com sucesso.'
-        );
-
-
-      } catch (error) {
-
-        alert(
-          'Não foi possível salvar a lista: ' +
-          error.message
-        );
-
-
-      } finally {
-
-        submit.disabled =
-          false;
-      }
-    };
-
-
-/*
- * SALVAR CLIENTE
- */
 $('#clientForm')
   .onsubmit =
-    async event => {
+  async event => {
 
-      event.preventDefault();
+    event.preventDefault();
 
+    const form =
+      event.target;
 
-      const form =
-        event.target;
+    const submit =
+      event.submitter;
 
+    const editId =
+      form.dataset.editId;
 
-      const submit =
-        event.submitter;
+    submit.disabled =
+      true;
 
+    try {
 
-      const editId =
-        form.dataset.editId;
+      const sourcePayload =
+        sourcePayloadFromForm(
+          form
+        );
 
+      const name =
+        form.elements
+          .name
+          .value
+          .trim();
 
-      submit.disabled =
-        true;
+      if (!name) {
+        throw Error(
+          'Informe o nome do cliente.'
+        );
+      }
 
+      const expiresAt =
+        isoEndOfDay(
+          form.elements
+            .expiresAt
+            .value
+        );
 
-      try {
+      const enabled =
+        form.elements
+          .enabled
+          .value ===
+        'true';
 
-        const formData =
-          new FormData(
-            form
+      if (!editId) {
+
+        const macAddress =
+          formatMac(
+            form.elements
+              .pendingMac
+              .value
           );
 
+        if (!macAddress) {
 
-        const data =
-          Object.fromEntries(
-            formData
+          throw Error(
+            'Nenhum MAC foi selecionado. Abra o APK no aparelho primeiro.'
           );
-
-
-        data.playlistIds =
-          formData.getAll(
-            'playlistIds'
-          );
-
-
-        data.enabled =
-          data.enabled ===
-          'true';
-
-
-        data.expiresAt =
-          data.expiresAt
-            ? new Date(
-                data.expiresAt +
-                'T23:59:59'
-              ).toISOString()
-            : null;
-
-
-        if (
-          !editId &&
-          data.playlistUrl
-        ) {
-
-          data.inlinePlaylist = {
-
-            name:
-              data.playlistName ||
-              data.name,
-
-            url:
-              data.playlistUrl,
-
-            xmltvUrl:
-              data.inlineXmltvUrl ||
-              ''
-          };
         }
 
-
-        delete data.playlistName;
-        delete data.playlistUrl;
-        delete data.inlineXmltvUrl;
-        delete data.activationCode;
-
-
         await request(
-          editId
-            ? `/api/admin/clients/${editId}`
-            : '/api/admin/clients',
-
+          '/api/admin/clients',
           {
             method:
-              editId
-                ? 'PUT'
-                : 'POST',
+              'POST',
 
             body:
-              JSON.stringify(
-                data
-              )
+              JSON.stringify({
+                name,
+                macAddress,
+                enabled,
+                expiresAt,
+                playlistIds: [],
+
+                inlinePlaylist: {
+
+                  name:
+                    `Fonte de ${name}`,
+
+                  url:
+                    sourcePayload.url,
+
+                  xmltvUrl:
+                    sourcePayload.xmltvUrl
+                }
+              })
           }
         );
 
+      } else {
 
-        form
-          .closest(
-            'dialog'
+        const client =
+          state.clients.find(
+            item =>
+              item.id ===
+              editId
+          );
+
+        if (!client) {
+          throw Error(
+            'Cliente não encontrado.'
+          );
+        }
+
+        const sourceId =
+          await ensureClientSource(
+            {
+              ...client,
+              name,
+              expiresAt
+            },
+
+            sourcePayload
+          );
+
+        const currentIds =
+          client.playlistIds ||
+          [];
+
+        const playlistIds =
+          currentIds.includes(
+            sourceId
           )
-          .close();
+            ? currentIds
+            : [
+                sourceId,
+                ...currentIds
+              ];
 
+        await request(
+          `/api/admin/clients/${editId}`,
+          {
+            method:
+              'PUT',
 
-        form.reset();
+            body:
+              JSON.stringify({
+                name,
 
+                macAddress:
+                  client.macAddress ||
+                  client.deviceId,
 
-        form.dataset.editId =
-          '';
-
-
-        await load();
-
-
-        alert(
-          editId
-            ? 'Cliente atualizado com sucesso.'
-            : 'Cliente autorizado com sucesso.'
+                enabled,
+                expiresAt,
+                playlistIds
+              })
+          }
         );
-
-
-      } catch (error) {
-
-        alert(
-          'Não foi possível salvar: ' +
-          error.message
-        );
-
-
-      } finally {
-
-        submit.disabled =
-          false;
-
-
-        submit.textContent =
-          editId
-            ? 'Salvar alterações'
-            : 'Criar';
       }
-    };
 
+      form
+        .closest(
+          'dialog'
+        )
+        .close();
 
-/*
- * APARÊNCIA
- */
-$('#appearanceForm')
+      await load();
+
+      alert(
+        editId
+          ? 'Cliente atualizado com sucesso.'
+          : 'Cliente criado e fonte vinculada com sucesso.'
+      );
+
+    } catch (
+      error
+    ) {
+
+      alert(
+        `Não foi possível salvar: ${error.message}`
+      );
+
+    } finally {
+
+      submit.disabled =
+        false;
+    }
+  };
+
+$('#sourceForm')
   .onsubmit =
-    async event => {
+  async event => {
 
-      event.preventDefault();
+    event.preventDefault();
 
+    const form =
+      event.target;
+
+    const submit =
+      event.submitter;
+
+    submit.disabled =
+      true;
+
+    try {
+
+      const sourceId =
+        form.elements
+          .sourceId
+          .value;
+
+      const sourcePayload =
+        sourcePayloadFromForm(
+          form
+        );
 
       await request(
-        '/api/admin/appearance',
+        `/api/admin/playlists/${sourceId}`,
         {
           method:
             'PUT',
 
           body:
-            JSON.stringify(
-              Object.fromEntries(
-                new FormData(
-                  event.target
+            JSON.stringify({
+
+              url:
+                sourcePayload.url,
+
+              xmltvUrl:
+                sourcePayload.xmltvUrl,
+
+              enabled:
+                form.elements
+                  .enabled
+                  .value ===
+                'true',
+
+              expiresAt:
+                isoEndOfDay(
+                  form.elements
+                    .expiresAt
+                    .value
                 )
-              )
-            )
+            })
         }
       );
 
+      form
+        .closest(
+          'dialog'
+        )
+        .close();
 
       await load();
-    };
 
+      alert(
+        'Fonte atualizada com sucesso.'
+      );
 
-/*
- * CLIQUES NOS CARDS
- */
+    } catch (
+      error
+    ) {
+
+      alert(
+        `Não foi possível salvar a fonte: ${error.message}`
+      );
+
+    } finally {
+
+      submit.disabled =
+        false;
+    }
+  };
+
+$('#appearanceForm')
+  .onsubmit =
+  async event => {
+
+    event.preventDefault();
+
+    await request(
+      '/api/admin/appearance',
+      {
+        method:
+          'PUT',
+
+        body:
+          JSON.stringify(
+            Object.fromEntries(
+              new FormData(
+                event.target
+              )
+            )
+          )
+      }
+    );
+
+    await load();
+  };
+
 document.body.onclick =
   async event => {
 
-
-    /*
-     * MAC PENDENTE
-     */
     const authorize =
       event.target.closest(
         '.authorize-mac'
       );
-
 
     if (authorize) {
 
@@ -1491,68 +1930,60 @@ document.body.onclick =
       return;
     }
 
-
-    /*
-     * EDITAR CLIENTE
-     */
     const editClient =
       event.target.closest(
         '.edit-client'
       );
 
-
     if (editClient) {
 
-      openClientDialog(
-        state.clients
-          .find(
-            client =>
-              client.id ===
-              editClient.dataset.id
-          )
-      );
+      const client =
+        state.clients.find(
+          item =>
+            item.id ===
+            editClient.dataset.id
+        );
+
+      if (client) {
+        openClientDialog(
+          client
+        );
+      }
 
       return;
     }
 
-
-    /*
-     * EDITAR LISTA
-     */
-    const editPlaylist =
+    const editSource =
       event.target.closest(
-        '.edit-playlist'
+        '.edit-source'
       );
 
+    if (editSource) {
 
-    if (editPlaylist) {
+      const source =
+        state.playlists.find(
+          item =>
+            item.id ===
+            editSource.dataset.id
+        );
 
-      openPlaylistDialog(
-        state.playlists
-          .find(
-            playlist =>
-              playlist.id ===
-              editPlaylist.dataset.id
-          )
-      );
+      if (source) {
+        openSourceDialog(
+          source
+        );
+      }
 
       return;
     }
 
-
-    /*
-     * ATIVAR / DESATIVAR / EXCLUIR
-     */
     const button =
       event.target.closest(
         '.toggle,.delete'
       );
 
-
     if (!button) {
       return;
     }
-
 
     if (
       button.classList
@@ -1569,7 +2000,6 @@ document.body.onclick =
         return;
       }
 
-
       await request(
         `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
         {
@@ -1578,9 +2008,7 @@ document.body.onclick =
         }
       );
 
-
     } else {
-
 
       await request(
         `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
@@ -1597,7 +2025,6 @@ document.body.onclick =
         }
       );
     }
-
 
     await load();
   };
