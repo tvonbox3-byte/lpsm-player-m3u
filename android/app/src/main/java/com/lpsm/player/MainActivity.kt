@@ -15,8 +15,9 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.lpsm.player.data.*
@@ -36,146 +37,197 @@ class MainActivity : AppCompatActivity() {
     private lateinit var store: SecureStore
     private lateinit var api: LpsmApi
 
-    private val pool = Executors.newSingleThreadExecutor()
+    private val pool =
+        Executors.newSingleThreadExecutor()
 
-    private var entries = listOf<MediaEntry>()
-    private var epg = emptyMap<String, String>()
+    private var entries =
+        listOf<MediaEntry>()
 
-    private var filter: ContentType? = null
-    private var favoritesOnly = false
-    private var selectedGroup: String? = null
-    private var selectedEntry: MediaEntry? = null
+    private var epg =
+        emptyMap<String, String>()
+
+    private var filter:
+        ContentType? = null
+
+    private var favoritesOnly =
+        false
+
+    private var selectedGroup:
+        String? = null
+
+    /*
+     * Usado na TV ao vivo para:
+     * primeiro OK = selecionar
+     * segundo OK = tela cheia
+     */
+    private var selectedEntry:
+        MediaEntry? = null
+
+    /*
+     * SÉRIES
+     */
+    private var selectedSeriesName:
+        String? = null
+
+    private var selectedSeason:
+        Int? = null
 
     private var entriesByType =
-        emptyMap<ContentType, List<MediaEntry>>()
+        emptyMap<
+            ContentType,
+            List<MediaEntry>
+            >()
 
     private var groupsAll =
-        emptyMap<String, List<MediaEntry>>()
+        emptyMap<
+            String,
+            List<MediaEntry>
+            >()
 
     private var groupsByType =
-        emptyMap<ContentType, Map<String, List<MediaEntry>>>()
+        emptyMap<
+            ContentType,
+            Map<
+                String,
+                List<MediaEntry>
+                >
+            >()
 
-    private var lastConfig: DeviceConfig? = null
+    private var lastConfig:
+        DeviceConfig? = null
 
+    /*
+     * ATIVAÇÃO
+     */
     private val activationHandler =
-        Handler(Looper.getMainLooper())
+        Handler(
+            Looper.getMainLooper()
+        )
 
     private val activationCheck =
-        Runnable { silentActivate() }
+        Runnable {
+            silentActivate()
+        }
 
     private val macAddress by lazy {
         store.installMac
     }
 
     /*
-     * PLAYER PEQUENO DA TV AO VIVO
+     * PLAYER PEQUENO
      */
-    private var previewPlayer: ExoPlayer? = null
-    private var previewPlayerView: PlayerView? = null
+    private var previewPlayer:
+        ExoPlayer? = null
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    private var previewPlayerView:
+        PlayerView? = null
 
-        b = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(b.root)
+    private var previewPlayingUrl:
+        String? = null
 
-        store = SecureStore(this)
-        api = LpsmApi(store)
+    /*
+     * Atraso da prévia.
+     *
+     * Evita abrir dezenas de streams
+     * enquanto a pessoa passa rápido
+     * pelas capas usando o controle.
+     */
+    private val previewHandler =
+        Handler(
+            Looper.getMainLooper()
+        )
 
-        b.deviceId.text = macAddress
-        b.simpleDeviceId.text = macAddress
+    private var previewRunnable:
+        Runnable? = null
 
-        b.simpleLogo.setOnLongClickListener {
-            showServerSetup()
-            true
-        }
+    private var previewTarget:
+        String? = null
 
-        b.code.visibility = View.GONE
-        b.activateButton.text = "ATUALIZAR"
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
+        super.onCreate(
+            savedInstanceState
+        )
 
-        b.server.setText(store.serverUrl)
+        b =
+            ActivityMainBinding
+                .inflate(
+                    layoutInflater
+                )
 
-        /*
-         * CRIA O PLAYER PEQUENO DENTRO
-         * DA JANELA DE PRÉ-VISUALIZAÇÃO.
-         */
+        setContentView(
+            b.root
+        )
+
+        store =
+            SecureStore(this)
+
+        api =
+            LpsmApi(store)
+
+        b.deviceId.text =
+            macAddress
+
+        b.simpleDeviceId.text =
+            macAddress
+
+        b.simpleLogo
+            .setOnLongClickListener {
+
+                showServerSetup()
+
+                true
+            }
+
+        b.code.visibility =
+            View.GONE
+
+        b.activateButton.text =
+            "ATUALIZAR"
+
+        b.server.setText(
+            store.serverUrl
+        )
+
         preparePreviewPlayerView()
 
         /*
-         * LISTA DE CONTEÚDO
+         * LISTA PRINCIPAL
          */
         b.list.layoutManager =
             GridLayoutManager(
                 this,
-                if (
-                    resources.configuration
-                        .smallestScreenWidthDp >= 600
-                ) 4 else 2
+                1
             )
 
         b.list.adapter =
-            MediaAdapter(store) { item ->
+            MediaAdapter(
+                store,
 
-                if (filter == ContentType.LIVE) {
+                /*
+                 * OK / CLICK
+                 */
+                { item ->
 
-                    /*
-                     * PRIMEIRO CLIQUE:
-                     * abre no player pequeno.
-                     *
-                     * SEGUNDO CLIQUE NO MESMO CANAL:
-                     * abre tela cheia.
-                     */
-                    if (
-                        selectedEntry?.url == item.url
-                    ) {
-                        openPlayer(item)
-                    } else {
+                    handleMediaClick(
+                        item
+                    )
+                },
 
-                        selectedEntry = item
+                /*
+                 * ITEM DESTACADO PELO
+                 * CONTROLE REMOTO
+                 */
+                { item ->
 
-                        b.previewTitle.text =
-                            item.name
-
-                        b.previewGroup.text =
-                            item.group
-
-                        playPreview(item)
+                    if (item != null) {
+                        handleMediaFocus(
+                            item
+                        )
                     }
-
-                } else {
-
-                    /*
-                     * FILMES E SÉRIES:
-                     * abre direto no player.
-                     */
-                    openPlayer(item)
                 }
-            }
-
-        /*
-         * BOTÃO ASSISTIR ABAIXO DO
-         * PLAYER PEQUENO.
-         */
-        b.previewWatch.setOnClickListener {
-            selectedEntry?.let {
-                openPlayer(it)
-            }
-        }
-
-        /*
-         * MENU DA HOME
-         */
-        b.homeLive.setOnClickListener {
-            showBrowser(ContentType.LIVE)
-        }
-
-        b.homeVod.setOnClickListener {
-            showBrowser(ContentType.VOD)
-        }
-
-        b.homeSeries.setOnClickListener {
-            showBrowser(ContentType.SERIES)
-        }
+            )
 
         /*
          * CATEGORIAS
@@ -184,76 +236,411 @@ class MainActivity : AppCompatActivity() {
             LinearLayoutManager(this)
 
         b.categoryList.adapter =
-            CategoryAdapter { category ->
+            CategoryAdapter {
+                    category ->
 
-                favoritesOnly =
-                    category == "Favoritos"
-
-                selectedGroup =
-                    category.takeUnless {
-                        it == "Tudo" ||
-                        it == "Favoritos"
-                    }
-
-                /*
-                 * Ao trocar categoria da TV,
-                 * para o canal anterior.
-                 */
-                if (filter == ContentType.LIVE) {
-                    selectedEntry = null
-                    stopPreview()
-                    b.previewTitle.text =
-                        "Selecione um canal"
-                    b.previewGroup.text = ""
-                }
-
-                render()
-
-                /*
-                 * Depois de escolher a categoria,
-                 * leva o foco para os canais/capas.
-                 */
-                b.list.post {
-                    b.list.requestFocus()
-                }
+                handleCategoryClick(
+                    category
+                )
             }
 
-        b.activateButton.setOnClickListener {
-            activate()
-        }
+        /*
+         * BOTÃO ABAIXO DA PRÉVIA
+         */
+        b.previewWatch
+            .setOnClickListener {
 
-        b.retryButton.setOnClickListener {
-            loadConfig()
-        }
+                currentPreviewEntry()
+                    ?.let {
+                        openPlayer(it)
+                    }
+            }
 
-        b.cancelButton.setOnClickListener {
-            finishAffinity()
-        }
+        /*
+         * HOME
+         */
+        b.homeLive
+            .setOnClickListener {
 
+                showBrowser(
+                    ContentType.LIVE
+                )
+            }
+
+        b.homeVod
+            .setOnClickListener {
+
+                showBrowser(
+                    ContentType.VOD
+                )
+            }
+
+        b.homeSeries
+            .setOnClickListener {
+
+                showBrowser(
+                    ContentType.SERIES
+                )
+            }
+
+        b.activateButton
+            .setOnClickListener {
+                activate()
+            }
+
+        b.retryButton
+            .setOnClickListener {
+                loadConfig()
+            }
+
+        b.cancelButton
+            .setOnClickListener {
+                finishAffinity()
+            }
+
+        configureRemoteNavigation()
         bindFilters()
+
         showActivation()
 
-        if (store.token != null) {
+        if (
+            store.token != null
+        ) {
             loadConfig()
         }
     }
 
     /*
-     * =================================================
+     * =====================================================
+     * CONTROLE REMOTO
+     * =====================================================
+     */
+
+    private fun configureRemoteNavigation() {
+
+        /*
+         * HOME
+         */
+        b.homeLive.nextFocusRightId =
+            b.homeVod.id
+
+        b.homeVod.nextFocusLeftId =
+            b.homeLive.id
+
+        b.homeVod.nextFocusRightId =
+            b.homeSeries.id
+
+        b.homeSeries.nextFocusLeftId =
+            b.homeVod.id
+
+        /*
+         * FILTROS SUPERIORES
+         */
+        b.all.nextFocusRightId =
+            b.live.id
+
+        b.live.nextFocusLeftId =
+            b.all.id
+
+        b.live.nextFocusRightId =
+            b.vod.id
+
+        b.vod.nextFocusLeftId =
+            b.live.id
+
+        b.vod.nextFocusRightId =
+            b.series.id
+
+        b.series.nextFocusLeftId =
+            b.vod.id
+
+        b.series.nextFocusRightId =
+            b.favorites.id
+
+        b.favorites.nextFocusLeftId =
+            b.series.id
+
+        /*
+         * Player pequeno também pode
+         * receber foco no botão assistir.
+         */
+        b.previewWatch.isFocusable =
+            true
+
+        b.previewWatch
+            .isFocusableInTouchMode =
+            false
+    }
+
+    /*
+     * =====================================================
+     * CLIQUE / OK NO CONTEÚDO
+     * =====================================================
+     */
+
+    private fun handleMediaClick(
+        item: MediaEntry
+    ) {
+
+        when (filter) {
+
+            ContentType.LIVE -> {
+
+                /*
+                 * Primeiro OK:
+                 * fixa o canal no preview.
+                 *
+                 * Segundo OK:
+                 * tela cheia.
+                 */
+                if (
+                    selectedEntry?.url ==
+                    item.url
+                ) {
+
+                    openPlayer(item)
+
+                } else {
+
+                    selectedEntry =
+                        item
+
+                    showPreviewInfo(
+                        item
+                    )
+
+                    playPreviewNow(
+                        item
+                    )
+                }
+            }
+
+            ContentType.VOD -> {
+
+                /*
+                 * No filme, navegar pelas
+                 * capas já mostra a prévia.
+                 *
+                 * OK abre o filme.
+                 */
+                openPlayer(item)
+            }
+
+            ContentType.SERIES -> {
+
+                if (
+                    selectedSeriesName ==
+                    null
+                ) {
+
+                    /*
+                     * Estamos nas capas
+                     * das séries.
+                     */
+                    openSeries(
+                        seriesKey(item)
+                    )
+
+                } else {
+
+                    /*
+                     * Estamos nos episódios.
+                     */
+                    openPlayer(item)
+                }
+            }
+
+            else -> {
+                openPlayer(item)
+            }
+        }
+    }
+
+    /*
+     * =====================================================
+     * FOCO DO CONTROLE REMOTO
+     * =====================================================
+     */
+
+    private fun handleMediaFocus(
+        item: MediaEntry
+    ) {
+
+        when (filter) {
+
+            ContentType.LIVE -> {
+
+                showPreviewInfo(
+                    item
+                )
+
+                schedulePreview(
+                    item,
+                    450L
+                )
+            }
+
+            ContentType.VOD -> {
+
+                showPreviewInfo(
+                    item
+                )
+
+                schedulePreview(
+                    item,
+                    850L
+                )
+            }
+
+            ContentType.SERIES -> {
+
+                if (
+                    selectedSeriesName ==
+                    null
+                ) {
+
+                    /*
+                     * A capa representa
+                     * uma série inteira.
+                     *
+                     * Encontramos o primeiro
+                     * episódio para usar
+                     * como prévia.
+                     */
+                    val name =
+                        seriesKey(item)
+
+                    val episodes =
+                        seriesEpisodes(
+                            name
+                        )
+
+                    val firstEpisode =
+                        episodes.firstOrNull()
+
+                    b.previewTitle.text =
+                        name
+
+                    b.previewGroup.text =
+                        if (
+                            episodes.size == 1
+                        ) {
+                            "Série • 1 episódio"
+                        } else {
+                            "Série • ${episodes.size} episódios"
+                        }
+
+                    if (
+                        firstEpisode !=
+                        null
+                    ) {
+                        schedulePreview(
+                            firstEpisode,
+                            900L
+                        )
+                    }
+
+                } else {
+
+                    /*
+                     * Episódio destacado.
+                     */
+                    showPreviewInfo(
+                        item
+                    )
+
+                    schedulePreview(
+                        item,
+                        750L
+                    )
+                }
+            }
+
+            else -> Unit
+        }
+    }
+
+    /*
+     * =====================================================
+     * CATEGORIAS / TEMPORADAS
+     * =====================================================
+     */
+
+    private fun handleCategoryClick(
+        category: String
+    ) {
+
+        /*
+         * Dentro de uma série,
+         * o menu da esquerda vira
+         * lista de temporadas.
+         */
+        if (
+            filter ==
+                ContentType.SERIES &&
+            selectedSeriesName !=
+                null
+        ) {
+
+            selectedSeason =
+                if (
+                    category ==
+                    "Todos"
+                ) {
+                    null
+                } else {
+                    category
+                        .removePrefix(
+                            "Temporada "
+                        )
+                        .toIntOrNull()
+                }
+
+            stopPreview()
+            renderSeriesDetail()
+            focusFirstMedia()
+
+            return
+        }
+
+        /*
+         * Navegação normal:
+         * Tudo / Favoritos / categorias.
+         */
+        favoritesOnly =
+            category ==
+            "Favoritos"
+
+        selectedGroup =
+            category.takeUnless {
+                it == "Tudo" ||
+                it == "Favoritos"
+            }
+
+        selectedEntry =
+            null
+
+        stopPreview()
+
+        resetPreviewText()
+
+        render()
+
+        focusFirstMedia()
+    }
+
+    /*
+     * =====================================================
      * PLAYER PEQUENO
-     * =================================================
+     * =====================================================
      */
 
     private fun preparePreviewPlayerView() {
 
-        /*
-         * O primeiro componente dentro do
-         * previewPanel é o FrameLayout preto
-         * que já existe no XML.
-         */
         val previewFrame =
-            b.previewPanel.getChildAt(0)
-                    as? FrameLayout
+            b.previewPanel
+                .getChildAt(0)
+                as? FrameLayout
                 ?: return
 
         previewPlayerView =
@@ -261,77 +648,256 @@ class MainActivity : AppCompatActivity() {
 
                 layoutParams =
                     FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
+                        FrameLayout.LayoutParams
+                            .MATCH_PARENT,
+
+                        FrameLayout.LayoutParams
+                            .MATCH_PARENT
                     )
 
-                useController = false
+                useController =
+                    false
 
-                isFocusable = false
-                isClickable = false
+                isFocusable =
+                    false
+
+                isClickable =
+                    false
+
+                resizeMode =
+                    AspectRatioFrameLayout
+                        .RESIZE_MODE_FIT
             }
 
-        /*
-         * O PlayerView fica por cima
-         * do texto LPSM existente.
-         */
         previewFrame.addView(
             previewPlayerView
         )
     }
 
-    private fun playPreview(
+    private fun schedulePreview(
+        entry: MediaEntry,
+        delay: Long
+    ) {
+
+        previewRunnable
+            ?.let {
+                previewHandler
+                    .removeCallbacks(it)
+            }
+
+        previewTarget =
+            entry.url
+
+        val runnable =
+            Runnable {
+
+                if (
+                    previewTarget ==
+                    entry.url
+                ) {
+                    playPreviewNow(
+                        entry
+                    )
+                }
+            }
+
+        previewRunnable =
+            runnable
+
+        previewHandler
+            .postDelayed(
+                runnable,
+                delay
+            )
+    }
+
+    private fun playPreviewNow(
         entry: MediaEntry
     ) {
 
-        if (previewPlayer == null) {
+        cancelPendingPreview()
+
+        /*
+         * Se já está passando esse
+         * mesmo vídeo, não reinicia.
+         */
+        if (
+            previewPlayingUrl ==
+            entry.url &&
+            previewPlayer !=
+            null
+        ) {
+            return
+        }
+
+        if (
+            previewPlayer ==
+            null
+        ) {
 
             previewPlayer =
-                ExoPlayer.Builder(this)
+                ExoPlayer
+                    .Builder(this)
                     .build()
 
-            previewPlayerView?.player =
+            previewPlayerView
+                ?.player =
                 previewPlayer
         }
 
-        previewPlayer?.apply {
+        previewPlayingUrl =
+            entry.url
 
-            stop()
-            clearMediaItems()
+        previewPlayer
+            ?.apply {
 
-            setMediaItem(
-                MediaItem.fromUri(
-                    entry.url
+                stop()
+                clearMediaItems()
+
+                setMediaItem(
+                    MediaItem
+                        .fromUri(
+                            entry.url
+                        )
                 )
-            )
 
-            prepare()
+                prepare()
 
-            playWhenReady = true
-        }
+                playWhenReady =
+                    true
+            }
+    }
+
+    private fun showPreviewInfo(
+        entry: MediaEntry
+    ) {
+
+        b.previewTitle.text =
+            entry.name
+
+        b.previewGroup.text =
+            when (
+                entry.type
+            ) {
+
+                ContentType.LIVE ->
+                    entry.group
+
+                ContentType.VOD ->
+                    "Filme • ${entry.group}"
+
+                ContentType.SERIES -> {
+
+                    buildString {
+
+                        if (
+                            entry.season !=
+                            null
+                        ) {
+                            append(
+                                "Temporada ${entry.season}"
+                            )
+                        }
+
+                        if (
+                            entry.episode !=
+                            null
+                        ) {
+
+                            if (
+                                isNotEmpty()
+                            ) {
+                                append(
+                                    " • "
+                                )
+                            }
+
+                            append(
+                                "Episódio ${entry.episode}"
+                            )
+                        }
+
+                        if (
+                            isEmpty()
+                        ) {
+                            append(
+                                entry.group
+                            )
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun cancelPendingPreview() {
+
+        previewRunnable
+            ?.let {
+                previewHandler
+                    .removeCallbacks(it)
+            }
+
+        previewRunnable =
+            null
+
+        previewTarget =
+            null
     }
 
     private fun stopPreview() {
 
-        previewPlayer?.apply {
-            stop()
-            clearMediaItems()
-        }
+        cancelPendingPreview()
+
+        previewPlayingUrl =
+            null
+
+        previewPlayer
+            ?.apply {
+                stop()
+                clearMediaItems()
+            }
     }
 
     private fun releasePreview() {
 
-        previewPlayerView?.player = null
+        cancelPendingPreview()
 
-        previewPlayer?.release()
+        previewPlayingUrl =
+            null
 
-        previewPlayer = null
+        previewPlayerView
+            ?.player =
+            null
+
+        previewPlayer
+            ?.release()
+
+        previewPlayer =
+            null
     }
 
     /*
-     * =================================================
+     * Item que está sendo usado
+     * pelo botão ASSISTIR.
+     */
+    private fun currentPreviewEntry():
+        MediaEntry? {
+
+        val url =
+            previewPlayingUrl
+                ?: return selectedEntry
+
+        return entries
+            .firstOrNull {
+                it.url == url
+            }
+            ?: selectedEntry
+    }
+
+    /*
+     * =====================================================
      * ATIVAÇÃO
-     * =================================================
+     * =====================================================
      */
 
     private fun activate() {
@@ -359,7 +925,9 @@ class MainActivity : AppCompatActivity() {
                     loadConfig()
                 }
 
-            } catch (e: Exception) {
+            } catch (
+                e: Exception
+            ) {
 
                 runOnUiThread {
 
@@ -375,9 +943,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /*
-     * =================================================
-     * CARREGAR CONFIGURAÇÃO
-     * =================================================
+     * =====================================================
+     * CARREGAR CONFIGURAÇÃO / M3U
+     * =====================================================
      */
 
     private fun loadConfig() {
@@ -393,7 +961,9 @@ class MainActivity : AppCompatActivity() {
 
                     api.config()
 
-                } catch (e: Exception) {
+                } catch (
+                    e: Exception
+                ) {
 
                     runOnUiThread {
 
@@ -415,13 +985,16 @@ class MainActivity : AppCompatActivity() {
                             )
                         ) {
 
-                            store.token = null
+                            store.token =
+                                null
+
                             showActivation()
 
                         } else {
 
                             showFailure(
                                 lastConfig,
+
                                 "Não foi possível conectar ao painel. Verifique a rede e tente novamente."
                             )
                         }
@@ -435,7 +1008,8 @@ class MainActivity : AppCompatActivity() {
                     return@execute
                 }
 
-            lastConfig = config
+            lastConfig =
+                config
 
             val wallpaper =
                 loadBitmap(
@@ -498,7 +1072,10 @@ class MainActivity : AppCompatActivity() {
                             )
                             .coerceAtLeast(0)
 
-                    if (remaining == 0) {
+                    if (
+                        remaining ==
+                        0
+                    ) {
                         break
                     }
 
@@ -508,14 +1085,17 @@ class MainActivity : AppCompatActivity() {
                             remaining
                         )
 
-                    if (parsed.isEmpty()) {
-
-                        throw IllegalStateException(
-                            "lista vazia ou formato inválido"
-                        )
+                    if (
+                        parsed.isEmpty()
+                    ) {
+                        throw
+                            IllegalStateException(
+                                "lista vazia ou formato inválido"
+                            )
                     }
 
-                    all += parsed
+                    all +=
+                        parsed
 
                     if (
                         playlist.xmltvUrl
@@ -525,11 +1105,12 @@ class MainActivity : AppCompatActivity() {
                         try {
 
                             guides +=
-                                XmlTvParser.current(
-                                    api.download(
-                                        playlist.xmltvUrl
+                                XmlTvParser
+                                    .current(
+                                        api.download(
+                                            playlist.xmltvUrl
+                                        )
                                     )
-                                )
 
                         } catch (
                             _: Exception
@@ -548,15 +1129,20 @@ class MainActivity : AppCompatActivity() {
 
             runOnUiThread {
 
-                if (all.isEmpty()) {
+                if (
+                    all.isEmpty()
+                ) {
 
                     val detail =
                         if (
                             config.playlists
                                 .isEmpty()
                         ) {
+
                             "Nenhuma lista foi vinculada a este MAC."
+
                         } else {
+
                             "A lista está indisponível. Corrija a URL no painel e toque em tentar novamente."
                         }
 
@@ -573,7 +1159,8 @@ class MainActivity : AppCompatActivity() {
 
                     rebuildIndex()
 
-                    epg = guides
+                    epg =
+                        guides
 
                     showContent(
                         config,
@@ -584,24 +1171,85 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /*
+     * =====================================================
+     * APARÊNCIA
+     * =====================================================
+     */
+
     private fun applyAppearance(
         wallpaper: Bitmap?,
         banner: Bitmap?
     ) {
 
-        b.wallpaper.setImageBitmap(
-            wallpaper
-        )
+        b.wallpaper
+            .setImageBitmap(
+                wallpaper
+            )
 
-        b.failureBanner.setImageBitmap(
-            banner
-        )
+        b.failureBanner
+            .setImageBitmap(
+                banner
+            )
+    }
+
+    private fun loadBitmap(
+        url: String,
+        sampleSize: Int
+    ): Bitmap? {
+
+        if (
+            url.isBlank()
+        ) {
+            return null
+        }
+
+        return try {
+
+            val connection =
+                URL(url)
+                    .openConnection()
+                    as HttpURLConnection
+
+            connection
+                .connectTimeout =
+                10_000
+
+            connection
+                .readTimeout =
+                15_000
+
+            connection
+                .inputStream
+                .use {
+
+                    BitmapFactory
+                        .decodeStream(
+                            it,
+                            null,
+
+                            BitmapFactory
+                                .Options()
+                                .apply {
+
+                                    inSampleSize =
+                                        sampleSize
+                                }
+                        )
+                }
+
+        } catch (
+            _: Exception
+        ) {
+
+            null
+        }
     }
 
     /*
-     * =================================================
+     * =====================================================
      * TELAS DE ESTADO
-     * =================================================
+     * =====================================================
      */
 
     private fun showActivation() {
@@ -641,8 +1289,8 @@ class MainActivity : AppCompatActivity() {
     private fun silentActivate() {
 
         if (
-            b.activationSimple.visibility
-                != View.VISIBLE
+            b.activationSimple.visibility !=
+            View.VISIBLE
         ) {
             return
         }
@@ -668,8 +1316,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
 
                     if (
-                        b.activationSimple
-                            .visibility ==
+                        b.activationSimple.visibility ==
                         View.VISIBLE
                     ) {
 
@@ -757,7 +1404,9 @@ class MainActivity : AppCompatActivity() {
 
         b.failurePlaylist.text =
             config?.playlists
-                ?.joinToString(" • ") {
+                ?.joinToString(
+                    " • "
+                ) {
                     it.name
                 }
                 ?: "Lista indisponível"
@@ -765,10 +1414,13 @@ class MainActivity : AppCompatActivity() {
         b.failureMessage.text =
             detail
 
-        banner?.let {
-            b.failureBanner
-                .setImageBitmap(it)
-        }
+        banner
+            ?.let {
+                b.failureBanner
+                    .setImageBitmap(
+                        it
+                    )
+            }
     }
 
     private fun showContent(
@@ -809,7 +1461,10 @@ class MainActivity : AppCompatActivity() {
             "BEM-VINDO, ${config.clientName.uppercase()}"
 
         b.message.text =
-            if (failedLists > 0) {
+            if (
+                failedLists >
+                0
+            ) {
 
                 "$failedLists lista(s) indisponível(is). As demais foram carregadas."
 
@@ -822,104 +1477,72 @@ class MainActivity : AppCompatActivity() {
                     }
             }
 
-        b.homeLive.requestFocus()
+        b.homeLive
+            .requestFocus()
     }
 
     /*
-     * =================================================
-     * IMAGENS DO PAINEL
-     * =================================================
-     */
-
-    private fun loadBitmap(
-        url: String,
-        sampleSize: Int
-    ): Bitmap? {
-
-        if (url.isBlank()) {
-            return null
-        }
-
-        return try {
-
-            val connection =
-                URL(url)
-                    .openConnection()
-                    as HttpURLConnection
-
-            connection.connectTimeout =
-                10_000
-
-            connection.readTimeout =
-                15_000
-
-            connection.inputStream.use {
-
-                BitmapFactory.decodeStream(
-                    it,
-                    null,
-                    BitmapFactory.Options()
-                        .apply {
-                            inSampleSize =
-                                sampleSize
-                        }
-                )
-            }
-
-        } catch (
-            _: Exception
-        ) {
-
-            null
-        }
-    }
-
-    /*
-     * =================================================
-     * FILTROS
-     * =================================================
+     * =====================================================
+     * FILTROS SUPERIORES
+     * =====================================================
      */
 
     private fun bindFilters() {
 
-        mapOf(
-            b.all to null,
-            b.live to ContentType.LIVE,
-            b.vod to ContentType.VOD,
-            b.series to ContentType.SERIES
-        ).forEach {
-                (button, type) ->
+        b.all.setOnClickListener {
+            showHome()
+        }
 
-            button.setOnClickListener {
+        b.live.setOnClickListener {
+            showBrowser(
+                ContentType.LIVE
+            )
+        }
 
-                if (type == null) {
-                    showHome()
-                } else {
-                    showBrowser(type)
-                }
-            }
+        b.vod.setOnClickListener {
+            showBrowser(
+                ContentType.VOD
+            )
+        }
+
+        b.series.setOnClickListener {
+            showBrowser(
+                ContentType.SERIES
+            )
         }
 
         b.favorites
             .setOnClickListener {
 
-                favoritesOnly = true
-                selectedGroup = null
-
                 if (
-                    filter ==
-                    ContentType.LIVE
+                    selectedSeriesName !=
+                    null
                 ) {
-                    selectedEntry = null
-                    stopPreview()
+                    selectedSeriesName =
+                        null
+
+                    selectedSeason =
+                        null
                 }
+
+                favoritesOnly =
+                    true
+
+                selectedGroup =
+                    null
+
+                selectedEntry =
+                    null
+
+                stopPreview()
 
                 render()
             }
 
         b.search
             .addTextChangedListener(
-                object : TextWatcher {
+                object :
+                    TextWatcher {
 
                     override fun beforeTextChanged(
                         s: CharSequence?,
@@ -935,6 +1558,7 @@ class MainActivity : AppCompatActivity() {
                         before: Int,
                         count: Int
                     ) {
+
                         render()
                     }
 
@@ -947,12 +1571,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     /*
-     * =================================================
-     * EXIBIR CATEGORIAS E CONTEÚDO
-     * =================================================
+     * =====================================================
+     * RENDER PRINCIPAL
+     * =====================================================
      */
 
     private fun render() {
+
+        if (
+            filter ==
+                ContentType.SERIES &&
+            selectedSeriesName !=
+                null
+        ) {
+
+            renderSeriesDetail()
+
+            return
+        }
 
         val query =
             b.search.text
@@ -963,17 +1599,24 @@ class MainActivity : AppCompatActivity() {
             store.favoriteUrls()
 
         val section =
-            filter?.let {
-                entriesByType[it]
-                    .orEmpty()
-            } ?: entries
+            filter
+                ?.let {
+                    entriesByType[it]
+                        .orEmpty()
+                }
+                ?: entries
 
         val indexedGroups =
-            filter?.let {
-                groupsByType[it]
-                    .orEmpty()
-            } ?: groupsAll
+            filter
+                ?.let {
+                    groupsByType[it]
+                        .orEmpty()
+                }
+                ?: groupsAll
 
+        /*
+         * CATEGORIAS DO LADO ESQUERDO
+         */
         val categories =
             buildList {
 
@@ -987,6 +1630,7 @@ class MainActivity : AppCompatActivity() {
                 add(
                     CategoryRow(
                         "Favoritos",
+
                         section.count {
                             it.url in
                                 favoriteUrls
@@ -1017,7 +1661,10 @@ class MainActivity : AppCompatActivity() {
             )
             .submit(
                 categories,
-                if (favoritesOnly) {
+
+                if (
+                    favoritesOnly
+                ) {
                     "Favoritos"
                 } else {
                     selectedGroup
@@ -1033,88 +1680,506 @@ class MainActivity : AppCompatActivity() {
                 }
                 ?: section
 
-        val shown =
-            if (
-                !favoritesOnly &&
-                query.isBlank()
-            ) {
+        val filtered =
+            source.filter {
 
-                source
+                val favoriteOkay =
+                    !favoritesOnly ||
+                    it.url in
+                    favoriteUrls
 
-            } else {
-
-                source.filter {
-
-                    (
-                        !favoritesOnly ||
-                        it.url in
-                        favoriteUrls
-                    ) &&
-                        (
-                            query.isBlank() ||
-                            it.name.contains(
-                                query,
-                                true
-                            ) ||
-                            it.group.contains(
-                                query,
-                                true
-                            )
+                val queryOkay =
+                    query.isBlank() ||
+                    it.name.contains(
+                        query,
+                        true
+                    ) ||
+                    it.group.contains(
+                        query,
+                        true
+                    ) ||
+                    it.seriesName
+                        .contains(
+                            query,
+                            true
                         )
-                }
-            }
 
-        val isLive =
-            filter ==
-                ContentType.LIVE
+                favoriteOkay &&
+                    queryOkay
+            }
 
         /*
-         * TV AO VIVO:
-         * mostra player lateral.
-         *
-         * FILMES/SÉRIES:
-         * usa toda a área para capas.
+         * O quadrado pequeno fica
+         * visível em TV, Filmes e Séries.
          */
         b.previewPanel.visibility =
-            if (isLive) {
-                View.VISIBLE
-            } else {
-                View.GONE
-            }
+            View.VISIBLE
 
-        val manager =
-            b.list.layoutManager
-                as GridLayoutManager
+        when (filter) {
 
-        manager.spanCount =
-            if (isLive) {
+            /*
+             * TV AO VIVO
+             */
+            ContentType.LIVE -> {
 
-                1
+                setGridColumns(
+                    1
+                )
 
-            } else {
+                (
+                    b.list.adapter
+                        as MediaAdapter
+                    )
+                    .submit(
+                        filtered,
+                        epg,
+                        false
+                    )
 
                 if (
-                    resources.configuration
-                        .smallestScreenWidthDp >= 600
+                    selectedEntry ==
+                    null
                 ) {
-                    4
-                } else {
-                    2
+                    resetPreviewText()
                 }
             }
+
+            /*
+             * FILMES
+             */
+            ContentType.VOD -> {
+
+                setGridColumns(
+                    posterColumns()
+                )
+
+                (
+                    b.list.adapter
+                        as MediaAdapter
+                    )
+                    .submit(
+                        filtered,
+                        epg,
+                        true
+                    )
+
+                b.previewTitle.text =
+                    "Selecione um filme"
+
+                b.previewGroup.text =
+                    "Navegue pelas capas para visualizar"
+            }
+
+            /*
+             * SÉRIES:
+             * transforma vários episódios
+             * em UMA capa por série.
+             */
+            ContentType.SERIES -> {
+
+                val seriesCards =
+                    createSeriesCards(
+                        filtered
+                    )
+
+                setGridColumns(
+                    posterColumns()
+                )
+
+                (
+                    b.list.adapter
+                        as MediaAdapter
+                    )
+                    .submit(
+                        seriesCards,
+                        epg,
+                        true
+                    )
+
+                b.previewTitle.text =
+                    "Selecione uma série"
+
+                b.previewGroup.text =
+                    "OK para abrir temporadas e episódios"
+            }
+
+            else -> {
+
+                setGridColumns(
+                    1
+                )
+
+                (
+                    b.list.adapter
+                        as MediaAdapter
+                    )
+                    .submit(
+                        filtered,
+                        epg,
+                        false
+                    )
+            }
+        }
+
+        b.message.contentDescription =
+            "${filtered.size} itens"
+    }
+
+    /*
+     * =====================================================
+     * SÉRIES
+     * =====================================================
+     */
+
+    private fun createSeriesCards(
+        source: List<MediaEntry>
+    ): List<MediaEntry> {
+
+        return source
+            .groupBy {
+                seriesKey(it)
+            }
+            .entries
+            .sortedBy {
+                it.key.lowercase()
+            }
+            .map {
+                    (seriesName, episodes) ->
+
+                val representative =
+                    episodes.firstOrNull {
+                        it.logo.isNotBlank()
+                    }
+                        ?: episodes.first()
+
+                representative.copy(
+                    name =
+                        seriesName,
+
+                    logo =
+                        episodes
+                            .firstOrNull {
+                                it.logo
+                                    .isNotBlank()
+                            }
+                            ?.logo
+                            ?: representative.logo,
+
+                    seriesName =
+                        seriesName,
+
+                    season =
+                        null,
+
+                    episode =
+                        null
+                )
+            }
+    }
+
+    private fun openSeries(
+        name: String
+    ) {
+
+        selectedSeriesName =
+            name
+
+        selectedSeason =
+            null
+
+        selectedEntry =
+            null
+
+        stopPreview()
+
+        renderSeriesDetail()
+
+        focusFirstCategory()
+    }
+
+    private fun renderSeriesDetail() {
+
+        val name =
+            selectedSeriesName
+                ?: return
+
+        val query =
+            b.search.text
+                .toString()
+                .trim()
+
+        val allEpisodes =
+            seriesEpisodes(
+                name
+            )
+
+        /*
+         * TEMPORADAS À ESQUERDA
+         */
+        val seasons =
+            allEpisodes
+                .mapNotNull {
+                    it.season
+                }
+                .distinct()
+                .sorted()
+
+        val categories =
+            buildList {
+
+                add(
+                    CategoryRow(
+                        "Todos",
+                        allEpisodes.size
+                    )
+                )
+
+                seasons.forEach {
+                        season ->
+
+                    add(
+                        CategoryRow(
+                            "Temporada $season",
+
+                            allEpisodes.count {
+                                it.season ==
+                                    season
+                            }
+                        )
+                    )
+                }
+            }
+
+        (
+            b.categoryList.adapter
+                as CategoryAdapter
+            )
+            .submit(
+                categories,
+
+                selectedSeason
+                    ?.let {
+                        "Temporada $it"
+                    }
+                    ?: "Todos"
+            )
+
+        /*
+         * EPISÓDIOS
+         */
+        var episodes =
+            if (
+                selectedSeason ==
+                null
+            ) {
+
+                allEpisodes
+
+            } else {
+
+                allEpisodes.filter {
+                    it.season ==
+                        selectedSeason
+                }
+            }
+
+        if (
+            query.isNotBlank()
+        ) {
+
+            episodes =
+                episodes.filter {
+
+                    it.name.contains(
+                        query,
+                        true
+                    ) ||
+                    it.group.contains(
+                        query,
+                        true
+                    )
+                }
+        }
+
+        episodes =
+            episodes.sortedWith(
+                compareBy<MediaEntry>(
+                    {
+                        it.season
+                            ?: 0
+                    },
+
+                    {
+                        it.episode
+                            ?: 0
+                    },
+
+                    {
+                        it.name
+                            .lowercase()
+                    }
+                )
+            )
+
+        /*
+         * Episódios ficam em LISTA,
+         * não em dezenas de capas.
+         */
+        setGridColumns(
+            1
+        )
 
         (
             b.list.adapter
                 as MediaAdapter
             )
             .submit(
-                shown,
-                epg
+                episodes,
+                epg,
+                false
             )
 
-        b.message.contentDescription =
-            "${shown.size} itens"
+        b.previewPanel.visibility =
+            View.VISIBLE
+
+        b.previewTitle.text =
+            name
+
+        b.previewGroup.text =
+            selectedSeason
+                ?.let {
+                    "Temporada $it • ${episodes.size} episódio(s)"
+                }
+                ?: "${allEpisodes.size} episódio(s)"
+
+        b.previewWatch.text =
+            "ASSISTIR EPISÓDIO"
     }
+
+    private fun seriesEpisodes(
+        name: String
+    ): List<MediaEntry> {
+
+        return entriesByType[
+            ContentType.SERIES
+        ]
+            .orEmpty()
+            .filter {
+                seriesKey(it)
+                    .equals(
+                        name,
+                        true
+                    )
+            }
+            .sortedWith(
+                compareBy(
+                    {
+                        it.season
+                            ?: 0
+                    },
+
+                    {
+                        it.episode
+                            ?: 0
+                    },
+
+                    {
+                        it.name
+                            .lowercase()
+                    }
+                )
+            )
+    }
+
+    private fun seriesKey(
+        entry: MediaEntry
+    ): String {
+
+        val parsed =
+            entry.seriesName
+                .trim()
+
+        if (
+            parsed.isNotBlank()
+        ) {
+            return parsed
+        }
+
+        /*
+         * Segurança extra para listas
+         * que não preencheram seriesName.
+         */
+        val cleaned =
+            entry.name
+                .replace(
+                    Regex(
+                        """(?i)\b[ST]\d{1,2}\s*E\d{1,3}\b.*$"""
+                    ),
+                    ""
+                )
+                .replace(
+                    Regex(
+                        """(?i)\b\d{1,2}\s*[xX]\s*\d{1,3}\b.*$"""
+                    ),
+                    ""
+                )
+                .trim(
+                    ' ',
+                    '-',
+                    '–',
+                    '—',
+                    '|',
+                    ':'
+                )
+
+        return cleaned
+            .ifBlank {
+                entry.name
+            }
+    }
+
+    /*
+     * =====================================================
+     * LAYOUT DA LISTA
+     * =====================================================
+     */
+
+    private fun setGridColumns(
+        columns: Int
+    ) {
+
+        val manager =
+            b.list.layoutManager
+                as GridLayoutManager
+
+        if (
+            manager.spanCount !=
+            columns
+        ) {
+            manager.spanCount =
+                columns
+        }
+    }
+
+    private fun posterColumns():
+        Int {
+
+        return if (
+            resources.configuration
+                .smallestScreenWidthDp >=
+            600
+        ) {
+            3
+        } else {
+            2
+        }
+    }
+
+    /*
+     * =====================================================
+     * ÍNDICES
+     * =====================================================
+     */
 
     private fun rebuildIndex() {
 
@@ -1132,39 +2197,31 @@ class MainActivity : AppCompatActivity() {
             }
 
         groupsByType =
-            entriesByType.mapValues {
-                    (_, values) ->
+            entriesByType
+                .mapValues {
+                        (_, values) ->
 
-                values.groupBy {
-                    it.group
-                        .ifBlank {
-                            "Outros"
-                        }
+                    values.groupBy {
+
+                        it.group
+                            .ifBlank {
+                                "Outros"
+                            }
+                    }
                 }
-            }
     }
 
     /*
-     * =================================================
+     * =====================================================
      * PLAYER TELA CHEIA
-     * =================================================
+     * =====================================================
      */
 
     private fun openPlayer(
         entry: MediaEntry
     ) {
 
-        /*
-         * Para o player pequeno antes
-         * de entrar em tela cheia.
-         */
-        if (
-            entry.type ==
-            ContentType.LIVE
-        ) {
-            releasePreview()
-            selectedEntry = null
-        }
+        releasePreview()
 
         startActivity(
             Intent(
@@ -1183,22 +2240,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     /*
-     * =================================================
-     * HOME
-     * =================================================
+     * =====================================================
+     * HOME / NAVEGADOR
+     * =====================================================
      */
 
     private fun showHome() {
 
         releasePreview()
 
-        filter = null
+        filter =
+            null
 
-        favoritesOnly = false
+        favoritesOnly =
+            false
 
-        selectedGroup = null
+        selectedGroup =
+            null
 
-        selectedEntry = null
+        selectedEntry =
+            null
+
+        selectedSeriesName =
+            null
+
+        selectedSeason =
+            null
 
         b.content.visibility =
             View.GONE
@@ -1206,14 +2273,12 @@ class MainActivity : AppCompatActivity() {
         b.homePanel.visibility =
             View.VISIBLE
 
-        b.homeLive.requestFocus()
-    }
+        b.previewWatch.text =
+            "ASSISTIR"
 
-    /*
-     * =================================================
-     * TV / FILMES / SÉRIES
-     * =================================================
-     */
+        b.homeLive
+            .requestFocus()
+    }
 
     private fun showBrowser(
         type: ContentType
@@ -1221,19 +2286,23 @@ class MainActivity : AppCompatActivity() {
 
         releasePreview()
 
-        filter = type
+        filter =
+            type
 
-        favoritesOnly = false
+        favoritesOnly =
+            false
 
-        selectedGroup = null
+        selectedGroup =
+            null
 
-        selectedEntry = null
+        selectedEntry =
+            null
 
-        b.previewTitle.text =
-            "Selecione um canal"
+        selectedSeriesName =
+            null
 
-        b.previewGroup.text =
-            ""
+        selectedSeason =
+            null
 
         b.homePanel.visibility =
             View.GONE
@@ -1241,32 +2310,169 @@ class MainActivity : AppCompatActivity() {
         b.content.visibility =
             View.VISIBLE
 
+        b.previewWatch.text =
+            "ASSISTIR"
+
+        resetPreviewText()
+
         render()
 
-        b.categoryList
-            .requestFocus()
+        focusFirstCategory()
+    }
+
+    private fun resetPreviewText() {
+
+        b.previewTitle.text =
+            when (filter) {
+
+                ContentType.LIVE ->
+                    "Selecione um canal"
+
+                ContentType.VOD ->
+                    "Selecione um filme"
+
+                ContentType.SERIES ->
+                    "Selecione uma série"
+
+                else ->
+                    "Selecione um conteúdo"
+            }
+
+        b.previewGroup.text =
+            ""
     }
 
     /*
-     * =================================================
-     * CONFIGURAÇÃO DO SERVIDOR
-     * =================================================
+     * =====================================================
+     * FOCO INICIAL
+     * =====================================================
+     */
+
+    private fun focusFirstCategory() {
+
+        b.categoryList.post {
+
+            val first =
+                b.categoryList
+                    .getChildAt(0)
+
+            if (
+                first != null
+            ) {
+
+                first.requestFocus()
+
+            } else {
+
+                b.categoryList
+                    .requestFocus()
+            }
+        }
+    }
+
+    private fun focusFirstMedia() {
+
+        b.list.post {
+
+            val first =
+                b.list
+                    .getChildAt(0)
+
+            if (
+                first != null
+            ) {
+
+                first.requestFocus()
+
+            } else {
+
+                b.list
+                    .requestFocus()
+            }
+        }
+    }
+
+    /*
+     * =====================================================
+     * BOTÃO VOLTAR DO CONTROLE
+     * =====================================================
+     */
+
+    @Deprecated(
+        "Usado para compatibilidade com TV Box"
+    )
+    override fun onBackPressed() {
+
+        /*
+         * Se estamos vendo episódios,
+         * volta para as capas das séries.
+         */
+        if (
+            selectedSeriesName !=
+            null
+        ) {
+
+            selectedSeriesName =
+                null
+
+            selectedSeason =
+                null
+
+            selectedEntry =
+                null
+
+            stopPreview()
+
+            b.previewWatch.text =
+                "ASSISTIR"
+
+            render()
+
+            focusFirstMedia()
+
+            return
+        }
+
+        /*
+         * Se estamos em TV/Filmes/Séries,
+         * volta para a Home.
+         */
+        if (
+            b.content.visibility ==
+            View.VISIBLE
+        ) {
+
+            showHome()
+
+            return
+        }
+
+        super.onBackPressed()
+    }
+
+    /*
+     * =====================================================
+     * SERVIDOR
+     * =====================================================
      */
 
     private fun showServerSetup() {
 
         val field =
-            EditText(this).apply {
+            EditText(this)
+                .apply {
 
-                setText(
-                    store.serverUrl
-                )
+                    setText(
+                        store.serverUrl
+                    )
 
-                hint =
-                    "https://painel.seudominio.com"
+                    hint =
+                        "https://painel.seudominio.com"
 
-                setSingleLine(true)
-            }
+                    setSingleLine(
+                        true
+                    )
+                }
 
         AlertDialog
             .Builder(this)
@@ -1276,14 +2482,18 @@ class MainActivity : AppCompatActivity() {
             .setMessage(
                 "Informe o endereço HTTPS público do LPSM."
             )
-            .setView(field)
+            .setView(
+                field
+            )
             .setNegativeButton(
                 "Cancelar",
                 null
             )
             .setPositiveButton(
                 "Salvar"
-            ) { _, _ ->
+            ) {
+                    _,
+                    _ ->
 
                 val value =
                     field.text
@@ -1303,7 +2513,9 @@ class MainActivity : AppCompatActivity() {
                         value
 
                     api =
-                        LpsmApi(store)
+                        LpsmApi(
+                            store
+                        )
 
                     b.server.setText(
                         store.serverUrl
@@ -1339,6 +2551,12 @@ class MainActivity : AppCompatActivity() {
         ).show()
     }
 
+    /*
+     * =====================================================
+     * CICLO DE VIDA
+     * =====================================================
+     */
+
     override fun onStop() {
 
         releasePreview()
@@ -1349,6 +2567,11 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
 
         activationHandler
+            .removeCallbacksAndMessages(
+                null
+            )
+
+        previewHandler
             .removeCallbacksAndMessages(
                 null
             )
