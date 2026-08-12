@@ -7,10 +7,9 @@ const $ =
 const $$ =
   selector =>
     [
-      ...document
-        .querySelectorAll(
-          selector
-        )
+      ...document.querySelectorAll(
+        selector
+      )
     ];
 
 let state = {
@@ -26,6 +25,7 @@ const request =
     path,
     options = {}
   ) => {
+
     const response =
       await fetch(
         path,
@@ -38,8 +38,7 @@ const request =
 
             authorization:
               `Bearer ${
-                localStorage
-                  .lpsmToken ||
+                localStorage.lpsmToken ||
                 ''
               }`,
 
@@ -61,6 +60,7 @@ const request =
     return data;
   };
 
+
 const esc =
   value =>
     String(
@@ -77,8 +77,10 @@ const esc =
         })[char]
     );
 
+
 const formatMac =
   value => {
+
     const raw =
       String(
         value || ''
@@ -100,6 +102,7 @@ const formatMac =
     ).join(':');
   };
 
+
 const fmt =
   value =>
     value
@@ -109,6 +112,7 @@ const fmt =
           'pt-BR'
         )
       : 'Sem expiração';
+
 
 const fmtDateTime =
   value =>
@@ -120,11 +124,9 @@ const fmtDateTime =
         )
       : '';
 
-/*
- * Cria a seção de MACs que
- * apareceram realmente no APK.
- */
+
 function ensurePendingArea() {
+
   if (
     $('#pendingDevices')
   ) {
@@ -141,20 +143,29 @@ function ensurePendingArea() {
         id="pendingDevices"
         class="pending-area"
       >
+
         <div class="section-title">
+
           <div>
-            <h2>MACs aguardando autorização</h2>
+
+            <h2>
+              MACs aguardando autorização
+            </h2>
+
             <p class="meta">
               Estes aparelhos abriram o APK
               e estão aguardando cadastro.
             </p>
+
           </div>
+
         </div>
 
         <div
           id="pendingList"
           class="grid"
         ></div>
+
       </section>
     `
   );
@@ -164,6 +175,7 @@ function ensurePendingArea() {
       'beforeend',
       `
       <style>
+
         .pending-area {
           margin-bottom: 30px;
           padding-bottom: 25px;
@@ -207,12 +219,15 @@ function ensurePendingArea() {
           opacity: .85;
           cursor: not-allowed;
         }
+
       </style>
       `
     );
 }
 
+
 async function load() {
+
   state =
     await request(
       '/api/admin/state'
@@ -225,11 +240,15 @@ async function load() {
   render();
 }
 
+
 function render() {
+
   ensurePendingArea();
+
 
   state.clients.forEach(
     client => {
+
       client.deviceId =
         formatMac(
           client.macAddress ||
@@ -237,6 +256,7 @@ function render() {
         );
     }
   );
+
 
   $('#summary')
     .textContent =
@@ -251,12 +271,12 @@ function render() {
             playlist.enabled
         ).length
       } listas disponíveis · ${
-        state.pendingDevices
-          .length
+        state.pendingDevices.length
       } MAC(s) aguardando`;
 
+
   /*
-   * MACs PENDENTES
+   * MACS AGUARDANDO
    */
   $('#pendingList')
     .innerHTML =
@@ -266,7 +286,9 @@ function render() {
             <article
               class="card item pending-card"
             >
+
               <div class="row">
+
                 <h3>
                   Novo aparelho
                 </h3>
@@ -274,10 +296,13 @@ function render() {
                 <span class="pill">
                   AGUARDANDO
                 </span>
+
               </div>
 
               <div class="meta">
+
                 MAC:
+
                 <div class="mac-code">
                   ${esc(
                     formatMac(
@@ -292,6 +317,7 @@ function render() {
                     device.firstSeenAt
                   )
                 )}
+
                 <br>
 
                 Último contato:
@@ -300,9 +326,11 @@ function render() {
                     device.lastSeenAt
                   )
                 )}
+
               </div>
 
               <div class="actions">
+
                 <button
                   class="authorize-mac"
                   data-mac="${esc(
@@ -313,7 +341,9 @@ function render() {
                 >
                   Cadastrar cliente
                 </button>
+
               </div>
+
             </article>
           `
         )
@@ -326,6 +356,7 @@ function render() {
         </p>
       `;
 
+
   /*
    * CLIENTES
    */
@@ -335,7 +366,9 @@ function render() {
         .map(
           client => `
             <article class="card item">
+
               <div class="row">
+
                 <h3>
                   ${esc(
                     client.name
@@ -355,9 +388,11 @@ function render() {
                       : 'INATIVO'
                   }
                 </span>
+
               </div>
 
               <div class="meta">
+
                 MAC:
                 ${esc(
                   formatMac(
@@ -365,12 +400,14 @@ function render() {
                     client.deviceId
                   )
                 )}
+
                 <br>
 
                 Expira:
                 ${fmt(
                   client.expiresAt
                 )}
+
                 <br>
 
                 ${
@@ -379,9 +416,11 @@ function render() {
                     []
                   ).length
                 } lista(s)
+
               </div>
 
               <div class="actions">
+
                 <button
                   class="ghost edit-client"
                   data-id="${client.id}"
@@ -411,12 +450,15 @@ function render() {
                 >
                   Excluir
                 </button>
+
               </div>
+
             </article>
           `
         )
         .join('') ||
       '<p>Nenhum cliente cadastrado.</p>';
+
 
   /*
    * LISTAS M3U
@@ -427,7 +469,9 @@ function render() {
         .map(
           playlist => `
             <article class="card item">
+
               <div class="row">
+
                 <h3>
                   ${esc(
                     playlist.name
@@ -447,12 +491,15 @@ function render() {
                       : 'INATIVA'
                   }
                 </span>
+
               </div>
 
               <div class="meta">
+
                 ${esc(
                   playlist.url
                 )}
+
                 <br>
 
                 XMLTV:
@@ -461,15 +508,18 @@ function render() {
                     ? 'configurado'
                     : 'não configurado'
                 }
+
                 <br>
 
                 Expira:
                 ${fmt(
                   playlist.expiresAt
                 )}
+
               </div>
 
               <div class="actions">
+
                 <button
                   class="ghost edit-playlist"
                   data-id="${playlist.id}"
@@ -499,15 +549,18 @@ function render() {
                 >
                   Excluir
                 </button>
+
               </div>
+
             </article>
           `
         )
         .join('') ||
       '<p>Nenhuma lista cadastrada.</p>';
 
+
   /*
-   * CHECKBOX DE LISTAS
+   * CHECKBOXES DAS LISTAS DO CLIENTE
    */
   $('#playlistChecks')
     .className =
@@ -519,19 +572,23 @@ function render() {
         .map(
           playlist => `
             <label>
+
               <input
                 type="checkbox"
                 name="playlistIds"
                 value="${playlist.id}"
               >
+
               ${esc(
                 playlist.name
               )}
+
             </label>
           `
         )
         .join('') ||
       'Cadastre uma lista primeiro.';
+
 
   /*
    * APARÊNCIA
@@ -545,6 +602,7 @@ function render() {
       {}
     )
   ) {
+
     const element =
       $(
         `#appearanceForm [name=${key}]`
@@ -555,6 +613,7 @@ function render() {
         value || '';
     }
   }
+
 
   /*
    * LOGS
@@ -569,6 +628,7 @@ function render() {
         .map(
           audit => `
             <div class="log">
+
               <time>
                 ${
                   new Date(
@@ -588,6 +648,7 @@ function render() {
                 audit.detail ||
                 ''
               )}
+
             </div>
           `
         )
@@ -595,15 +656,18 @@ function render() {
       'Sem atividade.';
 }
 
+
 /*
  * LOGIN
  */
 $('#loginForm')
   .onsubmit =
     async event => {
+
       event.preventDefault();
 
       try {
+
         const data =
           Object.fromEntries(
             new FormData(
@@ -611,34 +675,37 @@ $('#loginForm')
             )
           );
 
-        localStorage
-          .lpsmToken =
-            (
-              await request(
-                '/api/admin/login',
-                {
-                  method:
-                    'POST',
+        localStorage.lpsmToken =
+          (
+            await request(
+              '/api/admin/login',
+              {
+                method:
+                  'POST',
 
-                  body:
-                    JSON.stringify(
-                      data
-                    )
-                }
-              )
-            ).token;
+                body:
+                  JSON.stringify(
+                    data
+                  )
+              }
+            )
+          ).token;
 
         await enter();
 
       } catch (error) {
+
         $('output')
           .textContent =
             error.message;
       }
     };
 
+
 async function enter() {
+
   try {
+
     await load();
 
     $('#login')
@@ -657,6 +724,7 @@ async function enter() {
       );
 
   } catch {
+
     localStorage
       .removeItem(
         'lpsmToken'
@@ -664,25 +732,31 @@ async function enter() {
   }
 }
 
+
 if (
   localStorage.lpsmToken
 ) {
   enter();
 }
 
-$('#logout')
-  .onclick = () => {
-    localStorage
-      .removeItem(
-        'lpsmToken'
-      );
 
-    location.reload();
-  };
+$('#logout')
+  .onclick =
+    () => {
+
+      localStorage
+        .removeItem(
+          'lpsmToken'
+        );
+
+      location.reload();
+    };
+
 
 $('#refresh')
   .onclick =
     load;
+
 
 /*
  * ABAS
@@ -692,6 +766,7 @@ $$('nav button')
     button =>
       button.onclick =
         () => {
+
           $$('nav button')
             .forEach(
               item =>
@@ -710,15 +785,15 @@ $$('nav button')
                   .toggle(
                     'hidden',
                     tab.id !==
-                      button.dataset
-                        .tab
+                      button.dataset.tab
                   )
             );
         }
   );
 
+
 /*
- * Campo MAC do cliente.
+ * CAMPO MAC
  */
 const macInput =
   $(
@@ -739,10 +814,12 @@ macInput.parentElement
   .textContent =
     'MAC exibido no aplicativo';
 
+
 macInput
   .addEventListener(
     'input',
     () => {
+
       macInput.value =
         formatMac(
           macInput.value
@@ -750,32 +827,42 @@ macInput
     }
   );
 
-/*
- * Código antigo não é mais
- * necessário para cadastro.
- */
-$('#clientForm [name=activationCode]')
-  .parentElement
-  .classList
-  .add(
-    'hidden'
-  );
 
 /*
- * Permite criar uma M3U
- * junto do novo cliente.
+ * ESCONDE CÓDIGO ANTIGO
+ */
+const activationCodeInput =
+  $('#clientForm [name=activationCode]');
+
+if (
+  activationCodeInput
+) {
+
+  activationCodeInput
+    .parentElement
+    .classList
+    .add(
+      'hidden'
+    );
+}
+
+
+/*
+ * CRIAR LISTA JUNTO DO NOVO CLIENTE
  */
 $('#clientForm fieldset')
   .insertAdjacentHTML(
     'beforebegin',
     `
       <div class="inline-playlist">
+
         <h3>
           Playlist deste cliente
         </h3>
 
         <label>
           Título da lista
+
           <input
             name="playlistName"
             placeholder="Ex.: TV Sala"
@@ -784,6 +871,7 @@ $('#clientForm fieldset')
 
         <label>
           URL M3U/M3U8
+
           <input
             name="playlistUrl"
             type="url"
@@ -793,6 +881,7 @@ $('#clientForm fieldset')
 
         <label>
           URL XMLTV (opcional)
+
           <input
             name="inlineXmltvUrl"
             type="url"
@@ -800,17 +889,23 @@ $('#clientForm fieldset')
         </label>
 
         <p class="meta">
-          A lista será criada e
-          vinculada automaticamente.
+          Ao criar um novo cliente,
+          você pode criar uma lista junto dele.
         </p>
+
       </div>
     `
   );
 
+
+/*
+ * ABRIR CLIENTE
+ */
 function openClientDialog(
   client = null,
   pendingMac = ''
 ) {
+
   const form =
     $('#clientForm');
 
@@ -835,6 +930,7 @@ function openClientDialog(
         ? 'Salvar alterações'
         : 'Criar';
 
+
   const expiry =
     new Date();
 
@@ -843,10 +939,12 @@ function openClientDialog(
     1
   );
 
+
   form.elements.name
     .value =
       client?.name ||
       '';
+
 
   form.elements.macAddress
     .value =
@@ -856,14 +954,18 @@ function openClientDialog(
         ''
       );
 
+
   /*
-   * Novo cliente:
-   * MAC vem obrigatoriamente
-   * da fila do APK.
+   * NOVO CLIENTE:
+   * MAC VEM DO APK.
+   *
+   * EDITANDO:
+   * PERMITE ALTERAÇÃO.
    */
   form.elements.macAddress
     .readOnly =
       !client;
+
 
   form.elements.expiresAt
     .value =
@@ -881,6 +983,7 @@ function openClientDialog(
               10
             );
 
+
   form.elements.enabled
     .value =
       String(
@@ -888,24 +991,35 @@ function openClientDialog(
         false
       );
 
+
+  /*
+   * MARCA AS LISTAS QUE
+   * O CLIENTE JÁ POSSUI.
+   */
   $$('#playlistChecks input')
     .forEach(
       input => {
+
         input.checked =
-          !!client
-            ?.playlistIds
+          !!client?.playlistIds
             ?.includes(
               input.value
             );
       }
     );
 
+
+  /*
+   * CRIAR LISTA JUNTO:
+   * SÓ APARECE EM CLIENTE NOVO.
+   */
   const inline =
     form.querySelector(
       '.inline-playlist'
     );
 
   if (inline) {
+
     inline.classList
       .toggle(
         'hidden',
@@ -913,16 +1027,19 @@ function openClientDialog(
       );
   }
 
+
   $('#clientDialog')
     .showModal();
 }
 
+
 /*
- * EDITAR / CRIAR PLAYLIST
+ * ABRIR LISTA M3U
  */
 function openPlaylistDialog(
   playlist = null
 ) {
+
   const form =
     $('#playlistForm');
 
@@ -931,12 +1048,14 @@ function openPlaylistDialog(
   form.dataset.editId =
     playlist?.id || '';
 
+
   form
     .querySelector('h2')
     .textContent =
       playlist
         ? 'Editar lista M3U'
-        : 'Nova lista autorizada';
+        : 'Nova lista M3U';
+
 
   form
     .querySelector(
@@ -947,55 +1066,73 @@ function openPlaylistDialog(
         ? 'Salvar alterações'
         : 'Criar';
 
+
+  /*
+   * MANTÉM TODOS OS DADOS ANTIGOS
+   * VISÍVEIS DURANTE A EDIÇÃO.
+   */
   form.elements.name
     .value =
       playlist?.name ||
       '';
+
 
   form.elements.url
     .value =
       playlist?.url ||
       '';
 
+
   form.elements.xmltvUrl
     .value =
       playlist?.xmltvUrl ||
       '';
 
+
+  form.elements.enabled
+    .value =
+      String(
+        playlist?.enabled !==
+        false
+      );
+
+
   form.elements.expiresAt
     .value =
       playlist?.expiresAt
         ? String(
-            playlist
-              .expiresAt
+            playlist.expiresAt
           ).slice(
             0,
             10
           )
         : '';
 
+
   $('#playlistDialog')
     .showModal();
 }
 
+
 /*
- * Botões Novo cliente / Nova lista.
+ * BOTÕES NOVO CLIENTE / NOVA LISTA
  */
 $$('[data-open]')
   .forEach(
     button =>
       button.onclick =
         () => {
+
           if (
-            button.dataset
-              .open ===
+            button.dataset.open ===
             'clientDialog'
           ) {
+
             const firstPending =
-              state
-                .pendingDevices?.[0];
+              state.pendingDevices?.[0];
 
             if (!firstPending) {
+
               alert(
                 'Nenhum MAC reconhecido aguardando autorização. Abra o APK no aparelho primeiro.'
               );
@@ -1005,20 +1142,23 @@ $$('[data-open]')
 
             openClientDialog(
               null,
-              firstPending
-                .macAddress
+              firstPending.macAddress
             );
 
           } else if (
-            button.dataset
-              .open ===
+            button.dataset.open ===
             'playlistDialog'
           ) {
+
             openPlaylistDialog();
           }
         }
   );
 
+
+/*
+ * CANCELAR JANELAS
+ */
 $$('.close')
   .forEach(
     button =>
@@ -1031,28 +1171,35 @@ $$('.close')
             .close()
   );
 
+
 /*
  * SALVAR LISTA
  */
 $('#playlistForm')
   .onsubmit =
     async event => {
+
       event.preventDefault();
+
 
       const form =
         event.target;
 
+
       const editId =
-        form.dataset
-          .editId;
+        form.dataset.editId;
+
 
       const submit =
         event.submitter;
 
+
       submit.disabled =
         true;
 
+
       try {
+
         const data =
           Object.fromEntries(
             new FormData(
@@ -1060,8 +1207,11 @@ $('#playlistForm')
             )
           );
 
+
         data.enabled =
-          true;
+          data.enabled ===
+          'true';
+
 
         data.expiresAt =
           data.expiresAt
@@ -1070,6 +1220,7 @@ $('#playlistForm')
                 'T23:59:59'
               ).toISOString()
             : null;
+
 
         await request(
           editId
@@ -1089,18 +1240,23 @@ $('#playlistForm')
           }
         );
 
+
         form
           .closest(
             'dialog'
           )
           .close();
 
+
         form.reset();
+
 
         form.dataset.editId =
           '';
 
+
         await load();
+
 
         alert(
           editId
@@ -1108,17 +1264,22 @@ $('#playlistForm')
             : 'Lista criada com sucesso.'
         );
 
+
       } catch (error) {
+
         alert(
           'Não foi possível salvar a lista: ' +
           error.message
         );
 
+
       } finally {
+
         submit.disabled =
           false;
       }
     };
+
 
 /*
  * SALVAR CLIENTE
@@ -1126,40 +1287,50 @@ $('#playlistForm')
 $('#clientForm')
   .onsubmit =
     async event => {
+
       event.preventDefault();
+
 
       const form =
         event.target;
 
+
       const submit =
         event.submitter;
 
+
       const editId =
-        form.dataset
-          .editId;
+        form.dataset.editId;
+
 
       submit.disabled =
         true;
 
+
       try {
+
         const formData =
           new FormData(
             form
           );
+
 
         const data =
           Object.fromEntries(
             formData
           );
 
+
         data.playlistIds =
           formData.getAll(
             'playlistIds'
           );
 
+
         data.enabled =
           data.enabled ===
           'true';
+
 
         data.expiresAt =
           data.expiresAt
@@ -1169,11 +1340,14 @@ $('#clientForm')
               ).toISOString()
             : null;
 
+
         if (
           !editId &&
           data.playlistUrl
         ) {
+
           data.inlinePlaylist = {
+
             name:
               data.playlistName ||
               data.name,
@@ -1187,10 +1361,12 @@ $('#clientForm')
           };
         }
 
+
         delete data.playlistName;
         delete data.playlistUrl;
         delete data.inlineXmltvUrl;
         delete data.activationCode;
+
 
         await request(
           editId
@@ -1210,18 +1386,23 @@ $('#clientForm')
           }
         );
 
+
         form
           .closest(
             'dialog'
           )
           .close();
 
+
         form.reset();
+
 
         form.dataset.editId =
           '';
 
+
         await load();
+
 
         alert(
           editId
@@ -1229,15 +1410,20 @@ $('#clientForm')
             : 'Cliente autorizado com sucesso.'
         );
 
+
       } catch (error) {
+
         alert(
           'Não foi possível salvar: ' +
           error.message
         );
 
+
       } finally {
+
         submit.disabled =
           false;
+
 
         submit.textContent =
           editId
@@ -1246,13 +1432,16 @@ $('#clientForm')
       }
     };
 
+
 /*
  * APARÊNCIA
  */
 $('#appearanceForm')
   .onsubmit =
     async event => {
+
       event.preventDefault();
+
 
       await request(
         '/api/admin/appearance',
@@ -1271,84 +1460,99 @@ $('#appearanceForm')
         }
       );
 
+
       await load();
     };
 
+
 /*
- * BOTÕES DAS LISTAS/CARDS
+ * CLIQUES NOS CARDS
  */
 document.body.onclick =
   async event => {
+
+
     /*
-     * Autorizar MAC detectado.
+     * MAC PENDENTE
      */
     const authorize =
       event.target.closest(
         '.authorize-mac'
       );
 
+
     if (authorize) {
+
       openClientDialog(
         null,
-        authorize.dataset
-          .mac
+        authorize.dataset.mac
       );
 
       return;
     }
 
+
     /*
-     * Editar cliente.
+     * EDITAR CLIENTE
      */
     const editClient =
       event.target.closest(
         '.edit-client'
       );
 
+
     if (editClient) {
+
       openClientDialog(
         state.clients
           .find(
             client =>
               client.id ===
-              editClient
-                .dataset.id
+              editClient.dataset.id
           )
       );
 
       return;
     }
 
+
     /*
-     * Editar playlist.
+     * EDITAR LISTA
      */
     const editPlaylist =
       event.target.closest(
         '.edit-playlist'
       );
 
+
     if (editPlaylist) {
+
       openPlaylistDialog(
         state.playlists
           .find(
             playlist =>
               playlist.id ===
-              editPlaylist
-                .dataset.id
+              editPlaylist.dataset.id
           )
       );
 
       return;
     }
 
+
+    /*
+     * ATIVAR / DESATIVAR / EXCLUIR
+     */
     const button =
       event.target.closest(
         '.toggle,.delete'
       );
 
+
     if (!button) {
       return;
     }
+
 
     if (
       button.classList
@@ -1356,6 +1560,7 @@ document.body.onclick =
           'delete'
         )
     ) {
+
       if (
         !confirm(
           'Excluir este item?'
@@ -1363,6 +1568,7 @@ document.body.onclick =
       ) {
         return;
       }
+
 
       await request(
         `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
@@ -1372,7 +1578,10 @@ document.body.onclick =
         }
       );
 
+
     } else {
+
+
       await request(
         `/api/admin/${button.dataset.kind}/${button.dataset.id}`,
         {
@@ -1382,13 +1591,13 @@ document.body.onclick =
           body:
             JSON.stringify({
               enabled:
-                button.dataset
-                  .enabled ===
+                button.dataset.enabled ===
                 'true'
             })
         }
       );
     }
+
 
     await load();
   };
