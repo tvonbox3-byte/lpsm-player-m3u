@@ -12,8 +12,8 @@ android {
         minSdk = 23
         targetSdk = 35
 
-        versionCode = 15
-        versionName = "2.0.0-home"
+        versionCode = 16
+        versionName = "2.1.0"
 
         buildConfigField(
             "String",
@@ -28,6 +28,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+        }
+
         release {
             isMinifyEnabled = true
             proguardFiles(
@@ -53,9 +57,15 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
+    // Player
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
 
+    // Interface
     implementation("com.google.android.material:material:1.12.0")
+
+    // Capas de filmes e séries
+    implementation("io.coil-kt.coil3:coil:3.5.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
 }
