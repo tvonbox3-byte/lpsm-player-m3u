@@ -1,6 +1,8 @@
 package com.lpsm.player
 
+import android.app.Dialog
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
@@ -8,9 +10,14 @@ import android.os.Handler
 import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.View
+import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -20,6 +27,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import coil3.load
 import com.lpsm.player.data.*
 import com.lpsm.player.databinding.ActivityMainBinding
 import com.lpsm.player.model.*
@@ -381,10 +389,6 @@ class MainActivity : AppCompatActivity() {
 
         /*
          * BUSCA
-         *
-         * O EditText normalmente segura as setas para mover
-         * o cursor. Interceptamos BAIXO e VOLTAR para que o
-         * controle remoto nunca fique preso aqui.
          */
         b.search.isFocusable = true
         b.search.isFocusableInTouchMode = true
@@ -393,57 +397,96 @@ class MainActivity : AppCompatActivity() {
         )
 
         b.search.setOnKeyListener { _, keyCode, event ->
-            if (event.action != android.view.KeyEvent.ACTION_DOWN) {
+            if (
+                event.action !=
+                android.view.KeyEvent.ACTION_DOWN
+            ) {
                 return@setOnKeyListener false
             }
 
             when (keyCode) {
+
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    preferredTopFilter().requestFocus()
+
+                    preferredTopFilter()
+                        .requestFocus()
+
                     true
                 }
 
                 android.view.KeyEvent.KEYCODE_BACK -> {
+
                     b.search.clearFocus()
-                    preferredTopFilter().requestFocus()
+
+                    preferredTopFilter()
+                        .requestFocus()
+
                     true
                 }
 
-                else -> false
+                else ->
+                    false
             }
         }
 
-        /*
-         * ÁREAS PRINCIPAIS
-         */
-        b.categoryList.isFocusable = true
-        b.list.isFocusable = true
-        b.previewWatch.isFocusable = true
-        b.previewWatch.isFocusableInTouchMode = false
+        b.categoryList.isFocusable =
+            true
+
+        b.list.isFocusable =
+            true
+
+        b.previewWatch.isFocusable =
+            true
+
+        b.previewWatch.isFocusableInTouchMode =
+            false
     }
 
-    private fun preferredTopFilter(): View {
+    private fun preferredTopFilter():
+        View {
+
         return when {
-            favoritesOnly -> b.favorites
-            filter == ContentType.LIVE -> b.live
-            filter == ContentType.VOD -> b.vod
-            filter == ContentType.SERIES -> b.series
-            else -> b.all
+
+            favoritesOnly ->
+                b.favorites
+
+            filter ==
+                ContentType.LIVE ->
+                b.live
+
+            filter ==
+                ContentType.VOD ->
+                b.vod
+
+            filter ==
+                ContentType.SERIES ->
+                b.series
+
+            else ->
+                b.all
         }
     }
 
     private fun updateTopSelection() {
+
         b.all.isSelected =
-            filter == null && !favoritesOnly
+            filter == null &&
+                !favoritesOnly
 
         b.live.isSelected =
-            filter == ContentType.LIVE && !favoritesOnly
+            filter ==
+                ContentType.LIVE &&
+                !favoritesOnly
 
         b.vod.isSelected =
-            filter == ContentType.VOD && !favoritesOnly
+            filter ==
+                ContentType.VOD &&
+                !favoritesOnly
 
         b.series.isSelected =
-            filter == ContentType.SERIES && !favoritesOnly
+            filter ==
+                ContentType.SERIES &&
+                !favoritesOnly
 
         b.favorites.isSelected =
             favoritesOnly
@@ -463,19 +506,14 @@ class MainActivity : AppCompatActivity() {
 
             ContentType.LIVE -> {
 
-                /*
-                 * Primeiro OK:
-                 * fixa o canal no preview.
-                 *
-                 * Segundo OK:
-                 * tela cheia.
-                 */
                 if (
                     selectedEntry?.url ==
                     item.url
                 ) {
 
-                    openPlayer(item)
+                    openPlayer(
+                        item
+                    )
 
                 } else {
 
@@ -494,13 +532,10 @@ class MainActivity : AppCompatActivity() {
 
             ContentType.VOD -> {
 
-                /*
-                 * No filme, navegar pelas
-                 * capas já mostra a prévia.
-                 *
-                 * OK abre o filme.
-                 */
-                openPlayer(item)
+                showMediaDetails(
+                    item = item,
+                    series = false
+                )
             }
 
             ContentType.SERIES -> {
@@ -510,32 +545,31 @@ class MainActivity : AppCompatActivity() {
                     null
                 ) {
 
-                    /*
-                     * Estamos nas capas
-                     * das séries.
-                     */
-                    openSeries(
-                        seriesKey(item)
+                    showMediaDetails(
+                        item = item,
+                        series = true
                     )
 
                 } else {
 
-                    /*
-                     * Estamos nos episódios.
-                     */
-                    openPlayer(item)
+                    openPlayer(
+                        item
+                    )
                 }
             }
 
             else -> {
-                openPlayer(item)
+
+                openPlayer(
+                    item
+                )
             }
         }
     }
 
     /*
      * =====================================================
-     * FOCO DO CONTROLE REMOTO
+     * FOCO DO CONTROLE
      * =====================================================
      */
 
@@ -576,16 +610,10 @@ class MainActivity : AppCompatActivity() {
                     null
                 ) {
 
-                    /*
-                     * A capa representa
-                     * uma série inteira.
-                     *
-                     * Encontramos o primeiro
-                     * episódio para usar
-                     * como prévia.
-                     */
                     val name =
-                        seriesKey(item)
+                        seriesKey(
+                            item
+                        )
 
                     val episodes =
                         seriesEpisodes(
@@ -593,17 +621,25 @@ class MainActivity : AppCompatActivity() {
                         )
 
                     val firstEpisode =
-                        episodes.firstOrNull()
+                        episodes
+                            .firstOrNull()
 
                     b.previewTitle.text =
-                        name
+                        displaySeriesTitle(
+                            name,
+                            episodes
+                        )
 
                     b.previewGroup.text =
                         if (
-                            episodes.size == 1
+                            episodes.size ==
+                            1
                         ) {
+
                             "Série • 1 episódio"
+
                         } else {
+
                             "Série • ${episodes.size} episódios"
                         }
 
@@ -611,6 +647,7 @@ class MainActivity : AppCompatActivity() {
                         firstEpisode !=
                         null
                     ) {
+
                         schedulePreview(
                             firstEpisode,
                             900L
@@ -619,9 +656,6 @@ class MainActivity : AppCompatActivity() {
 
                 } else {
 
-                    /*
-                     * Episódio destacado.
-                     */
                     showPreviewInfo(
                         item
                     )
@@ -633,7 +667,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            else -> Unit
+            else ->
+                Unit
         }
     }
 
@@ -647,11 +682,6 @@ class MainActivity : AppCompatActivity() {
         category: String
     ) {
 
-        /*
-         * Dentro de uma série,
-         * o menu da esquerda vira
-         * lista de temporadas.
-         */
         if (
             filter ==
                 ContentType.SERIES &&
@@ -662,10 +692,13 @@ class MainActivity : AppCompatActivity() {
             selectedSeason =
                 if (
                     category ==
-                    "Todos"
+                    "Episódios"
                 ) {
+
                     null
+
                 } else {
+
                     category
                         .removePrefix(
                             "Temporada "
@@ -674,24 +707,26 @@ class MainActivity : AppCompatActivity() {
                 }
 
             stopPreview()
+
             renderSeriesDetail()
+
             focusFirstMedia()
 
             return
         }
 
-        /*
-         * Navegação normal:
-         * Tudo / Favoritos / categorias.
-         */
         favoritesOnly =
             category ==
-            "Favoritos"
+                "Favoritos"
 
         selectedGroup =
             category.takeUnless {
-                it == "Tudo" ||
-                it == "Favoritos"
+
+                it ==
+                    "Tudo" ||
+
+                it ==
+                    "Favoritos"
             }
 
         selectedEntry =
@@ -710,43 +745,62 @@ class MainActivity : AppCompatActivity() {
      * =====================================================
      * POSIÇÃO DO PREVIEW
      * =====================================================
-     *
-     * TV ao vivo: preview lateral, como já estava funcionando.
-     * Filmes e Séries: preview compacto no topo, ao lado da busca,
-     * para liberar a área inferior para capas e episódios.
      */
+
     private fun updatePreviewPosition() {
+
         when (filter) {
+
             ContentType.LIVE -> {
+
                 movePreviewTo(
-                    host = b.previewSideHost,
-                    compact = false
+                    host =
+                        b.previewSideHost,
+
+                    compact =
+                        false
                 )
 
-                b.previewTopHost.visibility = View.GONE
-                b.previewSideHost.visibility = View.VISIBLE
+                b.previewTopHost.visibility =
+                    View.GONE
+
+                b.previewSideHost.visibility =
+                    View.VISIBLE
             }
 
             ContentType.VOD,
             ContentType.SERIES -> {
-                b.previewTopHost.visibility = View.VISIBLE
+
+                b.previewTopHost.visibility =
+                    View.VISIBLE
 
                 movePreviewTo(
-                    host = b.previewTopHost,
-                    compact = true
+                    host =
+                        b.previewTopHost,
+
+                    compact =
+                        true
                 )
 
-                b.previewSideHost.visibility = View.GONE
+                b.previewSideHost.visibility =
+                    View.GONE
             }
 
             else -> {
+
                 movePreviewTo(
-                    host = b.previewSideHost,
-                    compact = false
+                    host =
+                        b.previewSideHost,
+
+                    compact =
+                        false
                 )
 
-                b.previewTopHost.visibility = View.GONE
-                b.previewSideHost.visibility = View.GONE
+                b.previewTopHost.visibility =
+                    View.GONE
+
+                b.previewSideHost.visibility =
+                    View.GONE
             }
         }
     }
@@ -755,18 +809,26 @@ class MainActivity : AppCompatActivity() {
         host: FrameLayout,
         compact: Boolean
     ) {
-        val currentParent =
-            b.previewPanel.parent as? FrameLayout
 
-        if (currentParent !== host) {
-            currentParent?.removeView(
-                b.previewPanel
-            )
+        val currentParent =
+            b.previewPanel.parent
+                as? FrameLayout
+
+        if (
+            currentParent !==
+            host
+        ) {
+
+            currentParent
+                ?.removeView(
+                    b.previewPanel
+                )
 
             host.removeAllViews()
 
             host.addView(
                 b.previewPanel,
+
                 FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
@@ -775,19 +837,36 @@ class MainActivity : AppCompatActivity() {
         }
 
         val videoFrame =
-            b.previewPanel.getChildAt(0)
+            b.previewPanel
+                .getChildAt(
+                    0
+                )
 
         videoFrame?.layoutParams =
-            videoFrame?.layoutParams?.apply {
-                height = dp(
-                    if (compact) 128 else 197
-                )
-            }
+            videoFrame?.layoutParams
+                ?.apply {
+
+                    height =
+                        dp(
+                            if (
+                                compact
+                            ) {
+                                128
+                            } else {
+                                197
+                            }
+                        )
+                }
 
         if (compact) {
-            b.previewPanel.setPadding(
-                0, 0, 0, 0
-            )
+
+            b.previewPanel
+                .setPadding(
+                    0,
+                    0,
+                    0,
+                    0
+                )
 
             b.previewWatch.visibility =
                 View.GONE
@@ -799,9 +878,14 @@ class MainActivity : AppCompatActivity() {
                 12f
 
         } else {
-            b.previewPanel.setPadding(
-                dp(10), 0, 0, 0
-            )
+
+            b.previewPanel
+                .setPadding(
+                    dp(10),
+                    0,
+                    0,
+                    0
+                )
 
             b.previewWatch.visibility =
                 View.VISIBLE
@@ -814,10 +898,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun dp(value: Int): Int {
+    private fun dp(
+        value: Int
+    ): Int {
+
         return (
             value *
-                resources.displayMetrics.density
+                resources
+                    .displayMetrics
+                    .density
             ).toInt()
     }
 
@@ -831,20 +920,21 @@ class MainActivity : AppCompatActivity() {
 
         val previewFrame =
             b.previewPanel
-                .getChildAt(0)
+                .getChildAt(
+                    0
+                )
                 as? FrameLayout
                 ?: return
 
         previewPlayerView =
-            PlayerView(this).apply {
+            PlayerView(
+                this
+            ).apply {
 
                 layoutParams =
                     FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams
-                            .MATCH_PARENT,
-
-                        FrameLayout.LayoutParams
-                            .MATCH_PARENT
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
                     )
 
                 useController =
@@ -873,8 +963,11 @@ class MainActivity : AppCompatActivity() {
 
         previewRunnable
             ?.let {
+
                 previewHandler
-                    .removeCallbacks(it)
+                    .removeCallbacks(
+                        it
+                    )
             }
 
         previewTarget =
@@ -887,6 +980,7 @@ class MainActivity : AppCompatActivity() {
                     previewTarget ==
                     entry.url
                 ) {
+
                     playPreviewNow(
                         entry
                     )
@@ -909,16 +1003,13 @@ class MainActivity : AppCompatActivity() {
 
         cancelPendingPreview()
 
-        /*
-         * Se já está passando esse
-         * mesmo vídeo, não reinicia.
-         */
         if (
             previewPlayingUrl ==
-            entry.url &&
+                entry.url &&
             previewPlayer !=
-            null
+                null
         ) {
+
             return
         }
 
@@ -929,7 +1020,9 @@ class MainActivity : AppCompatActivity() {
 
             previewPlayer =
                 ExoPlayer
-                    .Builder(this)
+                    .Builder(
+                        this
+                    )
                     .build()
 
             previewPlayerView
@@ -944,6 +1037,7 @@ class MainActivity : AppCompatActivity() {
             ?.apply {
 
                 stop()
+
                 clearMediaItems()
 
                 setMediaItem(
@@ -965,7 +1059,9 @@ class MainActivity : AppCompatActivity() {
     ) {
 
         b.previewTitle.text =
-            entry.name
+            displayTitle(
+                entry
+            )
 
         b.previewGroup.text =
             when (
@@ -986,6 +1082,7 @@ class MainActivity : AppCompatActivity() {
                             entry.season !=
                             null
                         ) {
+
                             append(
                                 "Temporada ${entry.season}"
                             )
@@ -999,6 +1096,7 @@ class MainActivity : AppCompatActivity() {
                             if (
                                 isNotEmpty()
                             ) {
+
                                 append(
                                     " • "
                                 )
@@ -1012,6 +1110,7 @@ class MainActivity : AppCompatActivity() {
                         if (
                             isEmpty()
                         ) {
+
                             append(
                                 entry.group
                             )
@@ -1025,8 +1124,11 @@ class MainActivity : AppCompatActivity() {
 
         previewRunnable
             ?.let {
+
                 previewHandler
-                    .removeCallbacks(it)
+                    .removeCallbacks(
+                        it
+                    )
             }
 
         previewRunnable =
@@ -1045,7 +1147,9 @@ class MainActivity : AppCompatActivity() {
 
         previewPlayer
             ?.apply {
+
                 stop()
+
                 clearMediaItems()
             }
     }
@@ -1059,7 +1163,7 @@ class MainActivity : AppCompatActivity() {
 
         previewPlayerView
             ?.player =
-            null
+                null
 
         previewPlayer
             ?.release()
@@ -1068,10 +1172,6 @@ class MainActivity : AppCompatActivity() {
             null
     }
 
-    /*
-     * Item que está sendo usado
-     * pelo botão ASSISTIR.
-     */
     private fun currentPreviewEntry():
         MediaEntry? {
 
@@ -1081,7 +1181,9 @@ class MainActivity : AppCompatActivity() {
 
         return entries
             .firstOrNull {
-                it.url == url
+
+                it.url ==
+                    url
             }
             ?: selectedEntry
     }
@@ -1114,6 +1216,7 @@ class MainActivity : AppCompatActivity() {
                     )
 
                 runOnUiThread {
+
                     loadConfig()
                 }
 
@@ -1160,17 +1263,20 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
 
                         val reason =
-                            e.message ?: ""
+                            e.message
+                                ?: ""
 
                         if (
                             reason.contains(
                                 "autoriz",
                                 true
                             ) ||
+
                             reason.contains(
                                 "inativo",
                                 true
                             ) ||
+
                             reason.contains(
                                 "expirado",
                                 true
@@ -1245,6 +1351,7 @@ class MainActivity : AppCompatActivity() {
             val uniquePlaylists =
                 config.playlists
                     .distinctBy {
+
                         it.url
                             .trim()
                             .lowercase()
@@ -1262,12 +1369,15 @@ class MainActivity : AppCompatActivity() {
                             60_000 -
                                 all.size
                             )
-                            .coerceAtLeast(0)
+                            .coerceAtLeast(
+                                0
+                            )
 
                     if (
                         remaining ==
                         0
                     ) {
+
                         break
                     }
 
@@ -1280,10 +1390,10 @@ class MainActivity : AppCompatActivity() {
                     if (
                         parsed.isEmpty()
                     ) {
-                        throw
-                            IllegalStateException(
-                                "lista vazia ou formato inválido"
-                            )
+
+                        throw IllegalStateException(
+                            "lista vazia ou formato inválido"
+                        )
                     }
 
                     all +=
@@ -1393,22 +1503,23 @@ class MainActivity : AppCompatActivity() {
         if (
             url.isBlank()
         ) {
+
             return null
         }
 
         return try {
 
             val connection =
-                URL(url)
+                URL(
+                    url
+                )
                     .openConnection()
                     as HttpURLConnection
 
-            connection
-                .connectTimeout =
+            connection.connectTimeout =
                 10_000
 
-            connection
-                .readTimeout =
+            connection.readTimeout =
                 15_000
 
             connection
@@ -1484,6 +1595,7 @@ class MainActivity : AppCompatActivity() {
             b.activationSimple.visibility !=
             View.VISIBLE
         ) {
+
             return
         }
 
@@ -1498,6 +1610,7 @@ class MainActivity : AppCompatActivity() {
                     )
 
                 runOnUiThread {
+
                     loadConfig()
                 }
 
@@ -1599,6 +1712,7 @@ class MainActivity : AppCompatActivity() {
                 ?.joinToString(
                     " • "
                 ) {
+
                     it.name
                 }
                 ?: "Lista indisponível"
@@ -1608,6 +1722,7 @@ class MainActivity : AppCompatActivity() {
 
         banner
             ?.let {
+
                 b.failureBanner
                     .setImageBitmap(
                         it
@@ -1665,6 +1780,7 @@ class MainActivity : AppCompatActivity() {
                 config.appearance
                     .supportMessage
                     .ifBlank {
+
                         "Somente conteúdo autorizado"
                     }
             }
@@ -1681,27 +1797,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindFilters() {
 
-        b.all.setOnClickListener {
-            showHome()
-        }
+        b.all
+            .setOnClickListener {
 
-        b.live.setOnClickListener {
-            showBrowser(
-                ContentType.LIVE
-            )
-        }
+                showHome()
+            }
 
-        b.vod.setOnClickListener {
-            showBrowser(
-                ContentType.VOD
-            )
-        }
+        b.live
+            .setOnClickListener {
 
-        b.series.setOnClickListener {
-            showBrowser(
-                ContentType.SERIES
-            )
-        }
+                showBrowser(
+                    ContentType.LIVE
+                )
+            }
+
+        b.vod
+            .setOnClickListener {
+
+                showBrowser(
+                    ContentType.VOD
+                )
+            }
+
+        b.series
+            .setOnClickListener {
+
+                showBrowser(
+                    ContentType.SERIES
+                )
+            }
 
         b.favorites
             .setOnClickListener {
@@ -1710,6 +1834,7 @@ class MainActivity : AppCompatActivity() {
                     selectedSeriesName !=
                     null
                 ) {
+
                     selectedSeriesName =
                         null
 
@@ -1733,6 +1858,7 @@ class MainActivity : AppCompatActivity() {
 
         b.search
             .addTextChangedListener(
+
                 object :
                     TextWatcher {
 
@@ -1764,46 +1890,71 @@ class MainActivity : AppCompatActivity() {
 
     /*
      * =====================================================
-     * ORDEM DAS CATEGORIAS DE TV
+     * ORDEM DAS CATEGORIAS
      * =====================================================
-     *
-     * Coloca primeiro os canais mais comuns/locais e deixa
-     * categorias adultas por último. O bloqueio por PIN será
-     * ligado ao painel para que a senha seja escolhida pelo
-     * administrador, em vez de ficar fixa dentro do APK.
      */
-    private fun orderedCategoryEntries(
-        indexedGroups: Map<String, List<MediaEntry>>
-    ): List<Map.Entry<String, List<MediaEntry>>> {
 
-        if (filter != ContentType.LIVE) {
+    private fun orderedCategoryEntries(
+        indexedGroups:
+            Map<
+                String,
+                List<MediaEntry>
+                >
+    ): List<
+        Map.Entry<
+            String,
+            List<MediaEntry>
+            >
+        > {
+
+        if (
+            filter !=
+            ContentType.LIVE
+        ) {
+
             return indexedGroups
                 .entries
                 .sortedBy {
-                    it.key.lowercase()
+
+                    it.key
+                        .lowercase()
                 }
         }
 
         return indexedGroups
             .entries
             .sortedWith(
-                Comparator { first, second ->
+
+                Comparator {
+                        first,
+                        second ->
+
                     val priority =
                         liveCategoryPriority(
                             first.key
-                        ).compareTo(
-                            liveCategoryPriority(
-                                second.key
-                            )
                         )
+                            .compareTo(
 
-                    if (priority != 0) {
+                                liveCategoryPriority(
+                                    second.key
+                                )
+                            )
+
+                    if (
+                        priority !=
+                        0
+                    ) {
+
                         priority
+
                     } else {
-                        first.key.compareTo(
-                            second.key,
-                            ignoreCase = true
-                        )
+
+                        first.key
+                            .compareTo(
+                                second.key,
+                                ignoreCase =
+                                    true
+                            )
                     }
                 }
             )
@@ -1812,11 +1963,17 @@ class MainActivity : AppCompatActivity() {
     private fun liveCategoryPriority(
         category: String
     ): Int {
+
         val value =
-            category.lowercase()
+            category
+                .lowercase()
 
         return when {
-            isAdultCategory(value) -> 1000
+
+            isAdultCategory(
+                value
+            ) ->
+                1000
 
             listOf(
                 "rio grande do sul",
@@ -1827,44 +1984,83 @@ class MainActivity : AppCompatActivity() {
                 "rs |",
                 "| rs",
                 " rs "
-            ).any { it in value } -> 0
+            ).any {
+
+                it in
+                    value
+            } ->
+                0
 
             listOf(
                 "canais abertos",
                 "tv aberta",
                 "abertos"
-            ).any { it in value } -> 10
+            ).any {
 
-            "globo" in value -> 20
-            "sbt" in value -> 30
-            "record" in value -> 40
-            "band" in value -> 50
+                it in
+                    value
+            } ->
+                10
+
+            "globo" in
+                value ->
+                20
+
+            "sbt" in
+                value ->
+                30
+
+            "record" in
+                value ->
+                40
+
+            "band" in
+                value ->
+                50
 
             listOf(
                 "rede tv",
                 "redetv"
-            ).any { it in value } -> 60
+            ).any {
+
+                it in
+                    value
+            } ->
+                60
 
             listOf(
                 "noticia",
                 "notícia",
                 "news"
-            ).any { it in value } -> 100
+            ).any {
+
+                it in
+                    value
+            } ->
+                100
 
             listOf(
                 "esporte",
                 "sport"
-            ).any { it in value } -> 110
+            ).any {
 
-            else -> 500
+                it in
+                    value
+            } ->
+                110
+
+            else ->
+                500
         }
     }
 
     private fun isAdultCategory(
         category: String
     ): Boolean {
+
         val value =
-            category.lowercase()
+            category
+                .lowercase()
 
         return listOf(
             "adult",
@@ -1876,7 +2072,9 @@ class MainActivity : AppCompatActivity() {
             "erótico",
             "erotico"
         ).any {
-            it in value
+
+            it in
+                value
         }
     }
 
@@ -1913,7 +2111,10 @@ class MainActivity : AppCompatActivity() {
         val section =
             filter
                 ?.let {
-                    entriesByType[it]
+
+                    entriesByType[
+                        it
+                    ]
                         .orEmpty()
                 }
                 ?: entries
@@ -1921,14 +2122,14 @@ class MainActivity : AppCompatActivity() {
         val indexedGroups =
             filter
                 ?.let {
-                    groupsByType[it]
+
+                    groupsByType[
+                        it
+                    ]
                         .orEmpty()
                 }
                 ?: groupsAll
 
-        /*
-         * CATEGORIAS DO LADO ESQUERDO
-         */
         val categories =
             buildList {
 
@@ -1944,6 +2145,7 @@ class MainActivity : AppCompatActivity() {
                         "Favoritos",
 
                         section.count {
+
                             it.url in
                                 favoriteUrls
                         }
@@ -1952,7 +2154,8 @@ class MainActivity : AppCompatActivity() {
 
                 orderedCategoryEntries(
                     indexedGroups
-                ).forEach { entry ->
+                ).forEach {
+                        entry ->
 
                     add(
                         CategoryRow(
@@ -1973,8 +2176,11 @@ class MainActivity : AppCompatActivity() {
                 if (
                     favoritesOnly
                 ) {
+
                     "Favoritos"
+
                 } else {
+
                     selectedGroup
                         ?: "Tudo"
                 }
@@ -1983,7 +2189,10 @@ class MainActivity : AppCompatActivity() {
         val source =
             selectedGroup
                 ?.let {
-                    indexedGroups[it]
+
+                    indexedGroups[
+                        it
+                    ]
                         .orEmpty()
                 }
                 ?: section
@@ -1993,33 +2202,33 @@ class MainActivity : AppCompatActivity() {
 
                 val favoriteOkay =
                     !favoritesOnly ||
-                    it.url in
-                    favoriteUrls
+
+                        it.url in
+                        favoriteUrls
 
                 val queryOkay =
                     query.isBlank() ||
-                    it.name.contains(
-                        query,
-                        true
-                    ) ||
-                    it.group.contains(
-                        query,
-                        true
-                    ) ||
-                    it.seriesName
-                        .contains(
+
+                        it.name.contains(
                             query,
                             true
-                        )
+                        ) ||
+
+                        it.group.contains(
+                            query,
+                            true
+                        ) ||
+
+                        it.seriesName
+                            .contains(
+                                query,
+                                true
+                            )
 
                 favoriteOkay &&
                     queryOkay
             }
 
-        /*
-         * O quadrado pequeno fica visível, mas muda de posição:
-         * TV ao vivo = lateral. Filmes/Séries = topo.
-         */
         updatePreviewPosition()
 
         b.previewPanel.visibility =
@@ -2027,9 +2236,6 @@ class MainActivity : AppCompatActivity() {
 
         when (filter) {
 
-            /*
-             * TV AO VIVO
-             */
             ContentType.LIVE -> {
 
                 setGridColumns(
@@ -2050,13 +2256,11 @@ class MainActivity : AppCompatActivity() {
                     selectedEntry ==
                     null
                 ) {
+
                     resetPreviewText()
                 }
             }
 
-            /*
-             * FILMES
-             */
             ContentType.VOD -> {
 
                 setGridColumns(
@@ -2077,14 +2281,9 @@ class MainActivity : AppCompatActivity() {
                     "Selecione um filme"
 
                 b.previewGroup.text =
-                    "Navegue pelas capas para visualizar"
+                    "Navegue pelas capas • OK para ver detalhes"
             }
 
-            /*
-             * SÉRIES:
-             * transforma vários episódios
-             * em UMA capa por série.
-             */
             ContentType.SERIES -> {
 
                 val seriesCards =
@@ -2110,7 +2309,7 @@ class MainActivity : AppCompatActivity() {
                     "Selecione uma série"
 
                 b.previewGroup.text =
-                    "OK para abrir temporadas e episódios"
+                    "OK para ver detalhes"
             }
 
             else -> {
@@ -2142,33 +2341,44 @@ class MainActivity : AppCompatActivity() {
      */
 
     private fun createSeriesCards(
-        source: List<MediaEntry>
+        source:
+            List<MediaEntry>
     ): List<MediaEntry> {
 
         return source
             .groupBy {
-                seriesKey(it)
+
+                seriesKey(
+                    it
+                )
             }
             .entries
             .sortedBy {
-                it.key.lowercase()
+
+                it.key
+                    .lowercase()
             }
             .map {
                     (seriesName, episodes) ->
 
                 val representative =
-                    episodes.firstOrNull {
-                        it.logo.isNotBlank()
-                    }
+                    episodes
+                        .firstOrNull {
+
+                            it.logo
+                                .isNotBlank()
+                        }
                         ?: episodes.first()
 
                 representative.copy(
+
                     name =
                         seriesName,
 
                     logo =
                         episodes
                             .firstOrNull {
+
                                 it.logo
                                     .isNotBlank()
                             }
@@ -2195,7 +2405,16 @@ class MainActivity : AppCompatActivity() {
             name
 
         selectedSeason =
-            null
+            seriesEpisodes(
+                name
+            )
+                .mapNotNull {
+
+                    it.season
+                }
+                .distinct()
+                .sorted()
+                .firstOrNull()
 
         selectedEntry =
             null
@@ -2223,39 +2442,50 @@ class MainActivity : AppCompatActivity() {
                 name
             )
 
-        /*
-         * TEMPORADAS À ESQUERDA
-         */
         val seasons =
             allEpisodes
                 .mapNotNull {
+
                     it.season
                 }
                 .distinct()
                 .sorted()
 
-        val categories =
-            buildList {
+        if (
+            selectedSeason ==
+                null &&
+            seasons.isNotEmpty()
+        ) {
 
-                add(
+            selectedSeason =
+                seasons.first()
+        }
+
+        val categories =
+            if (
+                seasons.isEmpty()
+            ) {
+
+                listOf(
                     CategoryRow(
-                        "Todos",
+                        "Episódios",
                         allEpisodes.size
                     )
                 )
 
-                seasons.forEach {
+            } else {
+
+                seasons.map {
                         season ->
 
-                    add(
-                        CategoryRow(
-                            "Temporada $season",
+                    CategoryRow(
+                        "Temporada $season",
 
-                            allEpisodes.count {
-                                it.season ==
-                                    season
-                            }
-                        )
+                        allEpisodes.count {
+
+                            it.season ==
+                                season
+                        }
                     )
                 }
             }
@@ -2269,14 +2499,12 @@ class MainActivity : AppCompatActivity() {
 
                 selectedSeason
                     ?.let {
+
                         "Temporada $it"
                     }
-                    ?: "Todos"
+                    ?: "Episódios"
             )
 
-        /*
-         * EPISÓDIOS
-         */
         var episodes =
             if (
                 selectedSeason ==
@@ -2288,6 +2516,7 @@ class MainActivity : AppCompatActivity() {
             } else {
 
                 allEpisodes.filter {
+
                     it.season ==
                         selectedSeason
                 }
@@ -2304,6 +2533,7 @@ class MainActivity : AppCompatActivity() {
                         query,
                         true
                     ) ||
+
                     it.group.contains(
                         query,
                         true
@@ -2313,28 +2543,28 @@ class MainActivity : AppCompatActivity() {
 
         episodes =
             episodes.sortedWith(
+
                 compareBy<MediaEntry>(
                     {
+
                         it.season
                             ?: 0
                     },
 
                     {
+
                         it.episode
                             ?: 0
                     },
 
                     {
+
                         it.name
                             .lowercase()
                     }
                 )
             )
 
-        /*
-         * Episódios ficam em LISTA,
-         * não em dezenas de capas.
-         */
         setGridColumns(
             1
         )
@@ -2355,11 +2585,15 @@ class MainActivity : AppCompatActivity() {
             View.VISIBLE
 
         b.previewTitle.text =
-            name
+            displaySeriesTitle(
+                name,
+                allEpisodes
+            )
 
         b.previewGroup.text =
             selectedSeason
                 ?.let {
+
                     "Temporada $it • ${episodes.size} episódio(s)"
                 }
                 ?: "${allEpisodes.size} episódio(s)"
@@ -2377,25 +2611,32 @@ class MainActivity : AppCompatActivity() {
         ]
             .orEmpty()
             .filter {
-                seriesKey(it)
+
+                seriesKey(
+                    it
+                )
                     .equals(
                         name,
                         true
                     )
             }
             .sortedWith(
+
                 compareBy(
                     {
+
                         it.season
                             ?: 0
                     },
 
                     {
+
                         it.episode
                             ?: 0
                     },
 
                     {
+
                         it.name
                             .lowercase()
                     }
@@ -2414,13 +2655,10 @@ class MainActivity : AppCompatActivity() {
         if (
             parsed.isNotBlank()
         ) {
+
             return parsed
         }
 
-        /*
-         * Segurança extra para listas
-         * que não preencheram seriesName.
-         */
         val cleaned =
             entry.name
                 .replace(
@@ -2446,8 +2684,740 @@ class MainActivity : AppCompatActivity() {
 
         return cleaned
             .ifBlank {
+
                 entry.name
             }
+    }
+
+    /*
+     * =====================================================
+     * TELA DE DETALHES - FILMES E SÉRIES
+     * =====================================================
+     */
+
+    private fun showMediaDetails(
+        item: MediaEntry,
+        series: Boolean
+    ) {
+
+        stopPreview()
+
+        val dialog =
+            Dialog(
+                this,
+                android.R.style
+                    .Theme_Black_NoTitleBar_Fullscreen
+            )
+
+        val root =
+            FrameLayout(
+                this
+            ).apply {
+
+                setBackgroundColor(
+                    Color.rgb(
+                        5,
+                        8,
+                        12
+                    )
+                )
+            }
+
+        val background =
+            ImageView(
+                this
+            ).apply {
+
+                scaleType =
+                    ImageView.ScaleType.CENTER_CROP
+
+                alpha =
+                    0.28f
+
+                if (
+                    item.logo
+                        .isNotBlank()
+                ) {
+
+                    load(
+                        item.logo
+                    )
+                }
+            }
+
+        root.addView(
+            background,
+
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        val shade =
+            View(
+                this
+            ).apply {
+
+                setBackgroundColor(
+                    Color.argb(
+                        185,
+                        0,
+                        0,
+                        0
+                    )
+                )
+            }
+
+        root.addView(
+            shade,
+
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        val main =
+            LinearLayout(
+                this
+            ).apply {
+
+                orientation =
+                    LinearLayout.VERTICAL
+
+                setPadding(
+                    dp(46),
+                    dp(32),
+                    dp(46),
+                    dp(32)
+                )
+            }
+
+        root.addView(
+            main,
+
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        val back =
+            Button(
+                this
+            ).apply {
+
+                id =
+                    View.generateViewId()
+
+                text =
+                    "↩  VOLTAR"
+
+                textSize =
+                    18f
+
+                isAllCaps =
+                    false
+
+                isFocusable =
+                    true
+
+                setTextColor(
+                    Color.WHITE
+                )
+
+                setBackgroundResource(
+                    R.drawable
+                        .tv_button_background
+                )
+
+                setOnClickListener {
+
+                    dialog.dismiss()
+                }
+            }
+
+        main.addView(
+            back,
+
+            LinearLayout.LayoutParams(
+                dp(170),
+                dp(58)
+            )
+        )
+
+        val body =
+            LinearLayout(
+                this
+            ).apply {
+
+                orientation =
+                    LinearLayout.HORIZONTAL
+
+                gravity =
+                    Gravity.CENTER_VERTICAL
+
+                setPadding(
+                    0,
+                    dp(24),
+                    0,
+                    0
+                )
+            }
+
+        main.addView(
+            body,
+
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+
+        val poster =
+            ImageView(
+                this
+            ).apply {
+
+                scaleType =
+                    ImageView.ScaleType.CENTER_CROP
+
+                setBackgroundColor(
+                    Color.rgb(
+                        25,
+                        30,
+                        38
+                    )
+                )
+
+                if (
+                    item.logo
+                        .isNotBlank()
+                ) {
+
+                    load(
+                        item.logo
+                    )
+                }
+            }
+
+        body.addView(
+            poster,
+
+            LinearLayout.LayoutParams(
+                dp(300),
+                dp(440)
+            )
+        )
+
+        val information =
+            LinearLayout(
+                this
+            ).apply {
+
+                orientation =
+                    LinearLayout.VERTICAL
+
+                gravity =
+                    Gravity.CENTER_VERTICAL
+
+                setPadding(
+                    dp(42),
+                    0,
+                    0,
+                    0
+                )
+            }
+
+        body.addView(
+            information,
+
+            LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                1f
+            )
+        )
+
+        val title =
+            TextView(
+                this
+            ).apply {
+
+                text =
+                    if (
+                        series
+                    ) {
+
+                        val episodes =
+                            seriesEpisodes(
+                                seriesKey(
+                                    item
+                                )
+                            )
+
+                        displaySeriesTitle(
+                            seriesKey(
+                                item
+                            ),
+                            episodes
+                        )
+
+                    } else {
+
+                        displayTitle(
+                            item
+                        )
+                    }
+
+                setTextColor(
+                    Color.WHITE
+                )
+
+                textSize =
+                    34f
+
+                maxLines =
+                    3
+            }
+
+        information.addView(
+            title
+        )
+
+        val info =
+            TextView(
+                this
+            ).apply {
+
+                val textValue =
+                    if (
+                        series
+                    ) {
+
+                        val episodes =
+                            seriesEpisodes(
+                                seriesKey(
+                                    item
+                                )
+                            )
+
+                        val seasons =
+                            episodes
+                                .mapNotNull {
+
+                                    it.season
+                                }
+                                .distinct()
+                                .sorted()
+
+                        buildString {
+
+                            append(
+                                "Série"
+                            )
+
+                            if (
+                                seasons.isNotEmpty()
+                            ) {
+
+                                append(
+                                    " • "
+                                )
+
+                                append(
+                                    seasons.size
+                                )
+
+                                append(
+                                    if (
+                                        seasons.size ==
+                                        1
+                                    ) {
+
+                                        " temporada"
+
+                                    } else {
+
+                                        " temporadas"
+                                    }
+                                )
+                            }
+
+                            append(
+                                " • "
+                            )
+
+                            append(
+                                episodes.size
+                            )
+
+                            append(
+                                if (
+                                    episodes.size ==
+                                    1
+                                ) {
+
+                                    " episódio"
+
+                                } else {
+
+                                    " episódios"
+                                }
+                            )
+
+                            if (
+                                item.group
+                                    .isNotBlank()
+                            ) {
+
+                                append(
+                                    "\n"
+                                )
+
+                                append(
+                                    item.group
+                                )
+                            }
+                        }
+
+                    } else {
+
+                        buildString {
+
+                            append(
+                                "Filme"
+                            )
+
+                            if (
+                                item.group
+                                    .isNotBlank()
+                            ) {
+
+                                append(
+                                    " • "
+                                )
+
+                                append(
+                                    item.group
+                                )
+                            }
+
+                            if (
+                                isLegendado(
+                                    item
+                                )
+                            ) {
+
+                                append(
+                                    "\nLEGENDADO (L)"
+                                )
+                            }
+                        }
+                    }
+
+                text =
+                    textValue
+
+                setTextColor(
+                    Color.LTGRAY
+                )
+
+                textSize =
+                    20f
+
+                setPadding(
+                    0,
+                    dp(18),
+                    0,
+                    dp(28)
+                )
+            }
+
+        information.addView(
+            info
+        )
+
+        val action =
+            Button(
+                this
+            ).apply {
+
+                id =
+                    View.generateViewId()
+
+                text =
+                    if (
+                        series
+                    ) {
+
+                        "▶  ASSISTIR A TEMPORADA"
+
+                    } else {
+
+                        "▶  ASSISTIR"
+                    }
+
+                textSize =
+                    20f
+
+                isAllCaps =
+                    false
+
+                isFocusable =
+                    true
+
+                setTextColor(
+                    Color.WHITE
+                )
+
+                setBackgroundResource(
+                    R.drawable
+                        .tv_button_background
+                )
+
+                setOnClickListener {
+
+                    dialog.dismiss()
+
+                    if (
+                        series
+                    ) {
+
+                        openSeries(
+                            seriesKey(
+                                item
+                            )
+                        )
+
+                    } else {
+
+                        openPlayer(
+                            item
+                        )
+                    }
+                }
+            }
+
+        information.addView(
+            action,
+
+            LinearLayout.LayoutParams(
+                dp(
+                    if (
+                        series
+                    ) {
+
+                        360
+
+                    } else {
+
+                        230
+                    }
+                ),
+                dp(66)
+            )
+        )
+
+        back.nextFocusDownId =
+            action.id
+
+        action.nextFocusUpId =
+            back.id
+
+        dialog.setContentView(
+            root
+        )
+
+        dialog.setOnShowListener {
+
+            dialog.window
+                ?.setLayout(
+                    android.view
+                        .WindowManager
+                        .LayoutParams
+                        .MATCH_PARENT,
+
+                    android.view
+                        .WindowManager
+                        .LayoutParams
+                        .MATCH_PARENT
+                )
+
+            action.requestFocus()
+        }
+
+        dialog.setOnDismissListener {
+
+            if (
+                b.content.visibility ==
+                    View.VISIBLE &&
+                selectedSeriesName ==
+                    null
+            ) {
+
+                showPreviewInfo(
+                    item
+                )
+
+                schedulePreview(
+                    item,
+
+                    if (
+                        series
+                    ) {
+
+                        900L
+
+                    } else {
+
+                        850L
+                    }
+                )
+            }
+        }
+
+        dialog.show()
+    }
+
+    /*
+     * =====================================================
+     * MARCAÇÃO (L)
+     * =====================================================
+     */
+
+    private fun isLegendado(
+        item: MediaEntry
+    ): Boolean {
+
+        val value =
+            buildString {
+
+                append(
+                    item.name
+                )
+
+                append(
+                    ' '
+                )
+
+                append(
+                    item.seriesName
+                )
+
+                append(
+                    ' '
+                )
+
+                append(
+                    item.group
+                )
+            }
+
+        return (
+            Regex(
+                """(?i)\[\s*L\s*]"""
+            )
+                .containsMatchIn(
+                    value
+                ) ||
+
+            Regex(
+                """(?i)\(\s*L\s*\)"""
+            )
+                .containsMatchIn(
+                    value
+                ) ||
+
+            Regex(
+                """(?i)\blegendad[oa]s?\b"""
+            )
+                .containsMatchIn(
+                    value
+                )
+        )
+    }
+
+    private fun cleanLegendMarker(
+        value: String
+    ): String {
+
+        return value
+            .replace(
+                Regex(
+                    """(?i)\[\s*L\s*]"""
+                ),
+                ""
+            )
+            .replace(
+                Regex(
+                    """(?i)\(\s*L\s*\)"""
+                ),
+                ""
+            )
+            .replace(
+                Regex(
+                    """\s+"""
+                ),
+                " "
+            )
+            .trim()
+    }
+
+    private fun displayTitle(
+        item: MediaEntry
+    ): String {
+
+        val clean =
+            cleanLegendMarker(
+                item.name
+            )
+
+        return if (
+            isLegendado(
+                item
+            )
+        ) {
+
+            "$clean (L)"
+
+        } else {
+
+            clean
+        }
+    }
+
+    private fun displaySeriesTitle(
+        name: String,
+        episodes:
+            List<MediaEntry>
+    ): String {
+
+        val clean =
+            cleanLegendMarker(
+                name
+            )
+
+        val legendado =
+            episodes.any {
+
+                isLegendado(
+                    it
+                )
+            }
+
+        return if (
+            legendado
+        ) {
+
+            "$clean (L)"
+
+        } else {
+
+            clean
+        }
     }
 
     /*
@@ -2468,6 +3438,7 @@ class MainActivity : AppCompatActivity() {
             manager.spanCount !=
             columns
         ) {
+
             manager.spanCount =
                 columns
         }
@@ -2481,8 +3452,11 @@ class MainActivity : AppCompatActivity() {
                 .smallestScreenWidthDp >=
             600
         ) {
+
             3
+
         } else {
+
             2
         }
     }
@@ -2497,13 +3471,16 @@ class MainActivity : AppCompatActivity() {
 
         entriesByType =
             entries.groupBy {
+
                 it.type
             }
 
         groupsAll =
             entries.groupBy {
+
                 it.group
                     .ifBlank {
+
                         "Outros"
                     }
             }
@@ -2517,6 +3494,7 @@ class MainActivity : AppCompatActivity() {
 
                         it.group
                             .ifBlank {
+
                                 "Outros"
                             }
                     }
@@ -2674,10 +3652,13 @@ class MainActivity : AppCompatActivity() {
 
             val first =
                 b.categoryList
-                    .getChildAt(0)
+                    .getChildAt(
+                        0
+                    )
 
             if (
-                first != null
+                first !=
+                null
             ) {
 
                 first.requestFocus()
@@ -2696,10 +3677,13 @@ class MainActivity : AppCompatActivity() {
 
             val first =
                 b.list
-                    .getChildAt(0)
+                    .getChildAt(
+                        0
+                    )
 
             if (
-                first != null
+                first !=
+                null
             ) {
 
                 first.requestFocus()
@@ -2714,7 +3698,7 @@ class MainActivity : AppCompatActivity() {
 
     /*
      * =====================================================
-     * BOTÃO VOLTAR DO CONTROLE
+     * BOTÃO VOLTAR
      * =====================================================
      */
 
@@ -2723,10 +3707,6 @@ class MainActivity : AppCompatActivity() {
     )
     override fun onBackPressed() {
 
-        /*
-         * Se estamos vendo episódios,
-         * volta para as capas das séries.
-         */
         if (
             selectedSeriesName !=
             null
@@ -2753,10 +3733,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        /*
-         * Se estamos em TV/Filmes/Séries,
-         * volta para a Home.
-         */
         if (
             b.content.visibility ==
             View.VISIBLE
@@ -2779,7 +3755,9 @@ class MainActivity : AppCompatActivity() {
     private fun showServerSetup() {
 
         val field =
-            EditText(this)
+            EditText(
+                this
+            )
                 .apply {
 
                     setText(
@@ -2795,7 +3773,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
         AlertDialog
-            .Builder(this)
+            .Builder(
+                this
+            )
             .setTitle(
                 "Servidor do painel"
             )
@@ -2824,6 +3804,7 @@ class MainActivity : AppCompatActivity() {
                     value.startsWith(
                         "https://"
                     ) ||
+
                     value.startsWith(
                         "http://"
                     )
@@ -2837,9 +3818,10 @@ class MainActivity : AppCompatActivity() {
                             store
                         )
 
-                    b.server.setText(
-                        store.serverUrl
-                    )
+                    b.server
+                        .setText(
+                            store.serverUrl
+                        )
 
                     store.token =
                         null
