@@ -319,57 +319,134 @@ class MainActivity : AppCompatActivity() {
     private fun configureRemoteNavigation() {
 
         /*
-         * HOME
+         * DESTAQUE VISUAL DOS BOTÕES
          */
-        b.homeLive.nextFocusRightId =
-            b.homeVod.id
-
-        b.homeVod.nextFocusLeftId =
-            b.homeLive.id
-
-        b.homeVod.nextFocusRightId =
-            b.homeSeries.id
-
-        b.homeSeries.nextFocusLeftId =
-            b.homeVod.id
+        listOf(
+            b.homeLive,
+            b.homeVod,
+            b.homeSeries,
+            b.all,
+            b.live,
+            b.vod,
+            b.series,
+            b.favorites,
+            b.previewWatch
+        ).forEach { button ->
+            button.isFocusable = true
+            button.isFocusableInTouchMode = false
+            button.backgroundTintList = null
+            button.setBackgroundResource(
+                R.drawable.tv_button_background
+            )
+        }
 
         /*
-         * FILTROS SUPERIORES
+         * HOME - esquerda / direita
          */
-        b.all.nextFocusRightId =
-            b.live.id
-
-        b.live.nextFocusLeftId =
-            b.all.id
-
-        b.live.nextFocusRightId =
-            b.vod.id
-
-        b.vod.nextFocusLeftId =
-            b.live.id
-
-        b.vod.nextFocusRightId =
-            b.series.id
-
-        b.series.nextFocusLeftId =
-            b.vod.id
-
-        b.series.nextFocusRightId =
-            b.favorites.id
-
-        b.favorites.nextFocusLeftId =
-            b.series.id
+        b.homeLive.nextFocusRightId = b.homeVod.id
+        b.homeVod.nextFocusLeftId = b.homeLive.id
+        b.homeVod.nextFocusRightId = b.homeSeries.id
+        b.homeSeries.nextFocusLeftId = b.homeVod.id
 
         /*
-         * Player pequeno também pode
-         * receber foco no botão assistir.
+         * FILTROS SUPERIORES - esquerda / direita
          */
-        b.previewWatch.isFocusable =
-            true
+        b.all.nextFocusLeftId = b.favorites.id
+        b.all.nextFocusRightId = b.live.id
 
-        b.previewWatch
-            .isFocusableInTouchMode =
-            false
+        b.live.nextFocusLeftId = b.all.id
+        b.live.nextFocusRightId = b.vod.id
+
+        b.vod.nextFocusLeftId = b.live.id
+        b.vod.nextFocusRightId = b.series.id
+
+        b.series.nextFocusLeftId = b.vod.id
+        b.series.nextFocusRightId = b.favorites.id
+
+        b.favorites.nextFocusLeftId = b.series.id
+        b.favorites.nextFocusRightId = b.all.id
+
+        /*
+         * Qualquer filtro sobe para a busca.
+         */
+        listOf(
+            b.all,
+            b.live,
+            b.vod,
+            b.series,
+            b.favorites
+        ).forEach { button ->
+            button.nextFocusUpId = b.search.id
+        }
+
+        /*
+         * BUSCA
+         *
+         * O EditText normalmente segura as setas para mover
+         * o cursor. Interceptamos BAIXO e VOLTAR para que o
+         * controle remoto nunca fique preso aqui.
+         */
+        b.search.isFocusable = true
+        b.search.isFocusableInTouchMode = true
+        b.search.setBackgroundResource(
+            R.drawable.tv_search_background
+        )
+
+        b.search.setOnKeyListener { _, keyCode, event ->
+            if (event.action != android.view.KeyEvent.ACTION_DOWN) {
+                return@setOnKeyListener false
+            }
+
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    preferredTopFilter().requestFocus()
+                    true
+                }
+
+                android.view.KeyEvent.KEYCODE_BACK -> {
+                    b.search.clearFocus()
+                    preferredTopFilter().requestFocus()
+                    true
+                }
+
+                else -> false
+            }
+        }
+
+        /*
+         * ÁREAS PRINCIPAIS
+         */
+        b.categoryList.isFocusable = true
+        b.list.isFocusable = true
+        b.previewWatch.isFocusable = true
+        b.previewWatch.isFocusableInTouchMode = false
+    }
+
+    private fun preferredTopFilter(): View {
+        return when {
+            favoritesOnly -> b.favorites
+            filter == ContentType.LIVE -> b.live
+            filter == ContentType.VOD -> b.vod
+            filter == ContentType.SERIES -> b.series
+            else -> b.all
+        }
+    }
+
+    private fun updateTopSelection() {
+        b.all.isSelected =
+            filter == null && !favoritesOnly
+
+        b.live.isSelected =
+            filter == ContentType.LIVE && !favoritesOnly
+
+        b.vod.isSelected =
+            filter == ContentType.VOD && !favoritesOnly
+
+        b.series.isSelected =
+            filter == ContentType.SERIES && !favoritesOnly
+
+        b.favorites.isSelected =
+            favoritesOnly
     }
 
     /*
@@ -1577,6 +1654,8 @@ class MainActivity : AppCompatActivity() {
      */
 
     private fun render() {
+
+        updateTopSelection()
 
         if (
             filter ==
