@@ -10,6 +10,9 @@ on:
       - "android/**"
       - ".github/workflows/build-apk.yml"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -56,6 +59,21 @@ jobs:
           echo "Chave LPSM carregada corretamente."
 
 
+      - name: Ler versão do aplicativo
+        id: app_version
+        working-directory: android
+        shell: bash
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
+
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+          echo "Versão: $VERSION_NAME"
+          echo "VersionCode: $VERSION_CODE"
+
+
       - name: Gerar APK Release assinado
         working-directory: android
         run: |
@@ -68,10 +86,37 @@ jobs:
              android/app/build/outputs/apk/release/LPSM-Player.apk
 
 
-      - name: Salvar APK
+      - name: Salvar APK no Actions
         uses: actions/upload-artifact@v4
         with:
           name: LPSM-Player-Release
           path: android/app/build/outputs/apk/release/LPSM-Player.apk
           if-no-files-found: error
           retention-days: 30
+
+
+      - name: Publicar atualização no GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
+        run: |
+          TAG="v${VERSION_NAME}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+
+            echo "Release $TAG já existe."
+
+          else
+
+            gh release create "$TAG" \
+              --title "LPSM ${VERSION_NAME}" \
+              --notes "Versão ${VERSION_NAME} do LPSM. VersionCode ${VERSION_CODE}."
+
+          fi
+
+          gh release upload "$TAG" \
+            android/app/build/outputs/apk/release/LPSM-Player.apk \
+            --clobber
+
+          echo "APK publicado no GitHub Releases."
