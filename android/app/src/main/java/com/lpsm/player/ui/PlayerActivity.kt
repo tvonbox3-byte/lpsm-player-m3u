@@ -86,18 +86,21 @@ class PlayerActivity : AppCompatActivity() {
             View.VISIBLE
 
         /*
-         * ZOOM:
-         * preenche toda a tela e evita
-         * aquelas barras pretas em cima
-         * e embaixo.
+         * PROPORÇÃO AUTOMÁTICA:
          *
-         * Pode cortar uma pequena parte
-         * das laterais dependendo do
-         * formato original do vídeo.
+         * FIT preserva a imagem completa do canal,
+         * filme ou episódio em celular, TV, TV Box
+         * e emulador. Assim logotipos e informações
+         * que ficam nas bordas não são cortados.
+         *
+         * Quando o formato do vídeo é diferente do
+         * formato da tela, podem aparecer pequenas
+         * barras pretas. Isso é intencional para não
+         * perder nenhuma parte da imagem.
          */
         b.playerView.resizeMode =
             AspectRatioFrameLayout
-                .RESIZE_MODE_ZOOM
+                .RESIZE_MODE_FIT
 
         /*
          * CONTROLE REMOTO
