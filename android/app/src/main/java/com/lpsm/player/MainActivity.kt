@@ -4603,17 +4603,206 @@ class MainActivity : AppCompatActivity() {
         groupsByType =
             entriesByType
                 .mapValues {
-                        (_, values) ->
+                        (type, values) ->
 
-                    values.groupBy {
+                    values.groupBy { entry ->
 
-                        it.group
-                            .ifBlank {
+                        when (type) {
 
-                                "Outros"
-                            }
+                            ContentType.LIVE ->
+                                liveDisplayGroup(entry)
+
+                            else ->
+                                entry.group
+                                    .ifBlank {
+
+                                        "Outros"
+                                    }
+                        }
                     }
                 }
+    }
+
+    /*
+     * =====================================================
+     * ORGANIZAÇÃO DOS CANAIS GLOBO / AFILIADAS
+     * =====================================================
+     *
+     * Mantemos as categorias originais da lista para todos
+     * os demais canais. Somente os canais Globo/afiliadas
+     * são reorganizados em duas categorias mais fáceis:
+     *
+     * - Globo Sul / RBS
+     * - Globo Capitais
+     *
+     * Isso não altera a URL do canal e não duplica canais.
+     */
+
+    private fun liveDisplayGroup(
+        entry: MediaEntry
+    ): String {
+
+        val originalGroup =
+            entry.group
+                .trim()
+                .ifBlank {
+
+                    "Outros"
+                }
+
+        val combined =
+            normalizeCategoryText(
+                "${entry.group} ${entry.name}"
+            )
+
+        if (
+            isGloboSouthChannel(
+                combined
+            )
+        ) {
+
+            return "Globo Sul / RBS"
+        }
+
+        if (
+            isGloboCapitalChannel(
+                combined
+            )
+        ) {
+
+            return "Globo Capitais"
+        }
+
+        return originalGroup
+    }
+
+    private fun isGloboSouthChannel(
+        text: String
+    ): Boolean {
+
+        val affiliateMarker =
+            listOf(
+                "rbs",
+                "rbs tv",
+                "nsc",
+                "nsc tv",
+                "rpc",
+                "rpc tv",
+                "globo sul"
+            ).any { marker ->
+
+                marker in text
+            }
+
+        if (affiliateMarker) {
+
+            return true
+        }
+
+        val isGlobo =
+            "globo" in text
+
+        if (!isGlobo) {
+
+            return false
+        }
+
+        return listOf(
+            "rio grande do sul",
+            "porto alegre",
+            "caxias do sul",
+            "pelotas",
+            "santa maria",
+            "passo fundo",
+            "erechim",
+            "uruguaiana",
+            "bage",
+            "santa cruz do sul",
+            "parana",
+            "curitiba",
+            "londrina",
+            "maringa",
+            "cascavel",
+            "santa catarina",
+            "florianopolis",
+            "joinville",
+            "blumenau",
+            "chapeco"
+        ).any { location ->
+
+            location in text
+        }
+    }
+
+    private fun isGloboCapitalChannel(
+        text: String
+    ): Boolean {
+
+        if (
+            "globo" !in text
+        ) {
+
+            return false
+        }
+
+        if (
+            isGloboSouthChannel(
+                text
+            )
+        ) {
+
+            return false
+        }
+
+        return listOf(
+            "rio de janeiro",
+            "sao paulo",
+            "belo horizonte",
+            "brasilia",
+            "salvador",
+            "recife",
+            "fortaleza",
+            "goiania",
+            "vitoria",
+            "belem",
+            "manaus",
+            "maceio",
+            "natal",
+            "joao pessoa",
+            "teresina",
+            "sao luis",
+            "aracaju",
+            "cuiaba",
+            "campo grande",
+            "porto velho",
+            "rio branco",
+            "macapa",
+            "boa vista",
+            "palmas"
+        ).any { capital ->
+
+            capital in text
+        }
+    }
+
+    private fun normalizeCategoryText(
+        value: String
+    ): String {
+
+        return java.text.Normalizer
+            .normalize(
+                value.lowercase(),
+                java.text.Normalizer.Form.NFD
+            )
+            .replace(
+                Regex("\\p{Mn}+"),
+                ""
+            )
+            .replace(
+                Regex("\\s+"),
+                " "
+            )
+            .trim()
     }
 
     /*
