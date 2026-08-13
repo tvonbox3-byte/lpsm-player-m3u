@@ -86,6 +86,25 @@ jobs:
              android/app/build/outputs/apk/release/LPSM-Player.apk
 
 
+      - name: Criar informações da atualização
+        env:
+          VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
+        run: |
+          cat > update.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/LPSM-Player.apk",
+            "force": false,
+            "message": "Uma nova versão do LPSM está disponível."
+          }
+          EOF
+
+          echo "Arquivo de atualização criado:"
+          cat update.json
+
+
       - name: Salvar APK no Actions
         uses: actions/upload-artifact@v4
         with:
@@ -117,6 +136,7 @@ jobs:
 
           gh release upload "$TAG" \
             android/app/build/outputs/apk/release/LPSM-Player.apk \
+            update.json \
             --clobber
 
-          echo "APK publicado no GitHub Releases."
+          echo "APK e update.json publicados."
