@@ -82,6 +82,22 @@ class MainActivity : AppCompatActivity() {
     private var selectedSeason:
         Int? = null
 
+    /*
+     * CONTROLE PARENTAL
+     *
+     * A senha protege somente grupos/itens
+     * claramente pornográficos. Classificação
+     * +18 por si só NÃO pede senha.
+     *
+     * O desbloqueio vale somente enquanto
+     * o aplicativo estiver aberto.
+     */
+    private val adultPin =
+        "02020"
+
+    private val unlockedAdultGroups =
+        mutableSetOf<String>()
+
     private var entriesByType =
         emptyMap<
             ContentType,
@@ -516,6 +532,32 @@ class MainActivity : AppCompatActivity() {
         item: MediaEntry
     ) {
 
+        if (
+            isPornProtectedEntry(item) &&
+            !isAdultUnlocked(item)
+        ) {
+
+            showAdultPinDialog(
+                unlockKey = adultUnlockKey(item)
+            ) {
+
+                openMediaAfterAdultCheck(
+                    item
+                )
+            }
+
+            return
+        }
+
+        openMediaAfterAdultCheck(
+            item
+        )
+    }
+
+    private fun openMediaAfterAdultCheck(
+        item: MediaEntry
+    ) {
+
         when (filter) {
 
             ContentType.LIVE -> {
@@ -642,6 +684,32 @@ class MainActivity : AppCompatActivity() {
 
             return
         }
+
+        if (
+            isPornProtectedText(category) &&
+            !isAdultGroupUnlocked(category)
+        ) {
+
+            showAdultPinDialog(
+                unlockKey = adultGroupKey(category)
+            ) {
+
+                selectCategoryAfterAdultCheck(
+                    category
+                )
+            }
+
+            return
+        }
+
+        selectCategoryAfterAdultCheck(
+            category
+        )
+    }
+
+    private fun selectCategoryAfterAdultCheck(
+        category: String
+    ) {
 
         favoritesOnly =
             category ==
@@ -2619,6 +2687,246 @@ class MainActivity : AppCompatActivity() {
             it in
                 value
         }
+    }
+
+    /*
+     * =====================================================
+     * CONTROLE PARENTAL - CONTEÚDO PORNOGRÁFICO
+     * =====================================================
+     *
+     * IMPORTANTE:
+     * +18 / 18+ sozinhos não são considerados pornô.
+     * Assim filmes comuns classificados para maiores
+     * de 18 anos continuam abrindo normalmente.
+     */
+
+    private fun isPornProtectedEntry(
+        item: MediaEntry
+    ): Boolean {
+
+        val combined =
+            buildString {
+
+                append(item.name)
+                append(' ')
+                append(item.group)
+                append(' ')
+                append(item.seriesName)
+            }
+
+        return isPornProtectedText(
+            combined
+        )
+    }
+
+    private fun isPornProtectedText(
+        text: String
+    ): Boolean {
+
+        val value =
+            text
+                .lowercase()
+                .replace('ô', 'o')
+                .replace('ó', 'o')
+                .replace('í', 'i')
+                .replace('é', 'e')
+                .replace('ê', 'e')
+                .replace('á', 'a')
+                .replace('ã', 'a')
+                .replace('ç', 'c')
+
+        /*
+         * Evita falso positivo em Adult Swim.
+         */
+        if (
+            "adult swim" in
+            value
+        ) {
+
+            return false
+        }
+
+        val explicitPornPattern =
+            Regex(
+                pattern =
+                    """(^|[\s|_\-:/\[\]()])(?:adultos?|xxx|porn|porno|pornografia|erotico|eroticos|sexo|sex|playboy|hustler|brazzers|redlight)(?=$|[\s|_\-:/\[\]()])""",
+                option =
+                    RegexOption.IGNORE_CASE
+            )
+
+        return explicitPornPattern
+            .containsMatchIn(
+                value
+            )
+    }
+
+    private fun adultGroupKey(
+        group: String
+    ): String {
+
+        return group
+            .trim()
+            .lowercase()
+    }
+
+    private fun adultUnlockKey(
+        item: MediaEntry
+    ): String {
+
+        val group =
+            item.group
+                .trim()
+
+        return if (
+            group.isNotBlank()
+        ) {
+
+            adultGroupKey(
+                group
+            )
+
+        } else {
+
+            "item:${item.url}"
+        }
+    }
+
+    private fun isAdultGroupUnlocked(
+        group: String
+    ): Boolean {
+
+        return adultGroupKey(
+            group
+        ) in unlockedAdultGroups
+    }
+
+    private fun isAdultUnlocked(
+        item: MediaEntry
+    ): Boolean {
+
+        return adultUnlockKey(
+            item
+        ) in unlockedAdultGroups
+    }
+
+    private fun showAdultPinDialog(
+        unlockKey: String,
+        onUnlocked: () -> Unit
+    ) {
+
+        val input =
+            EditText(
+                this
+            ).apply {
+
+                hint =
+                    "Senha"
+
+                inputType =
+                    android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+
+                isSingleLine =
+                    true
+
+                gravity =
+                    Gravity.CENTER
+
+                textSize =
+                    22f
+
+                setPadding(
+                    dp(18),
+                    dp(10),
+                    dp(18),
+                    dp(10)
+                )
+            }
+
+        val container =
+            FrameLayout(
+                this
+            ).apply {
+
+                setPadding(
+                    dp(24),
+                    dp(8),
+                    dp(24),
+                    0
+                )
+
+                addView(
+                    input,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            }
+
+        val dialog =
+            AlertDialog
+                .Builder(
+                    this
+                )
+                .setTitle(
+                    "Conteúdo protegido"
+                )
+                .setMessage(
+                    "Digite a senha para acessar canais ou filmes adultos."
+                )
+                .setView(
+                    container
+                )
+                .setPositiveButton(
+                    "ENTRAR",
+                    null
+                )
+                .setNegativeButton(
+                    "CANCELAR"
+                ) {
+                        dialogInterface,
+                        _ ->
+
+                    dialogInterface.dismiss()
+                }
+                .create()
+
+        dialog.setOnShowListener {
+
+            input.requestFocus()
+
+            dialog
+                .getButton(
+                    AlertDialog.BUTTON_POSITIVE
+                )
+                .setOnClickListener {
+
+                    if (
+                        input.text
+                            .toString() ==
+                        adultPin
+                    ) {
+
+                        unlockedAdultGroups.add(
+                            unlockKey
+                        )
+
+                        dialog.dismiss()
+
+                        onUnlocked()
+
+                    } else {
+
+                        input.error =
+                            "Senha incorreta"
+
+                        input.selectAll()
+                    }
+                }
+        }
+
+        dialog.show()
     }
 
     /*
