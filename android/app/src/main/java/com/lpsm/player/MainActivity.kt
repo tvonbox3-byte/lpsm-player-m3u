@@ -2,6 +2,7 @@ package com.lpsm.player
 
 import android.app.Dialog
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -27,6 +28,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import coil3.load
 import com.lpsm.player.data.*
 import com.lpsm.player.databinding.ActivityMainBinding
@@ -168,6 +170,12 @@ class MainActivity : AppCompatActivity() {
             b.root
         )
 
+        /*
+         * Ajusta o layout para o tamanho real
+         * do celular, tablet, TV Box ou TV.
+         */
+        applyResponsiveSizing()
+
         store =
             SecureStore(this)
 
@@ -236,6 +244,12 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             )
+
+        /*
+         * Ajusta capas e episódios quando
+         * entram na tela.
+         */
+        installResponsiveItemSizing()
 
         /*
          * CATEGORIAS
@@ -842,23 +856,31 @@ class MainActivity : AppCompatActivity() {
                     0
                 )
 
+        val videoHeight =
+            if (
+                compact
+            ) {
+
+                compactPreviewVideoHeightDp()
+
+            } else {
+
+                sidePreviewVideoHeightDp()
+            }
+
         videoFrame?.layoutParams =
             videoFrame?.layoutParams
                 ?.apply {
 
                     height =
                         dp(
-                            if (
-                                compact
-                            ) {
-                                128
-                            } else {
-                                197
-                            }
+                            videoHeight
                         )
                 }
 
-        if (compact) {
+        if (
+            compact
+        ) {
 
             b.previewPanel
                 .setPadding(
@@ -872,16 +894,44 @@ class MainActivity : AppCompatActivity() {
                 View.GONE
 
             b.previewTitle.textSize =
-                16f
+                when {
+
+                    isVeryCompactScreen() ->
+                        12f
+
+                    isCompactScreen() ->
+                        14f
+
+                    else ->
+                        16f
+                }
 
             b.previewGroup.textSize =
-                12f
+                when {
+
+                    isVeryCompactScreen() ->
+                        9f
+
+                    isCompactScreen() ->
+                        10f
+
+                    else ->
+                        12f
+                }
 
         } else {
 
             b.previewPanel
                 .setPadding(
-                    dp(10),
+                    dp(
+                        if (
+                            isCompactScreen()
+                        ) {
+                            4
+                        } else {
+                            10
+                        }
+                    ),
                     0,
                     0,
                     0
@@ -891,11 +941,622 @@ class MainActivity : AppCompatActivity() {
                 View.VISIBLE
 
             b.previewTitle.textSize =
-                20f
+                when {
+
+                    isVeryCompactScreen() ->
+                        13f
+
+                    isCompactScreen() ->
+                        15f
+
+                    else ->
+                        20f
+                }
 
             b.previewGroup.textSize =
-                14f
+                when {
+
+                    isVeryCompactScreen() ->
+                        10f
+
+                    isCompactScreen() ->
+                        11f
+
+                    else ->
+                        14f
+                }
         }
+    }
+
+    /*
+     * =====================================================
+     * RESPONSIVIDADE
+     * =====================================================
+     */
+
+    private fun screenWidthDp():
+        Int {
+
+        val configured =
+            resources.configuration
+                .screenWidthDp
+
+        if (
+            configured >
+            0
+        ) {
+            return configured
+        }
+
+        return (
+            resources.displayMetrics
+                .widthPixels /
+                resources.displayMetrics
+                    .density
+            )
+            .toInt()
+    }
+
+    private fun screenHeightDp():
+        Int {
+
+        val configured =
+            resources.configuration
+                .screenHeightDp
+
+        if (
+            configured >
+            0
+        ) {
+            return configured
+        }
+
+        return (
+            resources.displayMetrics
+                .heightPixels /
+                resources.displayMetrics
+                    .density
+            )
+            .toInt()
+    }
+
+    private fun isVeryCompactScreen():
+        Boolean {
+
+        return (
+            screenHeightDp() <=
+                380 ||
+            screenWidthDp() <
+                650
+            )
+    }
+
+    private fun isCompactScreen():
+        Boolean {
+
+        return (
+            screenHeightDp() <=
+                520 ||
+            screenWidthDp() <
+                950
+            )
+    }
+
+    private fun categoryWidthDp():
+        Int {
+
+        return when {
+
+            screenWidthDp() <
+                650 ->
+                96
+
+            screenWidthDp() <
+                800 ->
+                112
+
+            screenWidthDp() <
+                1000 ->
+                132
+
+            screenWidthDp() <
+                1300 ->
+                170
+
+            else ->
+                220
+        }
+    }
+
+    private fun topPreviewWidthDp():
+        Int {
+
+        return when {
+
+            screenWidthDp() <
+                650 ->
+                155
+
+            screenWidthDp() <
+                800 ->
+                180
+
+            screenWidthDp() <
+                1000 ->
+                215
+
+            screenWidthDp() <
+                1300 ->
+                285
+
+            else ->
+                390
+        }
+    }
+
+    private fun topPreviewHeightDp():
+        Int {
+
+        return when {
+
+            screenHeightDp() <=
+                340 ->
+                78
+
+            screenHeightDp() <=
+                380 ->
+                88
+
+            screenHeightDp() <=
+                430 ->
+                100
+
+            screenHeightDp() <=
+                520 ->
+                118
+
+            screenHeightDp() <=
+                700 ->
+                150
+
+            else ->
+                210
+        }
+    }
+
+    private fun sidePreviewWidthDp():
+        Int {
+
+        return when {
+
+            screenWidthDp() <
+                650 ->
+                130
+
+            screenWidthDp() <
+                800 ->
+                155
+
+            screenWidthDp() <
+                1000 ->
+                190
+
+            screenWidthDp() <
+                1300 ->
+                255
+
+            else ->
+                340
+        }
+    }
+
+    private fun compactPreviewVideoHeightDp():
+        Int {
+
+        return when {
+
+            screenHeightDp() <=
+                340 ->
+                50
+
+            screenHeightDp() <=
+                380 ->
+                58
+
+            screenHeightDp() <=
+                430 ->
+                68
+
+            screenHeightDp() <=
+                520 ->
+                80
+
+            screenHeightDp() <=
+                700 ->
+                108
+
+            else ->
+                160
+        }
+    }
+
+    private fun sidePreviewVideoHeightDp():
+        Int {
+
+        return when {
+
+            screenHeightDp() <=
+                340 ->
+                60
+
+            screenHeightDp() <=
+                380 ->
+                70
+
+            screenHeightDp() <=
+                430 ->
+                82
+
+            screenHeightDp() <=
+                520 ->
+                102
+
+            screenHeightDp() <=
+                700 ->
+                145
+
+            else ->
+                190
+        }
+    }
+
+    private fun applyResponsiveSizing() {
+
+        b.categoryList.layoutParams =
+            b.categoryList.layoutParams
+                .apply {
+
+                    width =
+                        dp(
+                            categoryWidthDp()
+                        )
+                }
+
+        b.previewTopHost.layoutParams =
+            b.previewTopHost.layoutParams
+                .apply {
+
+                    width =
+                        dp(
+                            topPreviewWidthDp()
+                        )
+
+                    height =
+                        dp(
+                            topPreviewHeightDp()
+                        )
+                }
+
+        b.previewSideHost.layoutParams =
+            b.previewSideHost.layoutParams
+                .apply {
+
+                    width =
+                        dp(
+                            sidePreviewWidthDp()
+                        )
+                }
+
+        if (
+            isCompactScreen()
+        ) {
+
+            b.homeWelcome.textSize =
+                if (
+                    isVeryCompactScreen()
+                ) {
+                    18f
+                } else {
+                    21f
+                }
+
+            val homeButtonText =
+                if (
+                    isVeryCompactScreen()
+                ) {
+                    12f
+                } else {
+                    15f
+                }
+
+            b.homeLive.textSize =
+                homeButtonText
+
+            b.homeVod.textSize =
+                homeButtonText
+
+            b.homeSeries.textSize =
+                homeButtonText
+        }
+    }
+
+    private fun installResponsiveItemSizing() {
+
+        b.list
+            .addOnChildAttachStateChangeListener(
+
+                object :
+                    RecyclerView.OnChildAttachStateChangeListener {
+
+                    override fun onChildViewAttachedToWindow(
+                        view: View
+                    ) {
+
+                        resizeMediaCard(
+                            view
+                        )
+                    }
+
+                    override fun onChildViewDetachedFromWindow(
+                        view: View
+                    ) {
+                    }
+                }
+            )
+    }
+
+    private fun resizeVisibleMediaCards() {
+
+        b.list.post {
+
+            for (
+                index in
+                0 until b.list.childCount
+            ) {
+
+                resizeMediaCard(
+                    b.list.getChildAt(
+                        index
+                    )
+                )
+            }
+        }
+    }
+
+    private fun resizeMediaCard(
+        view: View
+    ) {
+
+        val poster =
+            view.findViewById<ImageView?>(
+                R.id.poster
+            )
+
+        if (
+            poster !=
+            null
+        ) {
+
+            val manager =
+                b.list.layoutManager
+                    as? GridLayoutManager
+
+            val columns =
+                manager?.spanCount
+                    ?.coerceAtLeast(
+                        1
+                    )
+                    ?: 1
+
+            val listWidth =
+                b.list.width
+
+            if (
+                listWidth >
+                0
+            ) {
+
+                val targetWidth =
+                    (
+                        listWidth /
+                            columns -
+                            dp(10)
+                        )
+                        .coerceAtLeast(
+                            dp(82)
+                        )
+
+                view.layoutParams =
+                    view.layoutParams
+                        .apply {
+
+                            width =
+                                targetWidth
+                        }
+
+                val posterContainer =
+                    poster.parent
+                        as? View
+
+                posterContainer
+                    ?.layoutParams =
+                    posterContainer
+                        ?.layoutParams
+                        ?.apply {
+
+                            height =
+                                (
+                                    targetWidth *
+                                        1.42f
+                                    )
+                                    .toInt()
+                        }
+            }
+
+            view.findViewById<TextView?>(
+                R.id.posterTitle
+            )
+                ?.textSize =
+                when {
+
+                    isVeryCompactScreen() ->
+                        10f
+
+                    isCompactScreen() ->
+                        12f
+
+                    else ->
+                        16f
+                }
+
+            view.findViewById<TextView?>(
+                R.id.posterStar
+            )
+                ?.let {
+                    star ->
+
+                    if (
+                        isCompactScreen()
+                    ) {
+
+                        val size =
+                            if (
+                                isVeryCompactScreen()
+                            ) {
+                                26
+                            } else {
+                                32
+                            }
+
+                        star.textSize =
+                            if (
+                                isVeryCompactScreen()
+                            ) {
+                                16f
+                            } else {
+                                20f
+                            }
+
+                        star.layoutParams =
+                            star.layoutParams
+                                .apply {
+
+                                    width =
+                                        dp(
+                                            size
+                                        )
+
+                                    height =
+                                        dp(
+                                            size
+                                        )
+                                }
+                    }
+                }
+
+            return
+        }
+
+        val imageContainer =
+            view.findViewById<View?>(
+                R.id.mediaImageContainer
+            )
+
+        if (
+            imageContainer ==
+                null ||
+            !isCompactScreen()
+        ) {
+            return
+        }
+
+        val rowHeight =
+            when {
+
+                screenHeightDp() <=
+                    340 ->
+                    70
+
+                screenHeightDp() <=
+                    380 ->
+                    76
+
+                screenHeightDp() <=
+                    430 ->
+                    84
+
+                else ->
+                    96
+            }
+
+        val imageWidth =
+            when {
+
+                screenHeightDp() <=
+                    340 ->
+                    88
+
+                screenHeightDp() <=
+                    380 ->
+                    100
+
+                screenHeightDp() <=
+                    430 ->
+                    112
+
+                else ->
+                    132
+            }
+
+        view.layoutParams =
+            view.layoutParams
+                .apply {
+
+                    height =
+                        dp(
+                            rowHeight
+                        )
+                }
+
+        imageContainer.layoutParams =
+            imageContainer.layoutParams
+                .apply {
+
+                    width =
+                        dp(
+                            imageWidth
+                        )
+
+                    height =
+                        dp(
+                            rowHeight -
+                                10
+                        )
+                }
+
+        view.findViewById<TextView?>(
+            R.id.title
+        )
+            ?.textSize =
+            if (
+                isVeryCompactScreen()
+            ) {
+                12f
+            } else {
+                14f
+            }
+
+        view.findViewById<TextView?>(
+            R.id.subtitle
+        )
+            ?.textSize =
+            if (
+                isVeryCompactScreen()
+            ) {
+                9f
+            } else {
+                11f
+            }
     }
 
     private fun dp(
@@ -904,10 +1565,10 @@ class MainActivity : AppCompatActivity() {
 
         return (
             value *
-                resources
-                    .displayMetrics
+                resources.displayMetrics
                     .density
-            ).toInt()
+            )
+            .toInt()
     }
 
     /*
@@ -2702,6 +3363,101 @@ class MainActivity : AppCompatActivity() {
 
         stopPreview()
 
+        val compact =
+            isCompactScreen()
+
+        val veryCompact =
+            isVeryCompactScreen()
+
+        val heightDp =
+            screenHeightDp()
+
+        val horizontalPadding =
+            when {
+
+                veryCompact ->
+                    10
+
+                compact ->
+                    18
+
+                else ->
+                    46
+            }
+
+        val verticalPadding =
+            when {
+
+                veryCompact ->
+                    6
+
+                compact ->
+                    12
+
+                else ->
+                    32
+            }
+
+        val backWidth =
+            when {
+
+                veryCompact ->
+                    108
+
+                compact ->
+                    132
+
+                else ->
+                    170
+            }
+
+        val backHeight =
+            when {
+
+                veryCompact ->
+                    38
+
+                compact ->
+                    46
+
+                else ->
+                    58
+            }
+
+        val posterWidth =
+            when {
+
+                heightDp <=
+                    340 ->
+                    112
+
+                heightDp <=
+                    380 ->
+                    132
+
+                heightDp <=
+                    430 ->
+                    152
+
+                heightDp <=
+                    520 ->
+                    185
+
+                heightDp <=
+                    700 ->
+                    238
+
+                else ->
+                    300
+            }
+
+        val posterHeight =
+            (
+                posterWidth *
+                    1.46f
+                )
+                .toInt()
+
         val dialog =
             Dialog(
                 this,
@@ -2732,13 +3488,18 @@ class MainActivity : AppCompatActivity() {
                     ImageView.ScaleType.CENTER_CROP
 
                 alpha =
-                    0.28f
+                    if (
+                        compact
+                    ) {
+                        0.20f
+                    } else {
+                        0.28f
+                    }
 
                 if (
                     item.logo
                         .isNotBlank()
                 ) {
-
                     load(
                         item.logo
                     )
@@ -2761,7 +3522,13 @@ class MainActivity : AppCompatActivity() {
 
                 setBackgroundColor(
                     Color.argb(
-                        185,
+                        if (
+                            compact
+                        ) {
+                            205
+                        } else {
+                            185
+                        },
                         0,
                         0,
                         0
@@ -2787,10 +3554,18 @@ class MainActivity : AppCompatActivity() {
                     LinearLayout.VERTICAL
 
                 setPadding(
-                    dp(46),
-                    dp(32),
-                    dp(46),
-                    dp(32)
+                    dp(
+                        horizontalPadding
+                    ),
+                    dp(
+                        verticalPadding
+                    ),
+                    dp(
+                        horizontalPadding
+                    ),
+                    dp(
+                        verticalPadding
+                    )
                 )
             }
 
@@ -2815,7 +3590,17 @@ class MainActivity : AppCompatActivity() {
                     "↩  VOLTAR"
 
                 textSize =
-                    18f
+                    when {
+
+                        veryCompact ->
+                            12f
+
+                        compact ->
+                            15f
+
+                        else ->
+                            18f
+                    }
 
                 isAllCaps =
                     false
@@ -2833,7 +3618,6 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 setOnClickListener {
-
                     dialog.dismiss()
                 }
             }
@@ -2842,8 +3626,12 @@ class MainActivity : AppCompatActivity() {
             back,
 
             LinearLayout.LayoutParams(
-                dp(170),
-                dp(58)
+                dp(
+                    backWidth
+                ),
+                dp(
+                    backHeight
+                )
             )
         )
 
@@ -2860,7 +3648,19 @@ class MainActivity : AppCompatActivity() {
 
                 setPadding(
                     0,
-                    dp(24),
+                    dp(
+                        if (
+                            veryCompact
+                        ) {
+                            5
+                        } else if (
+                            compact
+                        ) {
+                            10
+                        } else {
+                            24
+                        }
+                    ),
                     0,
                     0
                 )
@@ -2896,7 +3696,6 @@ class MainActivity : AppCompatActivity() {
                     item.logo
                         .isNotBlank()
                 ) {
-
                     load(
                         item.logo
                     )
@@ -2907,8 +3706,12 @@ class MainActivity : AppCompatActivity() {
             poster,
 
             LinearLayout.LayoutParams(
-                dp(300),
-                dp(440)
+                dp(
+                    posterWidth
+                ),
+                dp(
+                    posterHeight
+                )
             )
         )
 
@@ -2924,7 +3727,19 @@ class MainActivity : AppCompatActivity() {
                     Gravity.CENTER_VERTICAL
 
                 setPadding(
-                    dp(42),
+                    dp(
+                        if (
+                            veryCompact
+                        ) {
+                            10
+                        } else if (
+                            compact
+                        ) {
+                            18
+                        } else {
+                            42
+                        }
+                    ),
                     0,
                     0,
                     0
@@ -2977,10 +3792,30 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 textSize =
-                    34f
+                    when {
+
+                        veryCompact ->
+                            19f
+
+                        compact ->
+                            25f
+
+                        else ->
+                            34f
+                    }
 
                 maxLines =
-                    3
+                    if (
+                        veryCompact
+                    ) {
+                        2
+                    } else {
+                        3
+                    }
+
+                ellipsize =
+                    android.text.TextUtils
+                        .TruncateAt.END
             }
 
         information.addView(
@@ -3007,7 +3842,6 @@ class MainActivity : AppCompatActivity() {
                         val seasons =
                             episodes
                                 .mapNotNull {
-
                                     it.season
                                 }
                                 .distinct()
@@ -3036,11 +3870,8 @@ class MainActivity : AppCompatActivity() {
                                         seasons.size ==
                                         1
                                     ) {
-
                                         " temporada"
-
                                     } else {
-
                                         " temporadas"
                                     }
                                 )
@@ -3059,11 +3890,8 @@ class MainActivity : AppCompatActivity() {
                                     episodes.size ==
                                     1
                                 ) {
-
                                     " episódio"
-
                                 } else {
-
                                     " episódios"
                                 }
                             )
@@ -3126,13 +3954,52 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 textSize =
-                    20f
+                    when {
+
+                        veryCompact ->
+                            11f
+
+                        compact ->
+                            15f
+
+                        else ->
+                            20f
+                    }
+
+                maxLines =
+                    if (
+                        veryCompact
+                    ) {
+                        3
+                    } else {
+                        5
+                    }
+
+                ellipsize =
+                    android.text.TextUtils
+                        .TruncateAt.END
 
                 setPadding(
                     0,
-                    dp(18),
+                    dp(
+                        if (
+                            compact
+                        ) {
+                            7
+                        } else {
+                            18
+                        }
+                    ),
                     0,
-                    dp(28)
+                    dp(
+                        if (
+                            compact
+                        ) {
+                            10
+                        } else {
+                            28
+                        }
+                    )
                 )
             }
 
@@ -3153,7 +4020,13 @@ class MainActivity : AppCompatActivity() {
                         series
                     ) {
 
-                        "▶  ASSISTIR A TEMPORADA"
+                        if (
+                            veryCompact
+                        ) {
+                            "▶ TEMPORADAS"
+                        } else {
+                            "▶  ASSISTIR A TEMPORADA"
+                        }
 
                     } else {
 
@@ -3161,7 +4034,17 @@ class MainActivity : AppCompatActivity() {
                     }
 
                 textSize =
-                    20f
+                    when {
+
+                        veryCompact ->
+                            12f
+
+                        compact ->
+                            16f
+
+                        else ->
+                            20f
+                    }
 
                 isAllCaps =
                     false
@@ -3201,23 +4084,61 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+        val actionWidth =
+            if (
+                series
+            ) {
+
+                when {
+
+                    veryCompact ->
+                        176
+
+                    compact ->
+                        265
+
+                    else ->
+                        360
+                }
+
+            } else {
+
+                when {
+
+                    veryCompact ->
+                        136
+
+                    compact ->
+                        180
+
+                    else ->
+                        230
+                }
+            }
+
+        val actionHeight =
+            when {
+
+                veryCompact ->
+                    40
+
+                compact ->
+                    50
+
+                else ->
+                    66
+            }
+
         information.addView(
             action,
 
             LinearLayout.LayoutParams(
                 dp(
-                    if (
-                        series
-                    ) {
-
-                        360
-
-                    } else {
-
-                        230
-                    }
+                    actionWidth
                 ),
-                dp(66)
+                dp(
+                    actionHeight
+                )
             )
         )
 
@@ -3235,15 +4156,10 @@ class MainActivity : AppCompatActivity() {
 
             dialog.window
                 ?.setLayout(
-                    android.view
-                        .WindowManager
-                        .LayoutParams
-                        .MATCH_PARENT,
-
-                    android.view
-                        .WindowManager
-                        .LayoutParams
-                        .MATCH_PARENT
+                    android.view.WindowManager
+                        .LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager
+                        .LayoutParams.MATCH_PARENT
                 )
 
             action.requestFocus()
@@ -3264,15 +4180,11 @@ class MainActivity : AppCompatActivity() {
 
                 schedulePreview(
                     item,
-
                     if (
                         series
                     ) {
-
                         900L
-
                     } else {
-
                         850L
                     }
                 )
@@ -3442,23 +4354,46 @@ class MainActivity : AppCompatActivity() {
             manager.spanCount =
                 columns
         }
+
+        resizeVisibleMediaCards()
     }
 
     private fun posterColumns():
         Int {
 
-        return if (
-            resources.configuration
-                .smallestScreenWidthDp >=
-            600
-        ) {
+        val availableWidth =
+            (
+                screenWidthDp() -
+                    categoryWidthDp() -
+                    24
+                )
+                .coerceAtLeast(
+                    220
+                )
 
-            3
+        val targetCardWidth =
+            when {
 
-        } else {
+                screenHeightDp() <=
+                    380 ->
+                    112
 
-            2
-        }
+                screenHeightDp() <=
+                    520 ->
+                    145
+
+                else ->
+                    190
+            }
+
+        return (
+            availableWidth /
+                (targetCardWidth + 10)
+            )
+            .coerceIn(
+                2,
+                6
+            )
     }
 
     /*
@@ -3858,6 +4793,28 @@ class MainActivity : AppCompatActivity() {
      * CICLO DE VIDA
      * =====================================================
      */
+
+    override fun onConfigurationChanged(
+        newConfig: Configuration
+    ) {
+
+        super.onConfigurationChanged(
+            newConfig
+        )
+
+        applyResponsiveSizing()
+
+        updatePreviewPosition()
+
+        resizeVisibleMediaCards()
+
+        if (
+            b.content.visibility ==
+            View.VISIBLE
+        ) {
+            render()
+        }
+    }
 
     override fun onStop() {
 
