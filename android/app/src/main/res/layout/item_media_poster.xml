@@ -1,47 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="190dp"
+
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="5dp"
     android:background="@drawable/tv_item_background"
-    android:orientation="vertical"
-    android:padding="6dp"
+    android:clickable="true"
     android:focusable="true"
     android:focusableInTouchMode="false"
-    android:clickable="true">
+    android:orientation="vertical"
+    android:padding="5dp">
 
+    <!-- CAPA -->
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="270dp">
+        android:layout_height="wrap_content"
+        android:minHeight="110dp">
 
         <ImageView
             android:id="@+id/poster"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:contentDescription="Capa do conteúdo"/>
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:contentDescription="Capa do conteúdo"
+            android:maxHeight="280dp"
+            android:minHeight="110dp"
+            android:scaleType="centerCrop" />
 
+        <!-- FAVORITO -->
         <TextView
             android:id="@+id/posterStar"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:layout_gravity="top|end"
+            android:layout_margin="4dp"
+            android:background="#99000000"
             android:gravity="center"
             android:text="☆"
-            android:textSize="26sp"
             android:textColor="@android:color/white"
-            android:background="#99000000"/>
+            android:textSize="22sp" />
+
     </FrameLayout>
 
+    <!-- NOME DO FILME / SÉRIE -->
     <TextView
         android:id="@+id/posterTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="7dp"
-        android:paddingBottom="4dp"
-        android:maxLines="2"
         android:ellipsize="end"
+        android:maxLines="2"
+        android:minLines="1"
+        android:paddingStart="2dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="2dp"
+        android:paddingBottom="4dp"
         android:text="Nome"
-        android:textSize="16sp"
-        android:textColor="@android:color/white"/>
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
 </LinearLayout>
