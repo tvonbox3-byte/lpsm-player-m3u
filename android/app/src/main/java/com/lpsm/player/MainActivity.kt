@@ -520,28 +520,16 @@ class MainActivity : AppCompatActivity() {
 
             ContentType.LIVE -> {
 
-                if (
-                    selectedEntry?.url ==
-                    item.url
-                ) {
+                /*
+                 * Sem prévia fixa: OK abre o canal
+                 * diretamente em tela cheia.
+                 */
+                selectedEntry =
+                    item
 
-                    openPlayer(
-                        item
-                    )
-
-                } else {
-
-                    selectedEntry =
-                        item
-
-                    showPreviewInfo(
-                        item
-                    )
-
-                    playPreviewNow(
-                        item
-                    )
-                }
+                openPlayer(
+                    item
+                )
             }
 
             ContentType.VOD -> {
@@ -591,98 +579,24 @@ class MainActivity : AppCompatActivity() {
         item: MediaEntry
     ) {
 
-        when (filter) {
+        /*
+         * Na grade não iniciamos vídeo automaticamente.
+         * Isso evita espaço de prévia e também reduz
+         * consumo de rede enquanto o cliente navega.
+         *
+         * Dentro dos episódios apenas atualizamos
+         * as informações internas do item.
+         */
+        if (
+            filter ==
+                ContentType.SERIES &&
+            selectedSeriesName !=
+                null
+        ) {
 
-            ContentType.LIVE -> {
-
-                showPreviewInfo(
-                    item
-                )
-
-                schedulePreview(
-                    item,
-                    450L
-                )
-            }
-
-            ContentType.VOD -> {
-
-                showPreviewInfo(
-                    item
-                )
-
-                schedulePreview(
-                    item,
-                    850L
-                )
-            }
-
-            ContentType.SERIES -> {
-
-                if (
-                    selectedSeriesName ==
-                    null
-                ) {
-
-                    val name =
-                        seriesKey(
-                            item
-                        )
-
-                    val episodes =
-                        seriesEpisodes(
-                            name
-                        )
-
-                    val firstEpisode =
-                        episodes
-                            .firstOrNull()
-
-                    b.previewTitle.text =
-                        displaySeriesTitle(
-                            name,
-                            episodes
-                        )
-
-                    b.previewGroup.text =
-                        if (
-                            episodes.size ==
-                            1
-                        ) {
-
-                            "Série • 1 episódio"
-
-                        } else {
-
-                            "Série • ${episodes.size} episódios"
-                        }
-
-                    if (
-                        firstEpisode !=
-                        null
-                    ) {
-
-                        schedulePreview(
-                            firstEpisode,
-                            900L
-                        )
-                    }
-
-                } else {
-
-                    showPreviewInfo(
-                        item
-                    )
-
-                    schedulePreview(
-                        item,
-                        750L
-                    )
-                }
-            }
-
-            else ->
-                Unit
+            showPreviewInfo(
+                item
+            )
         }
     }
 
@@ -763,60 +677,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun updatePreviewPosition() {
 
-        when (filter) {
+        /*
+         * Não reservamos mais área fixa para prévia
+         * na grade. Assim categorias e conteúdo usam
+         * toda a largura em celular, TV Box e TV.
+         *
+         * A prévia de filmes/séries fica para a tela
+         * de detalhes após o OK.
+         */
+        b.previewTopHost.visibility =
+            View.GONE
 
-            ContentType.LIVE -> {
+        b.previewSideHost.visibility =
+            View.GONE
 
-                movePreviewTo(
-                    host =
-                        b.previewSideHost,
+        b.previewPanel.visibility =
+            View.GONE
 
-                    compact =
-                        false
-                )
-
-                b.previewTopHost.visibility =
-                    View.GONE
-
-                b.previewSideHost.visibility =
-                    View.VISIBLE
-            }
-
-            ContentType.VOD,
-            ContentType.SERIES -> {
-
-                b.previewTopHost.visibility =
-                    View.VISIBLE
-
-                movePreviewTo(
-                    host =
-                        b.previewTopHost,
-
-                    compact =
-                        true
-                )
-
-                b.previewSideHost.visibility =
-                    View.GONE
-            }
-
-            else -> {
-
-                movePreviewTo(
-                    host =
-                        b.previewSideHost,
-
-                    compact =
-                        false
-                )
-
-                b.previewTopHost.visibility =
-                    View.GONE
-
-                b.previewSideHost.visibility =
-                    View.GONE
-            }
-        }
+        stopPreview()
     }
 
     private fun movePreviewTo(
@@ -1045,26 +923,30 @@ class MainActivity : AppCompatActivity() {
     private fun categoryWidthDp():
         Int {
 
+        /*
+         * Mantém as categorias legíveis também
+         * em celulares em modo paisagem.
+         */
         return when {
 
             screenWidthDp() <
                 650 ->
-                96
+                165
 
             screenWidthDp() <
                 800 ->
-                112
+                180
 
             screenWidthDp() <
                 1000 ->
-                132
+                200
 
             screenWidthDp() <
                 1300 ->
-                170
+                220
 
             else ->
-                220
+                245
         }
     }
 
@@ -2027,7 +1909,7 @@ class MainActivity : AppCompatActivity() {
 
                     val remaining =
                         (
-                            60_000 -
+                            120_000 -
                                 all.size
                             )
                             .coerceAtLeast(
@@ -2893,7 +2775,7 @@ class MainActivity : AppCompatActivity() {
         updatePreviewPosition()
 
         b.previewPanel.visibility =
-            View.VISIBLE
+            View.GONE
 
         when (filter) {
 
@@ -4361,39 +4243,29 @@ class MainActivity : AppCompatActivity() {
     private fun posterColumns():
         Int {
 
-        val availableWidth =
-            (
-                screenWidthDp() -
-                    categoryWidthDp() -
-                    24
-                )
-                .coerceAtLeast(
-                    220
-                )
+        /*
+         * No celular usamos uma coluna a menos,
+         * deixando as capas maiores e mais fáceis
+         * de ler. Em telas grandes aumentamos
+         * progressivamente.
+         */
+        return when {
 
-        val targetCardWidth =
-            when {
+            screenWidthDp() <
+                650 ->
+                3
 
-                screenHeightDp() <=
-                    380 ->
-                    112
+            screenWidthDp() <
+                900 ->
+                4
 
-                screenHeightDp() <=
-                    520 ->
-                    145
+            screenWidthDp() <
+                1200 ->
+                5
 
-                else ->
-                    190
-            }
-
-        return (
-            availableWidth /
-                (targetCardWidth + 10)
-            )
-            .coerceIn(
-                2,
+            else ->
                 6
-            )
+        }
     }
 
     /*
