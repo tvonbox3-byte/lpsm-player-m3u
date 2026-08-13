@@ -1,1 +1,72 @@
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><androidx.media3.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent" android:keepScreenOn="true"/><TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="top|start" android:background="#9908111E" android:padding="16dp" android:textColor="@color/text" android:textSize="18sp"/></FrameLayout>
+<?xml version="1.0" encoding="utf-8"?>
+
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:clipChildren="true"
+    android:clipToPadding="true">
+
+    <!--
+        VÍDEO
+    -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:keepScreenOn="true" />
+
+
+    <!--
+        NOME DO CANAL / FILME / EPISÓDIO
+    -->
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="12dp"
+        android:background="#9908111E"
+        android:maxWidth="520dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:textColor="@color/text"
+        android:textSize="16sp" />
+
+
+    <!--
+        CELULAR:
+        permite escolher a proporção sem entrar
+        em configurações.
+
+        PlayerActivity esconde automaticamente
+        este botão em TV / TV Box / telas grandes.
+    -->
+    <TextView
+        android:id="@+id/screenModeButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="12dp"
+        android:background="#B008111E"
+        android:clickable="true"
+        android:focusable="false"
+        android:gravity="center"
+        android:minHeight="36dp"
+        android:paddingStart="12dp"
+        android:paddingTop="7dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="7dp"
+        android:text="TELA: AMPLIAR"
+        android:textColor="@android:color/white"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+</FrameLayout>
