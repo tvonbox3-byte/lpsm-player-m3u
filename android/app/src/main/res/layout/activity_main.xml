@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/activation_background">
@@ -12,19 +14,22 @@
         android:contentDescription="@null"
         android:scaleType="centerCrop" />
 
+
     <LinearLayout
         android:id="@+id/mainContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:paddingStart="12dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp">
+        android:paddingStart="8dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="5dp">
 
+
+        <!-- TOPO COMPACTO -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="36dp"
+            android:layout_height="28dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -34,11 +39,11 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:ellipsize="end"
-                android:letterSpacing="0.10"
+                android:letterSpacing="0.08"
                 android:maxLines="1"
                 android:text="LPSM PLAYER"
                 android:textColor="@color/accent"
-                android:textSize="22sp"
+                android:textSize="17sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -48,7 +53,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/muted"
-                android:textSize="12sp" />
+                android:textSize="10sp" />
 
         </LinearLayout>
 
@@ -78,41 +83,41 @@
                     android:gravity="center"
                     android:text="Seu dispositivo ainda não está ativado"
                     android:textColor="@color/text"
-                    android:textSize="22sp"
+                    android:textSize="21sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="5dp"
                     android:gravity="center"
                     android:text="Cadastre o endereço abaixo no painel de controle"
                     android:textColor="@color/text"
-                    android:textSize="14sp" />
+                    android:textSize="13sp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:layout_marginTop="9dp"
                     android:background="@drawable/mac_panel"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:padding="14dp">
+                    android:padding="12dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="ENDEREÇO MAC"
                         android:textColor="@color/text"
-                        android:textSize="13sp" />
+                        android:textSize="12sp" />
 
                     <TextView
                         android:id="@+id/deviceId"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="3dp"
                         android:textColor="#FFE500"
-                        android:textSize="25sp"
+                        android:textSize="24sp"
                         android:textStyle="bold" />
 
                 </LinearLayout>
@@ -133,64 +138,65 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:layout_marginTop="8dp"
                     android:gravity="center"
                     android:orientation="horizontal">
 
                     <Button
                         android:id="@+id/activateButton"
                         android:layout_width="0dp"
-                        android:layout_height="50dp"
+                        android:layout_height="46dp"
                         android:layout_weight="1"
                         android:backgroundTint="#7656A8"
                         android:text="ATUALIZAR"
                         android:textColor="@color/text"
-                        android:textSize="14sp" />
+                        android:textSize="13sp" />
 
                     <Space
-                        android:layout_width="8dp"
+                        android:layout_width="7dp"
                         android:layout_height="1dp" />
 
                     <Button
                         android:id="@+id/cancelButton"
                         android:layout_width="0dp"
-                        android:layout_height="50dp"
+                        android:layout_height="46dp"
                         android:layout_weight="1"
                         android:backgroundTint="#7656A8"
                         android:text="CANCELAR"
                         android:textColor="@color/text"
-                        android:textSize="14sp" />
+                        android:textSize="13sp" />
 
                 </LinearLayout>
 
             </LinearLayout>
 
+
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.42"
+                android:layout_weight="0.40"
                 android:gravity="center"
                 android:orientation="vertical"
-                android:padding="8dp">
+                android:padding="6dp">
 
                 <TextView
-                    android:layout_width="120dp"
-                    android:layout_height="120dp"
+                    android:layout_width="105dp"
+                    android:layout_height="105dp"
                     android:background="@drawable/panel_badge"
                     android:gravity="center"
                     android:text="LPSM\nCONTROL"
                     android:textColor="#08111E"
-                    android:textSize="18sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="6dp"
                     android:gravity="center"
                     android:text="PAINEL DE ATIVAÇÃO"
                     android:textColor="#FFE500"
-                    android:textSize="13sp"
+                    android:textSize="11sp"
                     android:textStyle="bold" />
 
             </LinearLayout>
@@ -217,62 +223,62 @@
                 android:maxLines="1"
                 android:text="BEM-VINDO AO LPSM"
                 android:textColor="@color/text"
-                android:textSize="25sp"
+                android:textSize="23sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="3dp"
                 android:text="Escolha o que deseja assistir"
                 android:textColor="@color/muted"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="12dp"
                 android:layout_weight="1"
                 android:gravity="center"
                 android:orientation="horizontal"
-                android:paddingStart="6dp"
-                android:paddingEnd="6dp">
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp">
 
                 <Button
                     android:id="@+id/homeLive"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_margin="5dp"
+                    android:layout_margin="4dp"
                     android:layout_weight="1"
-                    android:maxHeight="120dp"
-                    android:minHeight="72dp"
+                    android:maxHeight="105dp"
+                    android:minHeight="65dp"
                     android:text="TV AO VIVO"
                     android:textColor="@color/text"
-                    android:textSize="18sp" />
+                    android:textSize="17sp" />
 
                 <Button
                     android:id="@+id/homeVod"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_margin="5dp"
+                    android:layout_margin="4dp"
                     android:layout_weight="1"
-                    android:maxHeight="120dp"
-                    android:minHeight="72dp"
+                    android:maxHeight="105dp"
+                    android:minHeight="65dp"
                     android:text="FILMES"
                     android:textColor="@color/text"
-                    android:textSize="18sp" />
+                    android:textSize="17sp" />
 
                 <Button
                     android:id="@+id/homeSeries"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_margin="5dp"
+                    android:layout_margin="4dp"
                     android:layout_weight="1"
-                    android:maxHeight="120dp"
-                    android:minHeight="72dp"
+                    android:maxHeight="105dp"
+                    android:minHeight="65dp"
                     android:text="SÉRIES"
                     android:textColor="@color/text"
-                    android:textSize="18sp" />
+                    android:textSize="17sp" />
 
             </LinearLayout>
 
@@ -288,17 +294,19 @@
             android:orientation="vertical"
             android:visibility="gone">
 
+
+            <!-- MENSAGEM BEM PEQUENA -->
             <TextView
                 android:id="@+id/message"
                 android:layout_width="match_parent"
-                android:layout_height="16dp"
+                android:layout_height="13dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/muted"
-                android:textSize="10sp" />
+                android:textSize="8sp" />
 
 
-            <!-- BUSCA + FILTROS + PRÉVIA SUPERIOR -->
+            <!-- BUSCA -->
             <LinearLayout
                 android:id="@+id/topMediaRow"
                 android:layout_width="match_parent"
@@ -311,28 +319,29 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:paddingEnd="8dp">
+                    android:orientation="vertical">
 
                     <EditText
                         android:id="@+id/search"
                         android:layout_width="match_parent"
-                        android:layout_height="44dp"
+                        android:layout_height="36dp"
                         android:background="@drawable/tv_search_background"
                         android:focusable="true"
                         android:focusableInTouchMode="true"
                         android:hint="Buscar canais, filmes e séries"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
                         android:singleLine="true"
                         android:textColor="@color/text"
                         android:textColorHint="@color/muted"
-                        android:textSize="14sp" />
+                        android:textSize="12sp" />
 
+
+                    <!-- FILTROS COMPACTOS -->
                     <HorizontalScrollView
                         android:layout_width="match_parent"
-                        android:layout_height="52dp"
-                        android:layout_marginTop="5dp"
+                        android:layout_height="42dp"
+                        android:layout_marginTop="3dp"
                         android:fillViewport="false"
                         android:scrollbars="none">
 
@@ -345,57 +354,67 @@
 
                             <Button
                                 android:id="@+id/all"
-                                android:layout_width="88dp"
-                                android:layout_height="44dp"
+                                android:layout_width="74dp"
+                                android:layout_height="38dp"
                                 android:focusable="true"
                                 android:focusableInTouchMode="false"
+                                android:minHeight="0dp"
+                                android:minWidth="0dp"
                                 android:text="TUDO"
                                 android:textColor="@color/text"
-                                android:textSize="12sp" />
+                                android:textSize="10sp" />
 
                             <Button
                                 android:id="@+id/live"
-                                android:layout_width="92dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="4dp"
+                                android:layout_width="78dp"
+                                android:layout_height="38dp"
+                                android:layout_marginStart="3dp"
                                 android:focusable="true"
                                 android:focusableInTouchMode="false"
+                                android:minHeight="0dp"
+                                android:minWidth="0dp"
                                 android:text="AO VIVO"
                                 android:textColor="@color/text"
-                                android:textSize="12sp" />
+                                android:textSize="10sp" />
 
                             <Button
                                 android:id="@+id/vod"
-                                android:layout_width="92dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="4dp"
+                                android:layout_width="78dp"
+                                android:layout_height="38dp"
+                                android:layout_marginStart="3dp"
                                 android:focusable="true"
                                 android:focusableInTouchMode="false"
+                                android:minHeight="0dp"
+                                android:minWidth="0dp"
                                 android:text="FILMES"
                                 android:textColor="@color/text"
-                                android:textSize="12sp" />
+                                android:textSize="10sp" />
 
                             <Button
                                 android:id="@+id/series"
-                                android:layout_width="92dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="4dp"
+                                android:layout_width="78dp"
+                                android:layout_height="38dp"
+                                android:layout_marginStart="3dp"
                                 android:focusable="true"
                                 android:focusableInTouchMode="false"
+                                android:minHeight="0dp"
+                                android:minWidth="0dp"
                                 android:text="SÉRIES"
                                 android:textColor="@color/text"
-                                android:textSize="12sp" />
+                                android:textSize="10sp" />
 
                             <Button
                                 android:id="@+id/favorites"
-                                android:layout_width="110dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="4dp"
+                                android:layout_width="92dp"
+                                android:layout_height="38dp"
+                                android:layout_marginStart="3dp"
                                 android:focusable="true"
                                 android:focusableInTouchMode="false"
+                                android:minHeight="0dp"
+                                android:minWidth="0dp"
                                 android:text="FAVORITOS"
                                 android:textColor="@color/text"
-                                android:textSize="12sp" />
+                                android:textSize="10sp" />
 
                         </LinearLayout>
 
@@ -404,33 +423,41 @@
                 </LinearLayout>
 
 
-                <!-- FILMES / SÉRIES -->
+                <!--
+                    Mantemos o ID para compatibilidade
+                    com o Kotlin.
+
+                    Filmes e séries não deixam mais
+                    essa área ocupando espaço.
+                -->
                 <FrameLayout
                     android:id="@+id/previewTopHost"
-                    android:layout_width="250dp"
-                    android:layout_height="150dp"
+                    android:layout_width="1dp"
+                    android:layout_height="1dp"
                     android:visibility="gone" />
 
             </LinearLayout>
 
 
-            <!-- NAVEGAÇÃO PRINCIPAL -->
+            <!-- ÁREA PRINCIPAL -->
             <LinearLayout
                 android:id="@+id/browserArea"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="5dp"
+                android:layout_marginTop="3dp"
                 android:layout_weight="1"
                 android:orientation="horizontal">
+
 
                 <!-- CATEGORIAS / TEMPORADAS -->
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/categoryList"
-                    android:layout_width="145dp"
+                    android:layout_width="155dp"
                     android:layout_height="match_parent"
                     android:clipToPadding="false"
                     android:focusable="true"
-                    android:paddingEnd="5dp" />
+                    android:paddingEnd="4dp" />
+
 
                 <View
                     android:layout_width="1dp"
@@ -438,7 +465,7 @@
                     android:background="#668AA0B8" />
 
 
-                <!-- CANAIS / FILMES / SÉRIES / EPISÓDIOS -->
+                <!-- CONTEÚDO -->
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/list"
                     android:layout_width="0dp"
@@ -446,12 +473,15 @@
                     android:layout_weight="1"
                     android:clipToPadding="false"
                     android:focusable="true"
-                    android:paddingStart="6dp"
-                    android:paddingEnd="6dp"
-                    android:paddingBottom="6dp" />
+                    android:paddingStart="5dp"
+                    android:paddingEnd="5dp"
+                    android:paddingBottom="4dp" />
 
 
-                <!-- PRÉVIA AO VIVO -->
+                <!--
+                    PRÉVIA LATERAL:
+                    usada principalmente na TV AO VIVO.
+                -->
                 <FrameLayout
                     android:id="@+id/previewSideHost"
                     android:layout_width="205dp"
@@ -462,12 +492,13 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:orientation="vertical"
-                        android:paddingStart="6dp">
+                        android:paddingStart="5dp">
 
-                        <!-- PRECISA SER O PRIMEIRO FILHO -->
+
+                        <!-- PRIMEIRO FILHO PRECISA SER O VÍDEO -->
                         <FrameLayout
                             android:layout_width="match_parent"
-                            android:layout_height="125dp"
+                            android:layout_height="120dp"
                             android:background="#E8000000">
 
                             <TextView
@@ -476,48 +507,53 @@
                                 android:layout_gravity="center"
                                 android:text="LPSM"
                                 android:textColor="#556A8098"
-                                android:textSize="20sp"
+                                android:textSize="18sp"
                                 android:textStyle="bold" />
 
                         </FrameLayout>
+
 
                         <TextView
                             android:id="@+id/previewTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="5dp"
+                            android:layout_marginTop="4dp"
                             android:ellipsize="end"
                             android:maxLines="2"
                             android:text="Selecione um conteúdo"
                             android:textColor="@color/text"
-                            android:textSize="15sp"
+                            android:textSize="14sp"
                             android:textStyle="bold" />
+
 
                         <TextView
                             android:id="@+id/previewGroup"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="3dp"
+                            android:layout_marginTop="2dp"
                             android:ellipsize="end"
                             android:maxLines="2"
                             android:textColor="@color/muted"
-                            android:textSize="11sp" />
+                            android:textSize="10sp" />
+
 
                         <Space
                             android:layout_width="1dp"
                             android:layout_height="0dp"
                             android:layout_weight="1" />
 
+
                         <Button
                             android:id="@+id/previewWatch"
                             android:layout_width="match_parent"
-                            android:layout_height="44dp"
+                            android:layout_height="40dp"
                             android:layout_marginBottom="2dp"
                             android:focusable="true"
                             android:focusableInTouchMode="false"
+                            android:minHeight="0dp"
                             android:text="ASSISTIR"
                             android:textColor="@color/text"
-                            android:textSize="12sp" />
+                            android:textSize="11sp" />
 
                     </LinearLayout>
 
@@ -548,24 +584,24 @@
             android:letterSpacing="0.18"
             android:text="LPSM"
             android:textColor="@color/accent"
-            android:textSize="34sp"
+            android:textSize="31sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="11dp"
             android:text="MAC PARA ATIVAÇÃO"
             android:textColor="@color/text"
-            android:textSize="14sp" />
+            android:textSize="13sp" />
 
         <TextView
             android:id="@+id/simpleDeviceId"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="5dp"
             android:textColor="#FFE500"
-            android:textSize="26sp"
+            android:textSize="24sp"
             android:textStyle="bold" />
 
     </LinearLayout>
@@ -578,13 +614,13 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="horizontal"
-        android:padding="16dp"
+        android:padding="14dp"
         android:visibility="gone">
 
         <ImageView
             android:id="@+id/failureBanner"
-            android:layout_width="180dp"
-            android:layout_height="130dp"
+            android:layout_width="160dp"
+            android:layout_height="115dp"
             android:adjustViewBounds="true"
             android:contentDescription="@null"
             android:scaleType="centerInside" />
@@ -592,7 +628,7 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="18dp"
+            android:layout_marginStart="15dp"
             android:layout_weight="1"
             android:gravity="center_vertical"
             android:orientation="vertical">
@@ -604,45 +640,45 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/text"
-                android:textSize="22sp"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/failurePlaylist"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="3dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FFE500"
-                android:textSize="16sp" />
+                android:textSize="14sp" />
 
             <TextView
                 android:id="@+id/failureMessage"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="6dp"
                 android:maxLines="3"
-                android:text="A lista está temporariamente indisponível. Corrija a URL no painel e tente novamente."
+                android:text="A lista está temporariamente indisponível."
                 android:textColor="@color/text"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
 
             <Button
                 android:id="@+id/retryButton"
-                android:layout_width="200dp"
-                android:layout_height="48dp"
-                android:layout_marginTop="10dp"
+                android:layout_width="185dp"
+                android:layout_height="44dp"
+                android:layout_marginTop="8dp"
                 android:backgroundTint="#7656A8"
                 android:text="TENTAR NOVAMENTE"
                 android:textColor="@color/text"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
 
         </LinearLayout>
 
     </LinearLayout>
 
 
-    <!-- CARREGAMENTO -->
+    <!-- CARREGANDO -->
     <LinearLayout
         android:id="@+id/loadingState"
         android:layout_width="match_parent"
@@ -653,17 +689,17 @@
 
         <ProgressBar
             android:id="@+id/progress"
-            android:layout_width="54dp"
-            android:layout_height="54dp" />
+            android:layout_width="48dp"
+            android:layout_height="48dp" />
 
         <TextView
             android:id="@+id/loadingLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:text="Carregando sua lista..."
             android:textColor="@color/text"
-            android:textSize="14sp" />
+            android:textSize="13sp" />
 
     </LinearLayout>
 
