@@ -216,9 +216,11 @@ object M3uParser {
         episodeInfo: EpisodeInfo
     ): ContentType {
 
+        val lowerUrl =
+            url.lowercase()
+
         val path =
-            url
-                .lowercase()
+            lowerUrl
                 .substringBefore('?')
                 .substringBefore('#')
 
@@ -246,7 +248,11 @@ object M3uParser {
         }
 
         if (
-            "/series/" in path
+            "/series/" in path ||
+            "type=series" in lowerUrl ||
+            "type=serie" in lowerUrl ||
+            "content=series" in lowerUrl ||
+            "category=series" in lowerUrl
         ) {
             return ContentType.SERIES
         }
@@ -279,8 +285,25 @@ object M3uParser {
                     "séries",
                     "serie ",
                     "série ",
+                    "seriado",
+                    "seriados",
                     "temporada",
-                    "season"
+                    "temporadas",
+                    "season",
+                    "seasons",
+                    "episodio",
+                    "episódio",
+                    "episodios",
+                    "episódios",
+                    "novela",
+                    "novelas",
+                    "dorama",
+                    "doramas",
+                    "anime",
+                    "animes",
+                    "reality",
+                    "minisserie",
+                    "minissérie"
                 )
             )
         ) {
