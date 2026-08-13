@@ -2,6 +2,7 @@ package com.lpsm.player
 
 import android.app.Dialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Bitmap
@@ -56,6 +57,24 @@ class MainActivity : AppCompatActivity() {
      */
     private var homeBannerView:
         ImageView? = null
+
+    /*
+     * Aparência central da HOME.
+     *
+     * Estes valores vêm codificados no campo
+     * supportMessage para manter compatibilidade
+     * com o backend atual, sem quebrar clientes
+     * ou o painel já existente.
+     */
+    private data class HomeVisualPrefs(
+        val message: String = "Escolha o que deseja assistir",
+        val style: String = "standard",
+        val showBanner: Boolean = true,
+        val accentHex: String = "7C4DFF"
+    )
+
+    private var homeVisualPrefs =
+        HomeVisualPrefs()
 
     private val pool =
         Executors.newSingleThreadExecutor()
@@ -208,6 +227,12 @@ class MainActivity : AppCompatActivity() {
          * essa área permanece totalmente escondida.
          */
         prepareHomeBanner()
+
+        /*
+         * Instala os ícones pequenos e prepara
+         * os três cartões da tela inicial.
+         */
+        prepareHomeButtons()
 
         store =
             SecureStore(this)
@@ -1937,6 +1962,12 @@ class MainActivity : AppCompatActivity() {
             lastConfig =
                 config
 
+            homeVisualPrefs =
+                parseHomeVisualPrefs(
+                    config.appearance
+                        .supportMessage
+                )
+
             val wallpaper =
                 loadBitmap(
                     config.appearance
@@ -1952,6 +1983,8 @@ class MainActivity : AppCompatActivity() {
                 )
 
             runOnUiThread {
+
+                applyHomeVisualStyle()
 
                 applyAppearance(
                     wallpaper,
@@ -2100,6 +2133,496 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    /*
+     * =====================================================
+     * APARÊNCIA CENTRAL DA HOME
+     * =====================================================
+     *
+     * Formato salvo pelo painel:
+     *
+     * Mensagem normal
+     * [[LPSM_HOME|style=compact|banner=1|accent=7C4DFF]]
+     *
+     * O texto antes do marcador continua sendo a
+     * mensagem normal. Assim o painel antigo e o
+     * backend continuam compatíveis.
+     */
+
+    private fun parseHomeVisualPrefs(
+        raw: String
+    ): HomeVisualPrefs {
+
+        val source =
+            raw.trim()
+
+        val regex =
+            Regex(
+                """\[\[LPSM_HOME\|([^\]]+)\]\]""",
+                RegexOption.IGNORE_CASE
+            )
+
+        val match =
+            regex.find(
+                source
+            )
+
+        val message =
+            regex.replace(
+                source,
+                ""
+            )
+                .trim()
+                .ifBlank {
+                    "Escolha o que deseja assistir"
+                }
+
+        if (
+            match == null
+        ) {
+            return HomeVisualPrefs(
+                message = message
+            )
+        }
+
+        val values =
+            match.groupValues
+                .getOrNull(1)
+                .orEmpty()
+                .split('|')
+                .mapNotNull {
+                    part ->
+
+                    val index =
+                        part.indexOf('=')
+
+                    if (
+                        index <= 0
+                    ) {
+                        null
+                    } else {
+                        part.substring(
+                            0,
+                            index
+                        )
+                            .trim()
+                            .lowercase() to
+                            part.substring(
+                                index + 1
+                            )
+                                .trim()
+                    }
+                }
+                .toMap()
+
+        val style =
+            when (
+                values[
+                    "style"
+                ]
+                    ?.lowercase()
+            ) {
+
+                "compact",
+                "compacto" ->
+                    "compact"
+
+                "classic",
+                "classico",
+                "clássico" ->
+                    "classic"
+
+                else ->
+                    "standard"
+            }
+
+        val showBanner =
+            values[
+                "banner"
+            ]
+                ?.lowercase()
+                ?.let {
+                    value ->
+
+                    value != "0" &&
+                        value != "false" &&
+                        value != "nao" &&
+                        value != "não"
+                }
+                ?: true
+
+        val accent =
+            values[
+                "accent"
+            ]
+                ?.replace(
+                    "#",
+                    ""
+                )
+                ?.uppercase()
+                ?.takeIf {
+                    value ->
+
+                    value.matches(
+                        Regex(
+                            "[0-9A-F]{6}"
+                        )
+                    )
+                }
+                ?: "7C4DFF"
+
+        return HomeVisualPrefs(
+            message = message,
+            style = style,
+            showBanner = showBanner,
+            accentHex = accent
+        )
+    }
+
+
+    private fun homeAccentColor():
+        Int {
+
+        return try {
+            Color.parseColor(
+                "#${homeVisualPrefs.accentHex}"
+            )
+        } catch (
+            _: Exception
+        ) {
+            Color.parseColor(
+                "#7C4DFF"
+            )
+        }
+    }
+
+
+    private fun prepareHomeButtons() {
+
+        b.homeLive
+            .setCompoundDrawablesWithIntrinsicBounds(
+                0,
+                R.drawable.ic_home_live,
+                0,
+                0
+            )
+
+        b.homeVod
+            .setCompoundDrawablesWithIntrinsicBounds(
+                0,
+                R.drawable.ic_home_movies,
+                0,
+                0
+            )
+
+        b.homeSeries
+            .setCompoundDrawablesWithIntrinsicBounds(
+                0,
+                R.drawable.ic_home_series,
+                0,
+                0
+            )
+
+        listOf(
+            b.homeLive,
+            b.homeVod,
+            b.homeSeries
+        ).forEach {
+            button ->
+
+            button.compoundDrawablePadding =
+                dp(5)
+
+            button.gravity =
+                Gravity.CENTER
+
+            button.setPadding(
+                dp(6),
+                dp(6),
+                dp(6),
+                dp(6)
+            )
+        }
+    }
+
+
+    private fun homeSubtitleView():
+        TextView? {
+
+        return b.homePanel
+            .childrenTextViews()
+            .firstOrNull {
+                view ->
+
+                view.id ==
+                    View.NO_ID &&
+                    view !==
+                    b.homeWelcome
+            }
+    }
+
+
+    private fun LinearLayout.childrenTextViews():
+        List<TextView> {
+
+        val result =
+            mutableListOf<TextView>()
+
+        for (
+            index in
+            0 until childCount
+        ) {
+            val child =
+                getChildAt(
+                    index
+                )
+
+            if (
+                child is TextView
+            ) {
+                result.add(
+                    child
+                )
+            }
+        }
+
+        return result
+    }
+
+
+    private fun applyHomeVisualStyle() {
+
+        val accent =
+            homeAccentColor()
+
+        val focusColor =
+            Color.parseColor(
+                "#FFD600"
+            )
+
+        val tint =
+            ColorStateList(
+                arrayOf(
+                    intArrayOf(
+                        android.R.attr.state_focused
+                    ),
+                    intArrayOf(
+                        android.R.attr.state_pressed
+                    ),
+                    intArrayOf()
+                ),
+                intArrayOf(
+                    focusColor,
+                    focusColor,
+                    accent
+                )
+            )
+
+        val compactHeight =
+            screenHeightDp() <=
+                430
+
+        val buttonRowHeight =
+            when (
+                homeVisualPrefs.style
+            ) {
+
+                "compact" ->
+                    if (
+                        compactHeight
+                    ) {
+                        62
+                    } else {
+                        78
+                    }
+
+                "classic" ->
+                    if (
+                        compactHeight
+                    ) {
+                        70
+                    } else {
+                        94
+                    }
+
+                else ->
+                    if (
+                        compactHeight
+                    ) {
+                        78
+                    } else {
+                        108
+                    }
+            }
+
+        val textSize =
+            when (
+                homeVisualPrefs.style
+            ) {
+
+                "compact" ->
+                    if (
+                        compactHeight
+                    ) {
+                        11f
+                    } else {
+                        13f
+                    }
+
+                "classic" ->
+                    if (
+                        compactHeight
+                    ) {
+                        12f
+                    } else {
+                        14f
+                    }
+
+                else ->
+                    if (
+                        compactHeight
+                    ) {
+                        12f
+                    } else {
+                        15f
+                    }
+            }
+
+        val buttonRow =
+            b.homeLive.parent as?
+                LinearLayout
+
+        buttonRow
+            ?.layoutParams
+            ?.let {
+                params ->
+
+                if (
+                    params is
+                    LinearLayout.LayoutParams
+                ) {
+                    params.height =
+                        dp(
+                            buttonRowHeight
+                        )
+
+                    params.weight =
+                        0f
+
+                    buttonRow.layoutParams =
+                        params
+                }
+            }
+
+        listOf(
+            b.homeLive,
+            b.homeVod,
+            b.homeSeries
+        ).forEach {
+            button ->
+
+            button.textSize =
+                textSize
+
+            button.minHeight =
+                0
+
+            button.minimumHeight =
+                0
+
+            button.backgroundTintList =
+                tint
+
+            button.setTextColor(
+                Color.WHITE
+            )
+
+            button.compoundDrawablePadding =
+                if (
+                    homeVisualPrefs.style ==
+                    "compact"
+                ) {
+                    dp(2)
+                } else {
+                    dp(5)
+                }
+        }
+
+        b.homeWelcome.textSize =
+            if (
+                compactHeight
+            ) {
+                17f
+            } else {
+                22f
+            }
+
+        homeSubtitleView()
+            ?.apply {
+
+                text =
+                    homeVisualPrefs.message
+
+                textSize =
+                    if (
+                        compactHeight
+                    ) {
+                        10f
+                    } else {
+                        13f
+                    }
+            }
+
+        homeBannerView
+            ?.layoutParams
+            ?.let {
+                params ->
+
+                params.height =
+                    dp(
+                        when (
+                            homeVisualPrefs.style
+                        ) {
+
+                            "compact" ->
+                                if (
+                                    compactHeight
+                                ) {
+                                    70
+                                } else {
+                                    105
+                                }
+
+                            "classic" ->
+                                if (
+                                    compactHeight
+                                ) {
+                                    78
+                                } else {
+                                    118
+                                }
+
+                            else ->
+                                if (
+                                    compactHeight
+                                ) {
+                                    86
+                                } else {
+                                    135
+                                }
+                        }
+                    )
+
+                homeBannerView
+                    ?.layoutParams =
+                    params
+            }
+
+        b.homePanel.gravity =
+            Gravity.TOP or
+                Gravity.CENTER_HORIZONTAL
+    }
+
 
     /*
      * =====================================================
@@ -2252,7 +2775,8 @@ class MainActivity : AppCompatActivity() {
 
                 if (
                     banner !=
-                    null
+                    null &&
+                    homeVisualPrefs.showBanner
                 ) {
 
                     setImageBitmap(
@@ -2565,13 +3089,15 @@ class MainActivity : AppCompatActivity() {
 
             } else {
 
-                config.appearance
-                    .supportMessage
+                homeVisualPrefs
+                    .message
                     .ifBlank {
 
                         "Somente conteúdo autorizado"
                     }
             }
+
+        applyHomeVisualStyle()
 
         b.homeLive
             .requestFocus()
