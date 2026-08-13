@@ -5,7 +5,104 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>LPSM Control</title>
   <link rel="stylesheet" href="/styles.css?v=20260812-5">
+
+  <style>
+    .appearance-help {
+      margin: 0 0 14px;
+      color: #9ca8b8;
+      line-height: 1.5;
+    }
+
+    .appearance-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .appearance-preview-card {
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 16px;
+      background: rgba(7,13,24,.90);
+    }
+
+    .appearance-preview-card h3 {
+      margin: 0;
+      padding: 12px 14px 8px;
+      font-size: 14px;
+    }
+
+    .appearance-preview-box {
+      position: relative;
+      min-height: 180px;
+      background:
+        radial-gradient(circle at top left, rgba(114,86,168,.35), transparent 46%),
+        #08111e;
+      overflow: hidden;
+    }
+
+    .appearance-preview-box.banner {
+      aspect-ratio: 16 / 5;
+      min-height: 120px;
+    }
+
+    .appearance-preview-box.wallpaper {
+      aspect-ratio: 16 / 9;
+    }
+
+    .appearance-preview-box img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .appearance-preview-empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      text-align: center;
+      color: #8f9bad;
+      font-size: 13px;
+    }
+
+    .appearance-message-preview {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 14px;
+      background: rgba(7,13,24,.90);
+    }
+
+    .appearance-message-preview strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    #supportPreview {
+      color: #b9c2ce;
+      word-break: break-word;
+    }
+
+    .appearance-tip {
+      display: block;
+      margin-top: 5px;
+      color: #7f8a99;
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    @media (max-width: 760px) {
+      .appearance-preview-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
+
 <body>
 <main>
   <header>
@@ -19,9 +116,18 @@
   <section id="login" class="card login">
     <h1>Painel de controle</h1>
     <p>Gerencie clientes, dispositivos e a fonte de conteúdo de cada cliente.</p>
+
     <form id="loginForm">
-      <label>Usuário<input name="user" autocomplete="username" required value="admin"></label>
-      <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+      <label>
+        Usuário
+        <input name="user" autocomplete="username" required value="admin">
+      </label>
+
+      <label>
+        Senha
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+
       <button>Entrar</button>
       <output></output>
     </form>
@@ -64,8 +170,8 @@
         <div>
           <h2>Fontes dos clientes</h2>
           <p class="meta">
-            O nome da fonte é automático. Aqui você altera somente a conexão,
-            status ou vencimento.
+            O nome da fonte é automático.
+            Aqui você altera somente a conexão, status ou vencimento.
           </p>
         </div>
       </div>
@@ -75,15 +181,82 @@
 
     <div id="appearance" class="tab hidden">
       <div class="section-title">
-        <h2>Identidade visual</h2>
+        <div>
+          <h2>Aparência do LPSM</h2>
+          <p class="meta">
+            Altere o banner, o papel de parede e a mensagem exibida pelo aplicativo.
+          </p>
+        </div>
       </div>
 
       <form id="appearanceForm" class="card form-grid">
-        <label>URL do banner<input name="bannerUrl" type="url"></label>
-        <label>URL do papel de parede<input name="wallpaperUrl" type="url"></label>
-        <label class="wide">Mensagem de suporte<input name="supportMessage"></label>
+        <label>
+          URL do banner
+          <input
+            id="bannerUrlInput"
+            name="bannerUrl"
+            type="url"
+            placeholder="https://site.com/banner.jpg"
+          >
+          <span class="appearance-tip">
+            Recomendado: imagem horizontal, por exemplo 1920 × 600.
+          </span>
+        </label>
+
+        <label>
+          URL do papel de parede
+          <input
+            id="wallpaperUrlInput"
+            name="wallpaperUrl"
+            type="url"
+            placeholder="https://site.com/fundo.jpg"
+          >
+          <span class="appearance-tip">
+            Recomendado: 1920 × 1080 ou outra imagem 16:9.
+          </span>
+        </label>
+
+        <label class="wide">
+          Mensagem de suporte
+          <input
+            id="supportMessageInput"
+            name="supportMessage"
+            maxlength="180"
+            placeholder="Ex.: Suporte LPSM • WhatsApp..."
+          >
+        </label>
+
         <button>Salvar aparência</button>
       </form>
+
+      <div class="appearance-preview-grid">
+        <article class="appearance-preview-card">
+          <h3>Prévia do banner</h3>
+
+          <div class="appearance-preview-box banner">
+            <img id="bannerPreview" alt="Prévia do banner" hidden>
+            <div id="bannerEmpty" class="appearance-preview-empty">
+              Cole uma URL de imagem para visualizar o banner.
+            </div>
+          </div>
+        </article>
+
+        <article class="appearance-preview-card">
+          <h3>Prévia do papel de parede</h3>
+
+          <div class="appearance-preview-box wallpaper">
+            <img id="wallpaperPreview" alt="Prévia do papel de parede" hidden>
+            <div id="wallpaperEmpty" class="appearance-preview-empty">
+              Cole uma URL de imagem para visualizar o fundo.
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <div class="appearance-message-preview">
+        <strong>Prévia da mensagem</strong>
+        <div id="supportPreview">Nenhuma mensagem configurada.</div>
+      </div>
     </div>
 
     <div id="audit" class="tab hidden">
@@ -95,7 +268,6 @@
   </section>
 </main>
 
-<!-- CLIENTE: criar e editar usam a MESMA tela -->
 <dialog id="clientDialog">
   <form id="clientForm" method="dialog">
     <h2>Novo cliente</h2>
@@ -205,7 +377,6 @@
   </form>
 </dialog>
 
-<!-- EDIÇÃO DA FONTE: sem campo para renomear -->
 <dialog id="sourceDialog">
   <form id="sourceForm" method="dialog">
     <h2>Editar fonte</h2>
@@ -273,6 +444,146 @@
   </form>
 </dialog>
 
-<script src="/app.js?v=20260812-5" type="module"></script>
+<script src="/app.js?v=20260813-appearance-1" type="module"></script>
+
+<script>
+(function () {
+
+  const get =
+    id =>
+      document.getElementById(id);
+
+  function updateImagePreview(
+    inputId,
+    imageId,
+    emptyId
+  ) {
+
+    const input = get(inputId);
+    const image = get(imageId);
+    const empty = get(emptyId);
+
+    if (!input || !image || !empty) {
+      return;
+    }
+
+    const url =
+      String(input.value || '').trim();
+
+    if (!url) {
+      image.hidden = true;
+      image.removeAttribute('src');
+      empty.hidden = false;
+      empty.textContent =
+        'Cole uma URL de imagem para visualizar.';
+      return;
+    }
+
+    image.onload =
+      () => {
+        image.hidden = false;
+        empty.hidden = true;
+      };
+
+    image.onerror =
+      () => {
+        image.hidden = true;
+        empty.hidden = false;
+        empty.textContent =
+          'Não foi possível carregar esta imagem. Verifique a URL.';
+      };
+
+    empty.textContent =
+      'Carregando imagem...';
+
+    empty.hidden = false;
+    image.src = url;
+  }
+
+  function updateSupportPreview() {
+
+    const input =
+      get('supportMessageInput');
+
+    const preview =
+      get('supportPreview');
+
+    if (!input || !preview) {
+      return;
+    }
+
+    preview.textContent =
+      String(input.value || '').trim() ||
+      'Nenhuma mensagem configurada.';
+  }
+
+  function syncAppearancePreview() {
+
+    updateImagePreview(
+      'bannerUrlInput',
+      'bannerPreview',
+      'bannerEmpty'
+    );
+
+    updateImagePreview(
+      'wallpaperUrlInput',
+      'wallpaperPreview',
+      'wallpaperEmpty'
+    );
+
+    updateSupportPreview();
+  }
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+
+      get('bannerUrlInput')
+        ?.addEventListener(
+          'input',
+          syncAppearancePreview
+        );
+
+      get('wallpaperUrlInput')
+        ?.addEventListener(
+          'input',
+          syncAppearancePreview
+        );
+
+      get('supportMessageInput')
+        ?.addEventListener(
+          'input',
+          updateSupportPreview
+        );
+
+      document
+        .querySelector(
+          '[data-tab="appearance"]'
+        )
+        ?.addEventListener(
+          'click',
+          () => {
+            setTimeout(
+              syncAppearancePreview,
+              120
+            );
+          }
+        );
+
+      setTimeout(
+        syncAppearancePreview,
+        700
+      );
+
+      setTimeout(
+        syncAppearancePreview,
+        1800
+      );
+    }
+  );
+
+})();
+</script>
+
 </body>
 </html>
