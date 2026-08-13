@@ -3,11 +3,20 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- INTERNET -->
     <uses-permission
         android:name="android.permission.INTERNET" />
 
     <!--
-        O mesmo APK funciona em:
+        Permite que o LPSM solicite ao Android
+        a instalação do APK de atualização.
+    -->
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+
+    <!--
+        Compatibilidade:
         celular, tablet, TV Box e Android TV.
     -->
     <uses-feature
@@ -18,6 +27,7 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+
     <application
         android:theme="@style/Theme.LPSM"
         android:label="LPSM"
@@ -27,26 +37,83 @@
         android:resizeableActivity="true"
         android:supportsRtl="true">
 
-        <!-- PLAYER DE VÍDEO -->
+
+        <!--
+            =================================================
+            FILE PROVIDER
+            =================================================
+
+            Entrega o APK baixado para o
+            instalador do Android com segurança.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+
+        </provider>
+
+
+        <!--
+            =================================================
+            PLAYER DE VÍDEO
+            =================================================
+        -->
         <activity
             android:name=".ui.PlayerActivity"
+            android:exported="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden" />
 
+
         <!--
-            TELA PRINCIPAL.
+            =================================================
+            TELA PRINCIPAL DO LPSM
+            =================================================
 
-            LANDSCAPE força o aplicativo
-            a abrir sempre deitado.
+            Agora ela NÃO abre diretamente.
 
-            Não depende da rotação automática
-            estar ligada no celular.
+            UpdateActivity verifica atualização
+            e depois abre MainActivity.
         -->
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden" />
+
+
+        <!--
+            =================================================
+            ATUALIZADOR
+            =================================================
+
+            Esta passa a ser a PRIMEIRA tela
+            executada quando abrir o LPSM.
+
+            Fluxo:
+
+            Abrir LPSM
+                 ↓
+            UpdateActivity
+                 ↓
+            verificar update.json
+                 ↓
+            sem atualização → MainActivity
+
+            com atualização → aviso para atualizar
+        -->
+        <activity
+            android:name=".UpdateActivity"
             android:exported="true"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden">
+
 
             <!-- CELULAR / TABLET / TV BOX -->
             <intent-filter>
@@ -58,6 +125,7 @@
                     android:name="android.intent.category.LAUNCHER" />
 
             </intent-filter>
+
 
             <!-- ANDROID TV -->
             <intent-filter>
@@ -71,6 +139,7 @@
             </intent-filter>
 
         </activity>
+
 
     </application>
 
