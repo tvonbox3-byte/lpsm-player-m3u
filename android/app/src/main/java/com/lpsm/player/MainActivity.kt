@@ -2455,7 +2455,7 @@ class MainActivity : AppCompatActivity() {
                     }
             }
 
-        val textSize =
+        val homeButtonTextSize =
             when (
                 homeVisualPrefs.style
             ) {
@@ -2522,7 +2522,7 @@ class MainActivity : AppCompatActivity() {
             button ->
 
             button.textSize =
-                textSize
+                homeButtonTextSize
 
             button.minHeight =
                 0
