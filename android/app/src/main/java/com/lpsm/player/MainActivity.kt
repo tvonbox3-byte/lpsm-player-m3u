@@ -2686,19 +2686,18 @@ class MainActivity : AppCompatActivity() {
             params
 
         /*
-         * HOME atualmente possui:
+         * ORDEM CORRETA DA HOME:
          *
-         * 0 = BEM-VINDO
-         * 1 = texto "Escolha..."
-         * 2 = botões TV / Filmes / Séries
+         * 0 = banner
+         * 1 = BEM-VINDO
+         * 2 = texto "Escolha..."
+         * 3 = botões TV / Filmes / Séries
          *
-         * Inserimos o banner entre o texto
-         * e os botões.
+         * O banner fica sempre no topo da área central
+         * e os botões permanecem abaixo dele.
          */
         val position =
-            2.coerceAtMost(
-                b.homePanel.childCount
-            )
+            0
 
         b.homePanel.addView(
             bannerView,
