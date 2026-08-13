@@ -47,6 +47,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var store: SecureStore
     private lateinit var api: LpsmApi
 
+    /*
+     * Banner configurado pelo painel.
+     *
+     * É criado por código para não mexer novamente
+     * no activity_main.xml e não ocupar espaço quando
+     * nenhuma imagem estiver configurada.
+     */
+    private var homeBannerView:
+        ImageView? = null
+
     private val pool =
         Executors.newSingleThreadExecutor()
 
@@ -191,6 +201,13 @@ class MainActivity : AppCompatActivity() {
          * do celular, tablet, TV Box ou TV.
          */
         applyResponsiveSizing()
+
+        /*
+         * Prepara a área do banner na HOME.
+         * Se o painel não tiver banner configurado,
+         * essa área permanece totalmente escondida.
+         */
+        prepareHomeBanner()
 
         store =
             SecureStore(this)
@@ -2086,6 +2103,123 @@ class MainActivity : AppCompatActivity() {
 
     /*
      * =====================================================
+     * BANNER DA HOME
+     * =====================================================
+     */
+
+    private fun prepareHomeBanner() {
+
+        if (
+            homeBannerView !=
+            null
+        ) {
+
+            return
+        }
+
+        val bannerView =
+            ImageView(
+                this
+            ).apply {
+
+                scaleType =
+                    ImageView.ScaleType
+                        .CENTER_CROP
+
+                visibility =
+                    View.GONE
+
+                isFocusable =
+                    false
+
+                isClickable =
+                    false
+
+                contentDescription =
+                    "Banner LPSM"
+
+                setBackgroundColor(
+                    Color.TRANSPARENT
+                )
+            }
+
+        val params =
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(
+                    homeBannerHeightDp()
+                )
+            ).apply {
+
+                setMargins(
+                    dp(8),
+                    dp(6),
+                    dp(8),
+                    dp(5)
+                )
+            }
+
+        bannerView.layoutParams =
+            params
+
+        /*
+         * HOME atualmente possui:
+         *
+         * 0 = BEM-VINDO
+         * 1 = texto "Escolha..."
+         * 2 = botões TV / Filmes / Séries
+         *
+         * Inserimos o banner entre o texto
+         * e os botões.
+         */
+        val position =
+            2.coerceAtMost(
+                b.homePanel.childCount
+            )
+
+        b.homePanel.addView(
+            bannerView,
+            position
+        )
+
+        homeBannerView =
+            bannerView
+    }
+
+
+    private fun homeBannerHeightDp():
+        Int {
+
+        return when {
+
+            screenHeightDp() <=
+                340 ->
+                58
+
+            screenHeightDp() <=
+                380 ->
+                68
+
+            screenHeightDp() <=
+                430 ->
+                82
+
+            screenHeightDp() <=
+                520 ->
+                96
+
+            screenHeightDp() <=
+                700 ->
+                125
+
+            else ->
+                155
+        }
+    }
+
+
+    /*
+     * =====================================================
      * APARÊNCIA
      * =====================================================
      */
@@ -2095,11 +2229,54 @@ class MainActivity : AppCompatActivity() {
         banner: Bitmap?
     ) {
 
+        /*
+         * PAPEL DE PAREDE
+         */
         b.wallpaper
             .setImageBitmap(
                 wallpaper
             )
 
+        /*
+         * BANNER NA HOME
+         *
+         * Sem banner configurado:
+         * não reserva nenhum espaço.
+         *
+         * Com banner:
+         * aparece automaticamente entre
+         * o título de boas-vindas e os botões.
+         */
+        homeBannerView
+            ?.apply {
+
+                if (
+                    banner !=
+                    null
+                ) {
+
+                    setImageBitmap(
+                        banner
+                    )
+
+                    visibility =
+                        View.VISIBLE
+
+                } else {
+
+                    setImageDrawable(
+                        null
+                    )
+
+                    visibility =
+                        View.GONE
+                }
+            }
+
+        /*
+         * Continua utilizando o mesmo banner
+         * também na tela de falha.
+         */
         b.failureBanner
             .setImageBitmap(
                 banner
