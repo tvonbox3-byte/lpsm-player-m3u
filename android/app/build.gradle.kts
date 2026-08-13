@@ -13,12 +13,8 @@ android {
         minSdk = 23
         targetSdk = 35
 
-        /*
-         * NOVA VERSÃO PARA TESTAR
-         * A ATUALIZAÇÃO AUTOMÁTICA.
-         */
-        versionCode = 18
-        versionName = "2.2.1"
+        versionCode = 19
+        versionName = "2.2.2"
 
         buildConfigField(
             "String",
@@ -32,41 +28,25 @@ android {
         viewBinding = true
     }
 
-    /*
-     * ASSINATURA FIXA DO LPSM
-     */
     signingConfigs {
 
         create("release") {
 
             val keystorePath =
-                System.getenv(
-                    "LPSM_KEYSTORE_PATH"
-                ) ?: ""
+                System.getenv("LPSM_KEYSTORE_PATH") ?: ""
 
-            if (
-                keystorePath.isNotBlank()
-            ) {
-                storeFile =
-                    file(
-                        keystorePath
-                    )
+            if (keystorePath.isNotBlank()) {
+                storeFile = file(keystorePath)
             }
 
             storePassword =
-                System.getenv(
-                    "LPSM_KEYSTORE_PASSWORD"
-                ) ?: ""
+                System.getenv("LPSM_KEYSTORE_PASSWORD") ?: ""
 
             keyAlias =
-                System.getenv(
-                    "LPSM_KEY_ALIAS"
-                ) ?: ""
+                System.getenv("LPSM_KEY_ALIAS") ?: ""
 
             keyPassword =
-                System.getenv(
-                    "LPSM_KEY_PASSWORD"
-                ) ?: ""
+                System.getenv("LPSM_KEY_PASSWORD") ?: ""
         }
     }
 
@@ -79,15 +59,8 @@ android {
         release {
 
             signingConfig =
-                signingConfigs
-                    .getByName(
-                        "release"
-                    )
+                signingConfigs.getByName("release")
 
-            /*
-             * Mantemos sem minificação
-             * enquanto testamos esta versão.
-             */
             isMinifyEnabled = false
 
             proguardFiles(
