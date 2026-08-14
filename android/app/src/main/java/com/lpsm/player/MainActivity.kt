@@ -53,6 +53,19 @@ class MainActivity : AppCompatActivity() {
     private var entries =
         listOf<MediaEntry>()
 
+    /*
+     * Radios usam um catalogo publico independente da playlist do cliente.
+     * O catalogo so e baixado ao abrir a secao para manter a HOME rapida.
+     */
+    private var radioEntries =
+        listOf<MediaEntry>()
+
+    private var radioMode =
+        false
+
+    private var radioLoading =
+        false
+
     private var epg =
         emptyMap<String, String>()
 
@@ -342,6 +355,15 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
+        b.homeRadio
+            .setOnClickListener {
+
+                showBrowser(
+                    ContentType.LIVE,
+                    radios = true
+                )
+            }
+
         b.activateButton
             .setOnClickListener {
                 activate()
@@ -384,10 +406,12 @@ class MainActivity : AppCompatActivity() {
             b.homeLive,
             b.homeVod,
             b.homeSeries,
+            b.homeRadio,
             b.all,
             b.live,
             b.vod,
             b.series,
+            b.radio,
             b.favorites,
             b.previewWatch
         ).forEach { button ->
@@ -403,9 +427,13 @@ class MainActivity : AppCompatActivity() {
          * HOME - esquerda / direita
          */
         b.homeLive.nextFocusRightId = b.homeVod.id
+        b.homeLive.nextFocusLeftId = b.homeRadio.id
         b.homeVod.nextFocusLeftId = b.homeLive.id
         b.homeVod.nextFocusRightId = b.homeSeries.id
         b.homeSeries.nextFocusLeftId = b.homeVod.id
+        b.homeSeries.nextFocusRightId = b.homeRadio.id
+        b.homeRadio.nextFocusLeftId = b.homeSeries.id
+        b.homeRadio.nextFocusRightId = b.homeLive.id
 
         /*
          * FILTROS SUPERIORES - esquerda / direita
@@ -420,9 +448,12 @@ class MainActivity : AppCompatActivity() {
         b.vod.nextFocusRightId = b.series.id
 
         b.series.nextFocusLeftId = b.vod.id
-        b.series.nextFocusRightId = b.favorites.id
+        b.series.nextFocusRightId = b.radio.id
 
-        b.favorites.nextFocusLeftId = b.series.id
+        b.radio.nextFocusLeftId = b.series.id
+        b.radio.nextFocusRightId = b.favorites.id
+
+        b.favorites.nextFocusLeftId = b.radio.id
         b.favorites.nextFocusRightId = b.all.id
 
         /*
@@ -433,6 +464,7 @@ class MainActivity : AppCompatActivity() {
             b.live,
             b.vod,
             b.series,
+            b.radio,
             b.favorites
         ).forEach { button ->
             button.nextFocusUpId = b.search.id
@@ -501,6 +533,9 @@ class MainActivity : AppCompatActivity() {
             favoritesOnly ->
                 b.favorites
 
+            radioMode ->
+                b.radio
+
             filter ==
                 ContentType.LIVE ->
                 b.live
@@ -527,6 +562,7 @@ class MainActivity : AppCompatActivity() {
         b.live.isSelected =
             filter ==
                 ContentType.LIVE &&
+                !radioMode &&
                 !favoritesOnly
 
         b.vod.isSelected =
@@ -537,6 +573,10 @@ class MainActivity : AppCompatActivity() {
         b.series.isSelected =
             filter ==
                 ContentType.SERIES &&
+                !favoritesOnly
+
+        b.radio.isSelected =
+            radioMode &&
                 !favoritesOnly
 
         b.favorites.isSelected =
@@ -3484,6 +3524,15 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
+        b.radio
+            .setOnClickListener {
+
+                showBrowser(
+                    ContentType.LIVE,
+                    radios = true
+                )
+            }
+
         b.favorites
             .setOnClickListener {
 
@@ -3766,26 +3815,50 @@ class MainActivity : AppCompatActivity() {
             store.favoriteUrls()
 
         val section =
-            filter
-                ?.let {
+            if (
+                radioMode
+            ) {
 
-                    entriesByType[
-                        it
-                    ]
-                        .orEmpty()
-                }
-                ?: entries
+                radioEntries
+
+            } else {
+
+                filter
+                    ?.let {
+
+                        entriesByType[
+                            it
+                        ]
+                            .orEmpty()
+                    }
+                    ?: entries
+            }
 
         val indexedGroups =
-            filter
-                ?.let {
+            if (
+                radioMode
+            ) {
 
-                    groupsByType[
-                        it
-                    ]
-                        .orEmpty()
+                radioEntries.groupBy {
+
+                    it.group
+                        .ifBlank {
+                            "Brasil"
+                        }
                 }
-                ?: groupsAll
+
+            } else {
+
+                filter
+                    ?.let {
+
+                        groupsByType[
+                            it
+                        ]
+                            .orEmpty()
+                    }
+                    ?: groupsAll
+            }
 
         val categories =
             buildList {
@@ -5488,6 +5561,9 @@ class MainActivity : AppCompatActivity() {
         selectedSeason =
             null
 
+        radioMode =
+            false
+
         b.content.visibility =
             View.GONE
 
@@ -5508,13 +5584,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showBrowser(
-        type: ContentType
+        type: ContentType,
+        radios: Boolean = false
     ) {
 
         releasePreview()
 
         filter =
             type
+
+        radioMode =
+            radios
 
         favoritesOnly =
             false
@@ -5546,13 +5626,97 @@ class MainActivity : AppCompatActivity() {
 
         render()
 
+        if (
+            radios
+        ) {
+            loadRadiosIfNeeded()
+        }
+
         focusFirstCategory()
+    }
+
+    private fun loadRadiosIfNeeded() {
+
+        if (
+            radioEntries.isNotEmpty() ||
+            radioLoading
+        ) {
+            return
+        }
+
+        radioLoading =
+            true
+
+        b.previewTitle.text =
+            "Carregando rádios brasileiras..."
+
+        b.previewGroup.text =
+            "Aguarde um instante"
+
+        pool.execute {
+
+            try {
+
+                val loaded =
+                    RadioBrowserApi
+                        .brazilianStations()
+
+                runOnUiThread {
+
+                    radioEntries =
+                        loaded
+
+                    radioLoading =
+                        false
+
+                    if (
+                        radioMode &&
+                        b.content.visibility ==
+                            View.VISIBLE
+                    ) {
+                        render()
+                        focusFirstCategory()
+                    }
+                }
+
+            } catch (
+                error: Throwable
+            ) {
+
+                runOnUiThread {
+
+                    radioLoading =
+                        false
+
+                    if (
+                        radioMode
+                    ) {
+                        b.previewTitle.text =
+                            "Rádios indisponíveis"
+
+                        b.previewGroup.text =
+                            "Volte e abra Rádios para tentar novamente"
+
+                        toast(
+                            error.message
+                                ?: "Falha ao carregar rádios"
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun resetPreviewText() {
 
         b.previewTitle.text =
-            when (filter) {
+            if (
+                radioMode
+            ) {
+
+                "Selecione uma rádio"
+
+            } else when (filter) {
 
                 ContentType.LIVE ->
                     "Selecione um canal"
