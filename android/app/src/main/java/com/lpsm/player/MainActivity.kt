@@ -191,6 +191,9 @@ class MainActivity : AppCompatActivity() {
     private var homeBannerView:
         ImageView? = null
 
+    private var homeSupportContact:
+        TextView? = null
+
     private var homeSubtitle:
         TextView? = null
 
@@ -292,6 +295,25 @@ class MainActivity : AppCompatActivity() {
                             item
                         )
                     }
+                },
+
+                /*
+                 * ATUALIZA A ESTRELA E O CONTADOR
+                 * LOGO APOS FAVORITAR.
+                 */
+                { _, added ->
+
+                    toast(
+                        if (added) {
+                            "Adicionado aos favoritos"
+                        } else {
+                            "Removido dos favoritos"
+                        }
+                    )
+
+                    b.list.post {
+                        render()
+                    }
                 }
             )
 
@@ -324,7 +346,13 @@ class MainActivity : AppCompatActivity() {
 
                 currentPreviewEntry()
                     ?.let {
-                        openPlayer(it)
+                        if (radioMode) {
+                            selectedEntry = it
+                            playPreviewNow(it)
+                            b.previewWatch.text = "TOCANDO"
+                        } else {
+                            openPlayer(it)
+                        }
                     }
             }
 
@@ -362,6 +390,12 @@ class MainActivity : AppCompatActivity() {
                     ContentType.LIVE,
                     radios = true
                 )
+            }
+
+        b.homeAccount
+            .setOnClickListener {
+
+                showAccount()
             }
 
         b.activateButton
@@ -407,6 +441,7 @@ class MainActivity : AppCompatActivity() {
             b.homeVod,
             b.homeSeries,
             b.homeRadio,
+            b.homeAccount,
             b.all,
             b.live,
             b.vod,
@@ -427,13 +462,15 @@ class MainActivity : AppCompatActivity() {
          * HOME - esquerda / direita
          */
         b.homeLive.nextFocusRightId = b.homeVod.id
-        b.homeLive.nextFocusLeftId = b.homeRadio.id
+        b.homeLive.nextFocusLeftId = b.homeAccount.id
         b.homeVod.nextFocusLeftId = b.homeLive.id
         b.homeVod.nextFocusRightId = b.homeSeries.id
         b.homeSeries.nextFocusLeftId = b.homeVod.id
         b.homeSeries.nextFocusRightId = b.homeRadio.id
         b.homeRadio.nextFocusLeftId = b.homeSeries.id
-        b.homeRadio.nextFocusRightId = b.homeLive.id
+        b.homeRadio.nextFocusRightId = b.homeAccount.id
+        b.homeAccount.nextFocusLeftId = b.homeRadio.id
+        b.homeAccount.nextFocusRightId = b.homeLive.id
 
         /*
          * FILTROS SUPERIORES - esquerda / direita
@@ -592,6 +629,24 @@ class MainActivity : AppCompatActivity() {
     private fun handleMediaClick(
         item: MediaEntry
     ) {
+
+        if (radioMode) {
+            selectedEntry =
+                item
+
+            showPreviewInfo(
+                item
+            )
+
+            playPreviewNow(
+                item
+            )
+
+            b.previewWatch.text =
+                "TOCANDO"
+
+            return
+        }
 
         when (filter) {
 
@@ -1353,6 +1408,12 @@ class MainActivity : AppCompatActivity() {
                 homeButtonText
 
             b.homeSeries.textSize =
+                homeButtonText
+
+            b.homeRadio.textSize =
+                homeButtonText
+
+            b.homeAccount.textSize =
                 homeButtonText
         }
     }
@@ -2292,6 +2353,55 @@ class MainActivity : AppCompatActivity() {
                 banner
         }
 
+        if (
+            homeSupportContact ==
+            null
+        ) {
+
+            val contact =
+                TextView(this)
+                    .apply {
+                        text =
+                            "SUPORTE: (54) 99714-6384"
+
+                        gravity =
+                            Gravity.CENTER
+
+                        textSize =
+                            16f
+
+                        setTextColor(
+                            Color.WHITE
+                        )
+
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            R.drawable.ic_support_robot,
+                            0,
+                            0,
+                            0
+                        )
+
+                        compoundDrawablePadding =
+                            dp(8)
+
+                        setPadding(
+                            dp(8),
+                            dp(5),
+                            dp(8),
+                            dp(5)
+                        )
+                    }
+
+            b.homePanel
+                .addView(
+                    contact,
+                    1
+                )
+
+            homeSupportContact =
+                contact
+        }
+
         /*
          * Antes o painel inteiro ficava centralizado.
          * Como a linha de botões tinha layout_weight=1,
@@ -2536,6 +2646,11 @@ class MainActivity : AppCompatActivity() {
             lightenColor(
                 accentColor,
                 0.20f
+            )
+
+        homeSupportContact
+            ?.setTextColor(
+                accentColor
             )
 
         val homeTint =
@@ -2980,7 +3095,9 @@ class MainActivity : AppCompatActivity() {
             listOf(
                 b.homeLive,
                 b.homeVod,
-                b.homeSeries
+                b.homeSeries,
+                b.homeRadio,
+                b.homeAccount
             )
                 .forEach {
                         button ->
@@ -3417,6 +3534,12 @@ class MainActivity : AppCompatActivity() {
         b.failureMessage.text =
             detail
 
+        b.failureMac.text =
+            "MAC: $macAddress"
+
+        b.failureSupport.text =
+            "SUPORTE: (54) 99714-6384"
+
         banner
             ?.let {
 
@@ -3425,6 +3548,26 @@ class MainActivity : AppCompatActivity() {
                         it
                     )
             }
+    }
+
+    private fun showAccount() {
+
+        AlertDialog
+            .Builder(this)
+            .setIcon(
+                R.drawable.ic_support_robot
+            )
+            .setTitle(
+                "CONTA LPSM"
+            )
+            .setMessage(
+                "MAC DO APARELHO\n$macAddress\n\nSUPORTE\n(54) 99714-6384"
+            )
+            .setPositiveButton(
+                "FECHAR",
+                null
+            )
+            .show()
     }
 
     private fun showContent(
@@ -5618,7 +5761,11 @@ class MainActivity : AppCompatActivity() {
             View.VISIBLE
 
         b.previewWatch.text =
-            "ASSISTIR"
+            if (radios) {
+                "TOCAR"
+            } else {
+                "ASSISTIR"
+            }
 
         resetPreviewText()
 
