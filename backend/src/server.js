@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import {
   extname,
   join,
-  normalize
+  normalize,
+  sep
 } from 'node:path';
 import {
   fileURLToPath
@@ -669,11 +670,21 @@ if (
  * ==========================================
  */
 
+const securityHeaders = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'no-referrer',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  'strict-transport-security': 'max-age=31536000; includeSubDomains'
+};
+
+
 const json =
   (
     res,
     status,
-    data
+    data,
+    extraHeaders = {}
   ) => {
 
     res.writeHead(
@@ -684,7 +695,11 @@ const json =
           'application/json; charset=utf-8',
 
         'cache-control':
-          'no-store'
+          'no-store',
+
+        ...securityHeaders,
+
+        ...extraHeaders
       }
     );
 
@@ -694,6 +709,100 @@ const json =
         data
       )
     );
+  };
+
+
+/*
+ * ==========================================
+ * LIMITAÇÃO DE TENTATIVAS
+ * ==========================================
+ */
+
+const rateBuckets =
+  new Map();
+
+
+const rateBucketCleanup =
+  setInterval(
+    () => {
+      const now = Date.now();
+
+      for (const [key, bucket] of rateBuckets) {
+        if (bucket.resetAt <= now) {
+          rateBuckets.delete(key);
+        }
+      }
+    },
+    10 * 60 * 1000
+  );
+
+rateBucketCleanup.unref();
+
+
+const requestIp =
+  req =>
+    String(
+      req.headers['x-forwarded-for'] ||
+      req.socket.remoteAddress ||
+      'unknown'
+    )
+      .split(',')[0]
+      .trim()
+      .slice(0, 80);
+
+
+const enforceRateLimit =
+  (req, res, scope, limit, windowMs) => {
+
+    const now = Date.now();
+    const key = `${scope}:${requestIp(req)}`;
+    let bucket = rateBuckets.get(key);
+
+
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = {
+        count: 0,
+        resetAt: now + windowMs
+      };
+    }
+
+
+    bucket.count += 1;
+    rateBuckets.set(key, bucket);
+
+
+    if (bucket.count <= limit) {
+      return {
+        allowed: true,
+        key
+      };
+    }
+
+
+    const retryAfter =
+      Math.max(
+        1,
+        Math.ceil((bucket.resetAt - now) / 1000)
+      );
+
+
+    json(
+      res,
+      429,
+      {
+        error:
+          'Muitas tentativas. Aguarde e tente novamente.'
+      },
+      {
+        'retry-after': String(retryAfter)
+      }
+    );
+
+
+    return {
+      allowed: false,
+      key
+    };
   };
 
 
@@ -1189,23 +1298,47 @@ async function api(
       '/api/admin/login'
   ) {
 
+    const loginLimit =
+      enforceRateLimit(
+        req,
+        res,
+        'admin-login',
+        8,
+        10 * 60 * 1000
+      );
+
+
+    if (!loginLimit.allowed) {
+      return;
+    }
+
     const data =
       await body(
         req
       );
 
 
+    const suppliedUser =
+      String(data.user || '')
+        .slice(0, 128);
+
+    const suppliedPassword =
+      String(data.password || '')
+        .slice(0, 256);
+
+    const passwordIsValid =
+      passwordMatches(
+        suppliedPassword,
+        store.data.admin.hash
+      );
+
+
     if (
 
-      data.user !==
+      suppliedUser !==
         store.data.admin.user ||
 
-      !passwordMatches(
-
-        data.password,
-
-        store.data.admin.hash
-      )
+      !passwordIsValid
 
     ) {
 
@@ -1219,6 +1352,11 @@ async function api(
         }
       );
     }
+
+
+    rateBuckets.delete(
+      loginLimit.key
+    );
 
 
     return json(
@@ -1257,6 +1395,19 @@ async function api(
     path ===
       '/api/device/activate'
   ) {
+
+    if (
+      !enforceRateLimit(
+        req,
+        res,
+        'device-activate',
+        60,
+        60 * 1000
+      ).allowed
+    ) {
+
+      return;
+    }
 
     const data =
       await body(
@@ -2740,6 +2891,19 @@ const server =
             )
         ) {
 
+          if (
+            !enforceRateLimit(
+              req,
+              res,
+              'api-global',
+              600,
+              60 * 1000
+            ).allowed
+          ) {
+
+            return;
+          }
+
           return await api(
 
             req,
@@ -2794,8 +2958,9 @@ const server =
 
 
         if (
+          file !== publicRoot &&
           !file.startsWith(
-            publicRoot
+            `${publicRoot}${sep}`
           )
         ) {
 
@@ -2813,12 +2978,22 @@ const server =
           );
 
 
-        /*
-         * SEM CACHE.
-         *
-         * Assim Ctrl+F5 não fica
-         * preso no app.js antigo.
-         */
+        const extension =
+          extname(
+            file
+          );
+
+        const isPanelShell =
+          rel === 'index.html' ||
+          rel === 'sw.js';
+
+        const isVersionedAsset =
+          url.searchParams.has('v') &&
+          (
+            extension === '.js' ||
+            extension === '.css'
+          );
+
         res.writeHead(
           200,
           {
@@ -2826,27 +3001,22 @@ const server =
             'content-type':
 
               mime[
-                extname(
-                  file
-                )
+                extension
               ] ||
 
               'application/octet-stream',
 
             'cache-control':
-              'no-store, no-cache, must-revalidate',
+              isPanelShell
+                ? 'no-cache, must-revalidate'
+                : isVersionedAsset
+                  ? 'public, max-age=31536000, immutable'
+                  : 'public, max-age=3600',
 
-            pragma:
-              'no-cache',
-
-            expires:
-              '0',
-
-            'x-content-type-options':
-              'nosniff',
+            ...securityHeaders,
 
             'content-security-policy':
-              "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; connect-src 'self'"
+              "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'"
           }
         );
 
@@ -2883,13 +3053,22 @@ const server =
         );
 
 
+        const payloadTooLarge =
+          error.message ===
+          'Payload muito grande';
+
+
         json(
           res,
-          500,
+          payloadTooLarge
+            ? 413
+            : 500,
           {
 
             error:
-              'Erro interno'
+              payloadTooLarge
+                ? error.message
+                : 'Erro interno'
           }
         );
       }
