@@ -29,6 +29,7 @@
 
 
     <application
+        android:name=".LpsmApplication"
         android:theme="@style/Theme.LPSM"
         android:label="LPSM"
         android:networkSecurityConfig="@xml/network_security_config"
