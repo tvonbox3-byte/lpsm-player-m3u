@@ -6,6 +6,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -24,6 +26,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 
@@ -60,7 +63,30 @@ class UpdateActivity : AppCompatActivity() {
      * Executor separado para internet/download.
      */
     private val executor =
-        Executors.newSingleThreadExecutor()
+        Executors.newFixedThreadPool(2)
+
+
+    private val mainHandler =
+        Handler(
+            Looper.getMainLooper()
+        )
+
+
+    private val startupFallback =
+        Runnable {
+
+            if (
+                !mainOpened &&
+                !isFinishing &&
+                !isDestroyed
+            ) {
+
+                statusText.text =
+                    "Iniciando LPSM..."
+
+                openMain()
+            }
+        }
 
 
     private lateinit var statusText:
@@ -111,6 +137,24 @@ class UpdateActivity : AppCompatActivity() {
          * só para o atualizador.
          */
         createLoadingScreen()
+
+
+        /*
+         * Acorda o backend gratuito em paralelo.
+         * Isso antecipa o cold start do Render sem
+         * prender o cliente na tela de atualização.
+         */
+        warmBackend()
+
+
+        /*
+         * A verificação de update nunca pode segurar
+         * a abertura do player por uma rede lenta.
+         */
+        mainHandler.postDelayed(
+            startupFallback,
+            2_500
+        )
 
 
         /*
@@ -324,6 +368,13 @@ class UpdateActivity : AppCompatActivity() {
                             ),
 
 
+                        sha256 =
+                            json.optString(
+                                "sha256",
+                                ""
+                            ),
+
+
                         force =
                             json.optBoolean(
                                 "force",
@@ -344,6 +395,14 @@ class UpdateActivity : AppCompatActivity() {
 
 
                 runOnUiThread {
+
+                    if (
+                        mainOpened ||
+                        isFinishing ||
+                        isDestroyed
+                    ) {
+                        return@runOnUiThread
+                    }
 
                     /*
                      * Existe atualização?
@@ -380,8 +439,13 @@ class UpdateActivity : AppCompatActivity() {
                  * O aplicativo abre normalmente.
                  */
                 runOnUiThread {
-
-                    openMain()
+                    if (
+                        !mainOpened &&
+                        !isFinishing &&
+                        !isDestroyed
+                    ) {
+                        openMain()
+                    }
                 }
             }
         }
@@ -432,6 +496,10 @@ class UpdateActivity : AppCompatActivity() {
     private fun showUpdateDialog(
         info: UpdateInfo
     ) {
+
+        mainHandler.removeCallbacks(
+            startupFallback
+        )
 
         pendingUpdate =
             info
@@ -996,6 +1064,47 @@ class UpdateActivity : AppCompatActivity() {
                 }
 
 
+                val expectedHash =
+                    info.sha256
+                        .trim()
+                        .lowercase()
+
+
+                if (
+                    expectedHash.length != 64 ||
+                    expectedHash.any {
+                        it !in '0'..'9' &&
+                        it !in 'a'..'f'
+                    }
+                ) {
+
+                    apkFile.delete()
+
+                    throw IllegalStateException(
+                        "A atualização não possui uma assinatura de integridade válida."
+                    )
+                }
+
+
+                val downloadedHash =
+                    sha256(
+                        apkFile
+                    )
+
+
+                if (
+                    downloadedHash !=
+                    expectedHash
+                ) {
+
+                    apkFile.delete()
+
+                    throw IllegalStateException(
+                        "A verificação de segurança do APK falhou."
+                    )
+                }
+
+
                 downloading =
                     false
 
@@ -1099,6 +1208,65 @@ class UpdateActivity : AppCompatActivity() {
                 "Não foi possível abrir o instalador: ${error.message ?: "erro desconhecido"}"
             )
         }
+    }
+
+
+    /*
+     * =====================================================
+     * INTEGRIDADE DO APK BAIXADO
+     * =====================================================
+     */
+
+    private fun sha256(
+        file: File
+    ): String {
+
+        val digest =
+            MessageDigest
+                .getInstance(
+                    "SHA-256"
+                )
+
+
+        file.inputStream()
+            .buffered()
+            .use {
+                input ->
+
+                val buffer =
+                    ByteArray(
+                        64 * 1024
+                    )
+
+
+                while (true) {
+                    val read =
+                        input.read(
+                            buffer
+                        )
+
+                    if (read <= 0) {
+                        break
+                    }
+
+                    digest.update(
+                        buffer,
+                        0,
+                        read
+                    )
+                }
+            }
+
+
+        return digest
+            .digest()
+            .joinToString("") {
+                byte ->
+
+                "%02x".format(
+                    byte.toInt() and 0xff
+                )
+            }
     }
 
 
@@ -1224,6 +1392,61 @@ class UpdateActivity : AppCompatActivity() {
         } finally {
 
             connection.disconnect()
+        }
+    }
+
+
+    /*
+     * =====================================================
+     * ACORDAR BACKEND SEM ATRASAR A ABERTURA
+     * =====================================================
+     */
+
+    private fun warmBackend() {
+
+        executor.execute {
+
+            var connection:
+                HttpURLConnection? = null
+
+            try {
+
+                connection =
+                    URL(
+                        BuildConfig.API_BASE_URL
+                            .trimEnd('/') +
+                            "/api/health"
+                    )
+                        .openConnection()
+                        as HttpURLConnection
+
+                connection.requestMethod =
+                    "GET"
+
+                connection.connectTimeout =
+                    5_000
+
+                connection.readTimeout =
+                    5_000
+
+                connection.setRequestProperty(
+                    "User-Agent",
+                    "LPSM-Android-Warmup/2.2.16"
+                )
+
+                connection.inputStream
+                    .use {
+                        it.read()
+                    }
+
+            } catch (
+                _: Exception
+            ) {
+                /* A chamada já foi suficiente para acordar o Render. */
+
+            } finally {
+                connection?.disconnect()
+            }
         }
     }
 
@@ -1379,6 +1602,11 @@ class UpdateActivity : AppCompatActivity() {
             true
 
 
+        mainHandler.removeCallbacks(
+            startupFallback
+        )
+
+
         startActivity(
             Intent(
                 this,
@@ -1421,6 +1649,10 @@ class UpdateActivity : AppCompatActivity() {
 
     override fun onDestroy() {
 
+        mainHandler.removeCallbacks(
+            startupFallback
+        )
+
         executor.shutdownNow()
 
 
@@ -1442,6 +1674,8 @@ class UpdateActivity : AppCompatActivity() {
         val versionName: String,
 
         val apkUrl: String,
+
+        val sha256: String,
 
         val force: Boolean,
 
