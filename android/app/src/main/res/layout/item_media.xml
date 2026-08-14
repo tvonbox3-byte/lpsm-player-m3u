@@ -3,7 +3,7 @@
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="118dp"
+    android:layout_height="110dp"
     android:layout_marginStart="6dp"
     android:layout_marginTop="6dp"
     android:layout_marginEnd="6dp"
@@ -21,15 +21,15 @@
     -->
     <FrameLayout
         android:id="@+id/mediaImageContainer"
-        android:layout_width="175dp"
-        android:layout_height="106dp">
+        android:layout_width="82dp"
+        android:layout_height="100dp">
 
         <ImageView
             android:id="@+id/mediaImage"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:contentDescription="Imagem do conteúdo"
-            android:scaleType="centerCrop" />
+            android:scaleType="centerInside" />
 
         <!-- Número do episódio -->
         <TextView

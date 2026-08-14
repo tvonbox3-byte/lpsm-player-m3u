@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:minHeight="58dp"
+    android:minHeight="64dp"
     android:layout_marginBottom="3dp"
     android:background="@drawable/category_background"
     android:clickable="true"
@@ -25,7 +25,7 @@
         android:minLines="1"
         android:paddingEnd="6dp"
         android:textColor="@color/text"
-        android:textSize="14sp"
+        android:textSize="16sp"
         android:textStyle="bold" />
 
     <TextView
@@ -35,7 +35,7 @@
         android:minWidth="38dp"
         android:gravity="end|center_vertical"
         android:textColor="@color/text"
-        android:textSize="13sp"
+        android:textSize="14sp"
         android:textStyle="bold" />
 
 </LinearLayout>
