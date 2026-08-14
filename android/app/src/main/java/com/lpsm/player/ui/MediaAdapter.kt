@@ -19,7 +19,8 @@ import com.lpsm.player.model.MediaEntry
 class MediaAdapter(
     private val store: SecureStore,
     private val open: (MediaEntry) -> Unit,
-    private val focused: (MediaEntry?) -> Unit = {}
+    private val focused: (MediaEntry?) -> Unit = {},
+    private val favoriteChanged: (MediaEntry, Boolean) -> Unit = { _, _ -> }
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
 
@@ -435,29 +436,26 @@ class MediaAdapter(
          */
         holder.itemView
             .setOnLongClickListener {
-
-                store.toggleFavorite(
-                    item.url
+                toggleFavorite(
+                    holder,
+                    item
                 )
-
-
-                val position =
-                    holder
-                        .bindingAdapterPosition
-
-
-                if (
-                    position !=
-                    RecyclerView.NO_POSITION
-                ) {
-
-                    notifyItemChanged(
-                        position
-                    )
-                }
-
-
                 true
+            }
+
+        holder.star
+            .apply {
+                isFocusable = true
+                isFocusableInTouchMode = false
+                contentDescription = "Favoritar ${item.name}"
+            }
+
+        holder.star
+            .setOnClickListener {
+                toggleFavorite(
+                    holder,
+                    item
+                )
             }
     }
 
@@ -546,30 +544,57 @@ class MediaAdapter(
 
         holder.itemView
             .setOnLongClickListener {
-
-                store.toggleFavorite(
-                    item.url
+                toggleFavorite(
+                    holder,
+                    item
                 )
-
-
-                val position =
-                    holder
-                        .bindingAdapterPosition
-
-
-                if (
-                    position !=
-                    RecyclerView.NO_POSITION
-                ) {
-
-                    notifyItemChanged(
-                        position
-                    )
-                }
-
-
                 true
             }
+
+        holder.star
+            .apply {
+                isFocusable = true
+                isFocusableInTouchMode = false
+                contentDescription = "Favoritar ${item.name}"
+            }
+
+        holder.star
+            .setOnClickListener {
+                toggleFavorite(
+                    holder,
+                    item
+                )
+            }
+    }
+
+
+
+    private fun toggleFavorite(
+        holder: RecyclerView.ViewHolder,
+        item: MediaEntry
+    ) {
+
+        val added =
+            store.toggleFavorite(
+                item.url
+            )
+
+        val position =
+            holder.bindingAdapterPosition
+
+        if (
+            position !=
+            RecyclerView.NO_POSITION
+        ) {
+            notifyItemChanged(
+                position
+            )
+        }
+
+        favoriteChanged(
+            item,
+            added
+        )
     }
 
 
