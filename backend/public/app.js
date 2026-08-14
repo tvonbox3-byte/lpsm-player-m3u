@@ -9,6 +9,9 @@ let state = {
   audit: []
 };
 
+let presenceRefreshInFlight =
+  false;
+
 const request = async (path, options = {}) => {
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -861,6 +864,42 @@ function ensureExtraStyles() {
             .8;
         }
 
+        .client-statuses {
+          display:
+            flex;
+
+          flex-wrap:
+            wrap;
+
+          justify-content:
+            flex-end;
+
+          gap:
+            7px;
+        }
+
+        .pill.presence.online {
+          background:
+            #0b6b45;
+
+          color:
+            #d8ffed;
+
+          box-shadow:
+            0 0 0 1px #39db93aa;
+        }
+
+        .pill.presence.offline {
+          background:
+            #6b2430;
+
+          color:
+            #ffdce2;
+
+          box-shadow:
+            0 0 0 1px #ff7189aa;
+        }
+
         .hidden {
           display:
             none !important;
@@ -1004,6 +1043,53 @@ async function load() {
 }
 
 
+/*
+ * Atualiza ONLINE/OFFLINE automaticamente.
+ * Formulários abertos não são interrompidos.
+ */
+setInterval(
+  async () => {
+
+    if (
+      !sessionStorage.lpsmToken ||
+      document.hidden ||
+      presenceRefreshInFlight ||
+      document.querySelector(
+        'dialog[open]'
+      )
+    ) {
+      return;
+    }
+
+    presenceRefreshInFlight =
+      true;
+
+    try {
+      await load();
+    } catch (error) {
+
+      if (
+        error.status ===
+        401
+      ) {
+        return;
+      }
+
+      console.debug(
+        'Presença temporariamente indisponível',
+        error.message
+      );
+
+    } finally {
+
+      presenceRefreshInFlight =
+        false;
+    }
+  },
+  5_000
+);
+
+
 /* ==============================
    RENDER
    ============================== */
@@ -1029,9 +1115,17 @@ function render() {
         false
     ).length;
 
+  const onlineClients =
+    state.clients.filter(
+      client =>
+        client.online ===
+        true
+    ).length;
+
   $('#summary')
     .textContent =
       `${activeClients} clientes ativos · ` +
+      `${onlineClients} online agora · ` +
       `${activeSources} fontes ativas · ` +
       `${state.pendingDevices.length} MAC(s) aguardando`;
 
@@ -1136,21 +1230,43 @@ function render() {
                     )}
                   </h3>
 
-                  <span
-                    class="pill ${
-                      client.enabled ===
-                      false
-                        ? 'off'
-                        : ''
-                    }"
-                  >
-                    ${
-                      client.enabled ===
-                      false
-                        ? 'INATIVO'
-                        : 'ATIVO'
-                    }
-                  </span>
+                  <div class="client-statuses">
+
+                    <span
+                      class="pill ${
+                        client.enabled ===
+                        false
+                          ? 'off'
+                          : ''
+                      }"
+                      title="Autorização definida por você"
+                    >
+                      ${
+                        client.enabled ===
+                        false
+                          ? 'DESATIVADO'
+                          : 'ATIVO'
+                      }
+                    </span>
+
+                    <span
+                      class="pill presence ${
+                        client.online ===
+                        true
+                          ? 'online'
+                          : 'offline'
+                      }"
+                      title="Presença enviada pelo aplicativo"
+                    >
+                      ${
+                        client.online ===
+                        true
+                          ? 'ONLINE'
+                          : 'OFFLINE'
+                      }
+                    </span>
+
+                  </div>
 
                 </div>
 
@@ -1170,6 +1286,19 @@ function render() {
                   ${fmtDate(
                     client.expiresAt
                   )}
+
+                  <br>
+
+                  Último contato:
+                  ${
+                    client.lastSeenAt
+                      ? esc(
+                          fmtDateTime(
+                            client.lastSeenAt
+                          )
+                        )
+                      : 'Ainda não informado'
+                  }
 
                   <br>
 
