@@ -2,7 +2,6 @@ package com.lpsm.player
 
 import android.app.Dialog
 import android.content.Intent
-import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Bitmap
@@ -48,34 +47,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var store: SecureStore
     private lateinit var api: LpsmApi
 
-    /*
-     * Banner configurado pelo painel.
-     *
-     * É criado por código para não mexer novamente
-     * no activity_main.xml e não ocupar espaço quando
-     * nenhuma imagem estiver configurada.
-     */
-    private var homeBannerView:
-        ImageView? = null
-
-    /*
-     * Aparência central da HOME.
-     *
-     * Estes valores vêm codificados no campo
-     * supportMessage para manter compatibilidade
-     * com o backend atual, sem quebrar clientes
-     * ou o painel já existente.
-     */
-    private data class HomeVisualPrefs(
-        val message: String = "Escolha o que deseja assistir",
-        val style: String = "standard",
-        val showBanner: Boolean = true,
-        val accentHex: String = "7C4DFF"
-    )
-
-    private var homeVisualPrefs =
-        HomeVisualPrefs()
-
     private val pool =
         Executors.newSingleThreadExecutor()
 
@@ -110,22 +81,6 @@ class MainActivity : AppCompatActivity() {
 
     private var selectedSeason:
         Int? = null
-
-    /*
-     * CONTROLE PARENTAL
-     *
-     * A senha protege somente grupos/itens
-     * claramente pornográficos. Classificação
-     * +18 por si só NÃO pede senha.
-     *
-     * O desbloqueio vale somente enquanto
-     * o aplicativo estiver aberto.
-     */
-    private val adultPin =
-        "02020"
-
-    private val unlockedAdultGroups =
-        mutableSetOf<String>()
 
     private var entriesByType =
         emptyMap<
@@ -220,19 +175,6 @@ class MainActivity : AppCompatActivity() {
          * do celular, tablet, TV Box ou TV.
          */
         applyResponsiveSizing()
-
-        /*
-         * Prepara a área do banner na HOME.
-         * Se o painel não tiver banner configurado,
-         * essa área permanece totalmente escondida.
-         */
-        prepareHomeBanner()
-
-        /*
-         * Instala os ícones pequenos e prepara
-         * os três cartões da tela inicial.
-         */
-        prepareHomeButtons()
 
         store =
             SecureStore(this)
@@ -574,46 +516,32 @@ class MainActivity : AppCompatActivity() {
         item: MediaEntry
     ) {
 
-        if (
-            isPornProtectedEntry(item) &&
-            !isAdultUnlocked(item)
-        ) {
-
-            showAdultPinDialog(
-                unlockKey = adultUnlockKey(item)
-            ) {
-
-                openMediaAfterAdultCheck(
-                    item
-                )
-            }
-
-            return
-        }
-
-        openMediaAfterAdultCheck(
-            item
-        )
-    }
-
-    private fun openMediaAfterAdultCheck(
-        item: MediaEntry
-    ) {
-
         when (filter) {
 
             ContentType.LIVE -> {
 
-                /*
-                 * Sem prévia fixa: OK abre o canal
-                 * diretamente em tela cheia.
-                 */
-                selectedEntry =
-                    item
+                if (
+                    selectedEntry?.url ==
+                    item.url
+                ) {
 
-                openPlayer(
-                    item
-                )
+                    openPlayer(
+                        item
+                    )
+
+                } else {
+
+                    selectedEntry =
+                        item
+
+                    showPreviewInfo(
+                        item
+                    )
+
+                    playPreviewNow(
+                        item
+                    )
+                }
             }
 
             ContentType.VOD -> {
@@ -663,24 +591,98 @@ class MainActivity : AppCompatActivity() {
         item: MediaEntry
     ) {
 
-        /*
-         * Na grade não iniciamos vídeo automaticamente.
-         * Isso evita espaço de prévia e também reduz
-         * consumo de rede enquanto o cliente navega.
-         *
-         * Dentro dos episódios apenas atualizamos
-         * as informações internas do item.
-         */
-        if (
-            filter ==
-                ContentType.SERIES &&
-            selectedSeriesName !=
-                null
-        ) {
+        when (filter) {
 
-            showPreviewInfo(
-                item
-            )
+            ContentType.LIVE -> {
+
+                showPreviewInfo(
+                    item
+                )
+
+                schedulePreview(
+                    item,
+                    450L
+                )
+            }
+
+            ContentType.VOD -> {
+
+                showPreviewInfo(
+                    item
+                )
+
+                schedulePreview(
+                    item,
+                    850L
+                )
+            }
+
+            ContentType.SERIES -> {
+
+                if (
+                    selectedSeriesName ==
+                    null
+                ) {
+
+                    val name =
+                        seriesKey(
+                            item
+                        )
+
+                    val episodes =
+                        seriesEpisodes(
+                            name
+                        )
+
+                    val firstEpisode =
+                        episodes
+                            .firstOrNull()
+
+                    b.previewTitle.text =
+                        displaySeriesTitle(
+                            name,
+                            episodes
+                        )
+
+                    b.previewGroup.text =
+                        if (
+                            episodes.size ==
+                            1
+                        ) {
+
+                            "Série • 1 episódio"
+
+                        } else {
+
+                            "Série • ${episodes.size} episódios"
+                        }
+
+                    if (
+                        firstEpisode !=
+                        null
+                    ) {
+
+                        schedulePreview(
+                            firstEpisode,
+                            900L
+                        )
+                    }
+
+                } else {
+
+                    showPreviewInfo(
+                        item
+                    )
+
+                    schedulePreview(
+                        item,
+                        750L
+                    )
+                }
+            }
+
+            else ->
+                Unit
         }
     }
 
@@ -727,32 +729,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (
-            isPornProtectedText(category) &&
-            !isAdultGroupUnlocked(category)
-        ) {
-
-            showAdultPinDialog(
-                unlockKey = adultGroupKey(category)
-            ) {
-
-                selectCategoryAfterAdultCheck(
-                    category
-                )
-            }
-
-            return
-        }
-
-        selectCategoryAfterAdultCheck(
-            category
-        )
-    }
-
-    private fun selectCategoryAfterAdultCheck(
-        category: String
-    ) {
-
         favoritesOnly =
             category ==
                 "Favoritos"
@@ -787,24 +763,60 @@ class MainActivity : AppCompatActivity() {
 
     private fun updatePreviewPosition() {
 
-        /*
-         * Não reservamos mais área fixa para prévia
-         * na grade. Assim categorias e conteúdo usam
-         * toda a largura em celular, TV Box e TV.
-         *
-         * A prévia de filmes/séries fica para a tela
-         * de detalhes após o OK.
-         */
-        b.previewTopHost.visibility =
-            View.GONE
+        when (filter) {
 
-        b.previewSideHost.visibility =
-            View.GONE
+            ContentType.LIVE -> {
 
-        b.previewPanel.visibility =
-            View.GONE
+                movePreviewTo(
+                    host =
+                        b.previewSideHost,
 
-        stopPreview()
+                    compact =
+                        false
+                )
+
+                b.previewTopHost.visibility =
+                    View.GONE
+
+                b.previewSideHost.visibility =
+                    View.VISIBLE
+            }
+
+            ContentType.VOD,
+            ContentType.SERIES -> {
+
+                b.previewTopHost.visibility =
+                    View.VISIBLE
+
+                movePreviewTo(
+                    host =
+                        b.previewTopHost,
+
+                    compact =
+                        true
+                )
+
+                b.previewSideHost.visibility =
+                    View.GONE
+            }
+
+            else -> {
+
+                movePreviewTo(
+                    host =
+                        b.previewSideHost,
+
+                    compact =
+                        false
+                )
+
+                b.previewTopHost.visibility =
+                    View.GONE
+
+                b.previewSideHost.visibility =
+                    View.GONE
+            }
+        }
     }
 
     private fun movePreviewTo(
@@ -1033,30 +1045,26 @@ class MainActivity : AppCompatActivity() {
     private fun categoryWidthDp():
         Int {
 
-        /*
-         * Mantém as categorias legíveis também
-         * em celulares em modo paisagem.
-         */
         return when {
 
             screenWidthDp() <
                 650 ->
-                165
+                96
 
             screenWidthDp() <
                 800 ->
-                180
+                112
 
             screenWidthDp() <
                 1000 ->
-                200
+                132
 
             screenWidthDp() <
                 1300 ->
-                220
+                170
 
             else ->
-                245
+                220
         }
     }
 
@@ -1962,12 +1970,6 @@ class MainActivity : AppCompatActivity() {
             lastConfig =
                 config
 
-            homeVisualPrefs =
-                parseHomeVisualPrefs(
-                    config.appearance
-                        .supportMessage
-                )
-
             val wallpaper =
                 loadBitmap(
                     config.appearance
@@ -1983,8 +1985,6 @@ class MainActivity : AppCompatActivity() {
                 )
 
             runOnUiThread {
-
-                applyHomeVisualStyle()
 
                 applyAppearance(
                     wallpaper,
@@ -2027,7 +2027,7 @@ class MainActivity : AppCompatActivity() {
 
                     val remaining =
                         (
-                            120_000 -
+                            60_000 -
                                 all.size
                             )
                             .coerceAtLeast(
@@ -2136,612 +2136,6 @@ class MainActivity : AppCompatActivity() {
 
     /*
      * =====================================================
-     * APARÊNCIA CENTRAL DA HOME
-     * =====================================================
-     *
-     * Formato salvo pelo painel:
-     *
-     * Mensagem normal
-     * [[LPSM_HOME|style=compact|banner=1|accent=7C4DFF]]
-     *
-     * O texto antes do marcador continua sendo a
-     * mensagem normal. Assim o painel antigo e o
-     * backend continuam compatíveis.
-     */
-
-    private fun parseHomeVisualPrefs(
-        raw: String
-    ): HomeVisualPrefs {
-
-        val source =
-            raw.trim()
-
-        val regex =
-            Regex(
-                """\[\[LPSM_HOME\|([^\]]+)\]\]""",
-                RegexOption.IGNORE_CASE
-            )
-
-        val match =
-            regex.find(
-                source
-            )
-
-        val message =
-            regex.replace(
-                source,
-                ""
-            )
-                .trim()
-                .ifBlank {
-                    "Escolha o que deseja assistir"
-                }
-
-        if (
-            match == null
-        ) {
-            return HomeVisualPrefs(
-                message = message
-            )
-        }
-
-        val values =
-            match.groupValues
-                .getOrNull(1)
-                .orEmpty()
-                .split('|')
-                .mapNotNull {
-                    part ->
-
-                    val index =
-                        part.indexOf('=')
-
-                    if (
-                        index <= 0
-                    ) {
-                        null
-                    } else {
-                        part.substring(
-                            0,
-                            index
-                        )
-                            .trim()
-                            .lowercase() to
-                            part.substring(
-                                index + 1
-                            )
-                                .trim()
-                    }
-                }
-                .toMap()
-
-        val style =
-            when (
-                values[
-                    "style"
-                ]
-                    ?.lowercase()
-            ) {
-
-                "compact",
-                "compacto" ->
-                    "compact"
-
-                "classic",
-                "classico",
-                "clássico" ->
-                    "classic"
-
-                else ->
-                    "standard"
-            }
-
-        val showBanner =
-            values[
-                "banner"
-            ]
-                ?.lowercase()
-                ?.let {
-                    value ->
-
-                    value != "0" &&
-                        value != "false" &&
-                        value != "nao" &&
-                        value != "não"
-                }
-                ?: true
-
-        val accent =
-            values[
-                "accent"
-            ]
-                ?.replace(
-                    "#",
-                    ""
-                )
-                ?.uppercase()
-                ?.takeIf {
-                    value ->
-
-                    value.matches(
-                        Regex(
-                            "[0-9A-F]{6}"
-                        )
-                    )
-                }
-                ?: "7C4DFF"
-
-        return HomeVisualPrefs(
-            message = message,
-            style = style,
-            showBanner = showBanner,
-            accentHex = accent
-        )
-    }
-
-
-    private fun homeAccentColor():
-        Int {
-
-        return try {
-            Color.parseColor(
-                "#${homeVisualPrefs.accentHex}"
-            )
-        } catch (
-            _: Exception
-        ) {
-            Color.parseColor(
-                "#7C4DFF"
-            )
-        }
-    }
-
-
-    private fun prepareHomeButtons() {
-
-        b.homeLive
-            .setCompoundDrawablesWithIntrinsicBounds(
-                0,
-                R.drawable.ic_home_live,
-                0,
-                0
-            )
-
-        b.homeVod
-            .setCompoundDrawablesWithIntrinsicBounds(
-                0,
-                R.drawable.ic_home_movies,
-                0,
-                0
-            )
-
-        b.homeSeries
-            .setCompoundDrawablesWithIntrinsicBounds(
-                0,
-                R.drawable.ic_home_series,
-                0,
-                0
-            )
-
-        listOf(
-            b.homeLive,
-            b.homeVod,
-            b.homeSeries
-        ).forEach {
-            button ->
-
-            button.compoundDrawablePadding =
-                dp(5)
-
-            button.gravity =
-                Gravity.CENTER
-
-            button.setPadding(
-                dp(6),
-                dp(6),
-                dp(6),
-                dp(6)
-            )
-        }
-    }
-
-
-    private fun homeSubtitleView():
-        TextView? {
-
-        return b.homePanel
-            .childrenTextViews()
-            .firstOrNull {
-                view ->
-
-                view.id ==
-                    View.NO_ID &&
-                    view !==
-                    b.homeWelcome
-            }
-    }
-
-
-    private fun LinearLayout.childrenTextViews():
-        List<TextView> {
-
-        val result =
-            mutableListOf<TextView>()
-
-        for (
-            index in
-            0 until childCount
-        ) {
-            val child =
-                getChildAt(
-                    index
-                )
-
-            if (
-                child is TextView
-            ) {
-                result.add(
-                    child
-                )
-            }
-        }
-
-        return result
-    }
-
-
-    private fun applyHomeVisualStyle() {
-
-        val accent =
-            homeAccentColor()
-
-        val focusColor =
-            Color.parseColor(
-                "#FFD600"
-            )
-
-        val tint =
-            ColorStateList(
-                arrayOf(
-                    intArrayOf(
-                        android.R.attr.state_focused
-                    ),
-                    intArrayOf(
-                        android.R.attr.state_pressed
-                    ),
-                    intArrayOf()
-                ),
-                intArrayOf(
-                    focusColor,
-                    focusColor,
-                    accent
-                )
-            )
-
-        val compactHeight =
-            screenHeightDp() <=
-                430
-
-        val buttonRowHeight =
-            when (
-                homeVisualPrefs.style
-            ) {
-
-                "compact" ->
-                    if (
-                        compactHeight
-                    ) {
-                        62
-                    } else {
-                        78
-                    }
-
-                "classic" ->
-                    if (
-                        compactHeight
-                    ) {
-                        70
-                    } else {
-                        94
-                    }
-
-                else ->
-                    if (
-                        compactHeight
-                    ) {
-                        78
-                    } else {
-                        108
-                    }
-            }
-
-        val homeButtonTextSize =
-            when (
-                homeVisualPrefs.style
-            ) {
-
-                "compact" ->
-                    if (
-                        compactHeight
-                    ) {
-                        11f
-                    } else {
-                        13f
-                    }
-
-                "classic" ->
-                    if (
-                        compactHeight
-                    ) {
-                        12f
-                    } else {
-                        14f
-                    }
-
-                else ->
-                    if (
-                        compactHeight
-                    ) {
-                        12f
-                    } else {
-                        15f
-                    }
-            }
-
-        val buttonRow =
-            b.homeLive.parent as?
-                LinearLayout
-
-        buttonRow
-            ?.layoutParams
-            ?.let {
-                params ->
-
-                if (
-                    params is
-                    LinearLayout.LayoutParams
-                ) {
-                    params.height =
-                        dp(
-                            buttonRowHeight
-                        )
-
-                    params.weight =
-                        0f
-
-                    buttonRow.layoutParams =
-                        params
-                }
-            }
-
-        listOf(
-            b.homeLive,
-            b.homeVod,
-            b.homeSeries
-        ).forEach {
-            button ->
-
-            button.textSize =
-                homeButtonTextSize
-
-            button.minHeight =
-                0
-
-            button.minimumHeight =
-                0
-
-            button.backgroundTintList =
-                tint
-
-            button.setTextColor(
-                Color.WHITE
-            )
-
-            button.compoundDrawablePadding =
-                if (
-                    homeVisualPrefs.style ==
-                    "compact"
-                ) {
-                    dp(2)
-                } else {
-                    dp(5)
-                }
-        }
-
-        b.homeWelcome.textSize =
-            if (
-                compactHeight
-            ) {
-                17f
-            } else {
-                22f
-            }
-
-        homeSubtitleView()
-            ?.apply {
-
-                text =
-                    homeVisualPrefs.message
-
-                textSize =
-                    if (
-                        compactHeight
-                    ) {
-                        10f
-                    } else {
-                        13f
-                    }
-            }
-
-        homeBannerView
-            ?.layoutParams
-            ?.let {
-                params ->
-
-                params.height =
-                    dp(
-                        when (
-                            homeVisualPrefs.style
-                        ) {
-
-                            "compact" ->
-                                if (
-                                    compactHeight
-                                ) {
-                                    70
-                                } else {
-                                    105
-                                }
-
-                            "classic" ->
-                                if (
-                                    compactHeight
-                                ) {
-                                    78
-                                } else {
-                                    118
-                                }
-
-                            else ->
-                                if (
-                                    compactHeight
-                                ) {
-                                    86
-                                } else {
-                                    135
-                                }
-                        }
-                    )
-
-                homeBannerView
-                    ?.layoutParams =
-                    params
-            }
-
-        b.homePanel.gravity =
-            Gravity.TOP or
-                Gravity.CENTER_HORIZONTAL
-    }
-
-
-    /*
-     * =====================================================
-     * BANNER DA HOME
-     * =====================================================
-     */
-
-    private fun prepareHomeBanner() {
-
-        if (
-            homeBannerView !=
-            null
-        ) {
-
-            return
-        }
-
-        val bannerView =
-            ImageView(
-                this
-            ).apply {
-
-                scaleType =
-                    ImageView.ScaleType
-                        .CENTER_CROP
-
-                visibility =
-                    View.GONE
-
-                isFocusable =
-                    false
-
-                isClickable =
-                    false
-
-                contentDescription =
-                    "Banner LPSM"
-
-                setBackgroundColor(
-                    Color.TRANSPARENT
-                )
-            }
-
-        val params =
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(
-                    homeBannerHeightDp()
-                )
-            ).apply {
-
-                setMargins(
-                    dp(8),
-                    dp(6),
-                    dp(8),
-                    dp(5)
-                )
-            }
-
-        bannerView.layoutParams =
-            params
-
-        /*
-         * ORDEM CORRETA DA HOME:
-         *
-         * 0 = banner
-         * 1 = BEM-VINDO
-         * 2 = texto "Escolha..."
-         * 3 = botões TV / Filmes / Séries
-         *
-         * O banner fica sempre no topo da área central
-         * e os botões permanecem abaixo dele.
-         */
-        val position =
-            0
-
-        b.homePanel.addView(
-            bannerView,
-            position
-        )
-
-        homeBannerView =
-            bannerView
-    }
-
-
-    private fun homeBannerHeightDp():
-        Int {
-
-        return when {
-
-            screenHeightDp() <=
-                340 ->
-                58
-
-            screenHeightDp() <=
-                380 ->
-                68
-
-            screenHeightDp() <=
-                430 ->
-                82
-
-            screenHeightDp() <=
-                520 ->
-                96
-
-            screenHeightDp() <=
-                700 ->
-                125
-
-            else ->
-                155
-        }
-    }
-
-
-    /*
-     * =====================================================
      * APARÊNCIA
      * =====================================================
      */
@@ -2751,55 +2145,11 @@ class MainActivity : AppCompatActivity() {
         banner: Bitmap?
     ) {
 
-        /*
-         * PAPEL DE PAREDE
-         */
         b.wallpaper
             .setImageBitmap(
                 wallpaper
             )
 
-        /*
-         * BANNER NA HOME
-         *
-         * Sem banner configurado:
-         * não reserva nenhum espaço.
-         *
-         * Com banner:
-         * aparece automaticamente entre
-         * o título de boas-vindas e os botões.
-         */
-        homeBannerView
-            ?.apply {
-
-                if (
-                    banner !=
-                    null &&
-                    homeVisualPrefs.showBanner
-                ) {
-
-                    setImageBitmap(
-                        banner
-                    )
-
-                    visibility =
-                        View.VISIBLE
-
-                } else {
-
-                    setImageDrawable(
-                        null
-                    )
-
-                    visibility =
-                        View.GONE
-                }
-            }
-
-        /*
-         * Continua utilizando o mesmo banner
-         * também na tela de falha.
-         */
         b.failureBanner
             .setImageBitmap(
                 banner
@@ -3088,15 +2438,13 @@ class MainActivity : AppCompatActivity() {
 
             } else {
 
-                homeVisualPrefs
-                    .message
+                config.appearance
+                    .supportMessage
                     .ifBlank {
 
                         "Somente conteúdo autorizado"
                     }
             }
-
-        applyHomeVisualStyle()
 
         b.homeLive
             .requestFocus()
@@ -3393,246 +2741,6 @@ class MainActivity : AppCompatActivity() {
 
     /*
      * =====================================================
-     * CONTROLE PARENTAL - CONTEÚDO PORNOGRÁFICO
-     * =====================================================
-     *
-     * IMPORTANTE:
-     * +18 / 18+ sozinhos não são considerados pornô.
-     * Assim filmes comuns classificados para maiores
-     * de 18 anos continuam abrindo normalmente.
-     */
-
-    private fun isPornProtectedEntry(
-        item: MediaEntry
-    ): Boolean {
-
-        val combined =
-            buildString {
-
-                append(item.name)
-                append(' ')
-                append(item.group)
-                append(' ')
-                append(item.seriesName)
-            }
-
-        return isPornProtectedText(
-            combined
-        )
-    }
-
-    private fun isPornProtectedText(
-        text: String
-    ): Boolean {
-
-        val value =
-            text
-                .lowercase()
-                .replace('ô', 'o')
-                .replace('ó', 'o')
-                .replace('í', 'i')
-                .replace('é', 'e')
-                .replace('ê', 'e')
-                .replace('á', 'a')
-                .replace('ã', 'a')
-                .replace('ç', 'c')
-
-        /*
-         * Evita falso positivo em Adult Swim.
-         */
-        if (
-            "adult swim" in
-            value
-        ) {
-
-            return false
-        }
-
-        val explicitPornPattern =
-            Regex(
-                pattern =
-                    """(^|[\s|_\-:/\[\]()])(?:adultos?|xxx|porn|porno|pornografia|erotico|eroticos|sexo|sex|playboy|hustler|brazzers|redlight)(?=$|[\s|_\-:/\[\]()])""",
-                option =
-                    RegexOption.IGNORE_CASE
-            )
-
-        return explicitPornPattern
-            .containsMatchIn(
-                value
-            )
-    }
-
-    private fun adultGroupKey(
-        group: String
-    ): String {
-
-        return group
-            .trim()
-            .lowercase()
-    }
-
-    private fun adultUnlockKey(
-        item: MediaEntry
-    ): String {
-
-        val group =
-            item.group
-                .trim()
-
-        return if (
-            group.isNotBlank()
-        ) {
-
-            adultGroupKey(
-                group
-            )
-
-        } else {
-
-            "item:${item.url}"
-        }
-    }
-
-    private fun isAdultGroupUnlocked(
-        group: String
-    ): Boolean {
-
-        return adultGroupKey(
-            group
-        ) in unlockedAdultGroups
-    }
-
-    private fun isAdultUnlocked(
-        item: MediaEntry
-    ): Boolean {
-
-        return adultUnlockKey(
-            item
-        ) in unlockedAdultGroups
-    }
-
-    private fun showAdultPinDialog(
-        unlockKey: String,
-        onUnlocked: () -> Unit
-    ) {
-
-        val input =
-            EditText(
-                this
-            ).apply {
-
-                hint =
-                    "Senha"
-
-                inputType =
-                    android.text.InputType.TYPE_CLASS_NUMBER or
-                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-
-                isSingleLine =
-                    true
-
-                gravity =
-                    Gravity.CENTER
-
-                textSize =
-                    22f
-
-                setPadding(
-                    dp(18),
-                    dp(10),
-                    dp(18),
-                    dp(10)
-                )
-            }
-
-        val container =
-            FrameLayout(
-                this
-            ).apply {
-
-                setPadding(
-                    dp(24),
-                    dp(8),
-                    dp(24),
-                    0
-                )
-
-                addView(
-                    input,
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                    )
-                )
-            }
-
-        val dialog =
-            AlertDialog
-                .Builder(
-                    this
-                )
-                .setTitle(
-                    "Conteúdo protegido"
-                )
-                .setMessage(
-                    "Digite a senha para acessar canais ou filmes adultos."
-                )
-                .setView(
-                    container
-                )
-                .setPositiveButton(
-                    "ENTRAR",
-                    null
-                )
-                .setNegativeButton(
-                    "CANCELAR"
-                ) {
-                        dialogInterface,
-                        _ ->
-
-                    dialogInterface.dismiss()
-                }
-                .create()
-
-        dialog.setOnShowListener {
-
-            input.requestFocus()
-
-            dialog
-                .getButton(
-                    AlertDialog.BUTTON_POSITIVE
-                )
-                .setOnClickListener {
-
-                    if (
-                        input.text
-                            .toString() ==
-                        adultPin
-                    ) {
-
-                        unlockedAdultGroups.add(
-                            unlockKey
-                        )
-
-                        dialog.dismiss()
-
-                        onUnlocked()
-
-                    } else {
-
-                        input.error =
-                            "Senha incorreta"
-
-                        input.selectAll()
-                    }
-                }
-        }
-
-        dialog.show()
-    }
-
-    /*
-     * =====================================================
      * RENDER PRINCIPAL
      * =====================================================
      */
@@ -3785,7 +2893,7 @@ class MainActivity : AppCompatActivity() {
         updatePreviewPosition()
 
         b.previewPanel.visibility =
-            View.GONE
+            View.VISIBLE
 
         when (filter) {
 
@@ -5253,29 +4361,39 @@ class MainActivity : AppCompatActivity() {
     private fun posterColumns():
         Int {
 
-        /*
-         * No celular usamos uma coluna a menos,
-         * deixando as capas maiores e mais fáceis
-         * de ler. Em telas grandes aumentamos
-         * progressivamente.
-         */
-        return when {
+        val availableWidth =
+            (
+                screenWidthDp() -
+                    categoryWidthDp() -
+                    24
+                )
+                .coerceAtLeast(
+                    220
+                )
 
-            screenWidthDp() <
-                650 ->
-                3
+        val targetCardWidth =
+            when {
 
-            screenWidthDp() <
-                900 ->
-                4
+                screenHeightDp() <=
+                    380 ->
+                    112
 
-            screenWidthDp() <
-                1200 ->
-                5
+                screenHeightDp() <=
+                    520 ->
+                    145
 
-            else ->
+                else ->
+                    190
+            }
+
+        return (
+            availableWidth /
+                (targetCardWidth + 10)
+            )
+            .coerceIn(
+                2,
                 6
-        }
+            )
     }
 
     /*
@@ -5305,206 +4423,17 @@ class MainActivity : AppCompatActivity() {
         groupsByType =
             entriesByType
                 .mapValues {
-                        (type, values) ->
+                        (_, values) ->
 
-                    values.groupBy { entry ->
+                    values.groupBy {
 
-                        when (type) {
+                        it.group
+                            .ifBlank {
 
-                            ContentType.LIVE ->
-                                liveDisplayGroup(entry)
-
-                            else ->
-                                entry.group
-                                    .ifBlank {
-
-                                        "Outros"
-                                    }
-                        }
+                                "Outros"
+                            }
                     }
                 }
-    }
-
-    /*
-     * =====================================================
-     * ORGANIZAÇÃO DOS CANAIS GLOBO / AFILIADAS
-     * =====================================================
-     *
-     * Mantemos as categorias originais da lista para todos
-     * os demais canais. Somente os canais Globo/afiliadas
-     * são reorganizados em duas categorias mais fáceis:
-     *
-     * - Globo Sul / RBS
-     * - Globo Capitais
-     *
-     * Isso não altera a URL do canal e não duplica canais.
-     */
-
-    private fun liveDisplayGroup(
-        entry: MediaEntry
-    ): String {
-
-        val originalGroup =
-            entry.group
-                .trim()
-                .ifBlank {
-
-                    "Outros"
-                }
-
-        val combined =
-            normalizeCategoryText(
-                "${entry.group} ${entry.name}"
-            )
-
-        if (
-            isGloboSouthChannel(
-                combined
-            )
-        ) {
-
-            return "Globo Sul / RBS"
-        }
-
-        if (
-            isGloboCapitalChannel(
-                combined
-            )
-        ) {
-
-            return "Globo Capitais"
-        }
-
-        return originalGroup
-    }
-
-    private fun isGloboSouthChannel(
-        text: String
-    ): Boolean {
-
-        val affiliateMarker =
-            listOf(
-                "rbs",
-                "rbs tv",
-                "nsc",
-                "nsc tv",
-                "rpc",
-                "rpc tv",
-                "globo sul"
-            ).any { marker ->
-
-                marker in text
-            }
-
-        if (affiliateMarker) {
-
-            return true
-        }
-
-        val isGlobo =
-            "globo" in text
-
-        if (!isGlobo) {
-
-            return false
-        }
-
-        return listOf(
-            "rio grande do sul",
-            "porto alegre",
-            "caxias do sul",
-            "pelotas",
-            "santa maria",
-            "passo fundo",
-            "erechim",
-            "uruguaiana",
-            "bage",
-            "santa cruz do sul",
-            "parana",
-            "curitiba",
-            "londrina",
-            "maringa",
-            "cascavel",
-            "santa catarina",
-            "florianopolis",
-            "joinville",
-            "blumenau",
-            "chapeco"
-        ).any { location ->
-
-            location in text
-        }
-    }
-
-    private fun isGloboCapitalChannel(
-        text: String
-    ): Boolean {
-
-        if (
-            "globo" !in text
-        ) {
-
-            return false
-        }
-
-        if (
-            isGloboSouthChannel(
-                text
-            )
-        ) {
-
-            return false
-        }
-
-        return listOf(
-            "rio de janeiro",
-            "sao paulo",
-            "belo horizonte",
-            "brasilia",
-            "salvador",
-            "recife",
-            "fortaleza",
-            "goiania",
-            "vitoria",
-            "belem",
-            "manaus",
-            "maceio",
-            "natal",
-            "joao pessoa",
-            "teresina",
-            "sao luis",
-            "aracaju",
-            "cuiaba",
-            "campo grande",
-            "porto velho",
-            "rio branco",
-            "macapa",
-            "boa vista",
-            "palmas"
-        ).any { capital ->
-
-            capital in text
-        }
-    }
-
-    private fun normalizeCategoryText(
-        value: String
-    ): String {
-
-        return java.text.Normalizer
-            .normalize(
-                value.lowercase(),
-                java.text.Normalizer.Form.NFD
-            )
-            .replace(
-                Regex("\\p{Mn}+"),
-                ""
-            )
-            .replace(
-                Regex("\\s+"),
-                " "
-            )
-            .trim()
     }
 
     /*
