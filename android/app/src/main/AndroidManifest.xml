@@ -33,7 +33,8 @@
         android:label="LPSM"
         android:networkSecurityConfig="@xml/network_security_config"
         android:banner="@drawable/tv_banner"
-        android:icon="@drawable/app_icon"
+        android:icon="@drawable/app_icon_lpsm"
+        android:roundIcon="@drawable/app_icon_lpsm"
         android:resizeableActivity="true"
         android:supportsRtl="true">
 
