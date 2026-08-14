@@ -10,14 +10,32 @@ let state = {
 };
 
 const request = async (path, options = {}) => {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${localStorage.lpsmToken || ''}`,
-      ...options.headers
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    90000
+  );
+
+  let response;
+
+  try {
+    response = await fetch(path, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${sessionStorage.lpsmToken || ''}`,
+        ...options.headers
+      }
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw Error('O servidor demorou para iniciar. Tente novamente em alguns segundos.');
     }
-  });
+    throw Error('Não foi possível conectar ao servidor. Verifique a internet e tente novamente.');
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const raw = await response.text();
   let data = {};
@@ -31,14 +49,61 @@ const request = async (path, options = {}) => {
   }
 
   if (!response.ok) {
-    throw Error(
+    const error = Error(
       data.error ||
       `Erro ${response.status}`
     );
+    error.status = response.status;
+    throw error;
   }
 
   return data;
 };
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .catch(() => {});
+  });
+}
+
+const warmServer = async () => {
+  const output = $('output');
+  const message =
+    'Servidor gratuito iniciando. Aguarde alguns segundos…';
+
+  const notice = setTimeout(() => {
+    if (output && !output.textContent.trim()) {
+      output.textContent = message;
+    }
+  }, 500);
+
+  try {
+    const response = await fetch(
+      '/api/health',
+      {
+        cache: 'no-store'
+      }
+    );
+
+    if (
+      response.ok &&
+      output?.textContent === message
+    ) {
+      output.textContent = '';
+    }
+  } catch {
+    if (output) {
+      output.textContent =
+        'Não foi possível conectar ao servidor. Tente novamente.';
+    }
+  } finally {
+    clearTimeout(notice);
+  }
+};
+
+warmServer();
 
 const esc = value =>
   String(value ?? '').replace(
@@ -2034,7 +2099,7 @@ $('#loginForm')
           )
         );
 
-      localStorage.lpsmToken =
+      sessionStorage.lpsmToken =
         (
           await request(
             '/api/admin/login',
@@ -2083,17 +2148,22 @@ async function enter() {
         'hidden'
       );
 
-  } catch {
+  } catch (error) {
 
-    localStorage
-      .removeItem(
-        'lpsmToken'
-      );
+    if (error.status === 401) {
+      sessionStorage
+        .removeItem(
+          'lpsmToken'
+        );
+    } else {
+      $('output').textContent =
+        error.message;
+    }
   }
 }
 
 if (
-  localStorage.lpsmToken
+  sessionStorage.lpsmToken
 ) {
   enter();
 }
@@ -2102,7 +2172,7 @@ $('#logout')
   .onclick =
   () => {
 
-    localStorage
+    sessionStorage
       .removeItem(
         'lpsmToken'
       );
