@@ -153,6 +153,37 @@ class MainActivity : AppCompatActivity() {
     private var previewTarget:
         String? = null
 
+    /*
+     * =====================================================
+     * APARÊNCIA DA HOME
+     * =====================================================
+     *
+     * O painel salva as preferências da HOME dentro de
+     * supportMessage no formato:
+     *
+     * [[LPSM_HOME|style=standard|banner=1|accent=7C4DFF]]
+     *
+     * Mantemos esse formato para não quebrar o backend atual.
+     */
+    private data class HomeVisualPrefs(
+        val message: String = "Escolha o que deseja assistir",
+        val style: String = "standard",
+        val showBanner: Boolean = true,
+        val accentHex: String = "7C4DFF"
+    )
+
+    private var homeVisualPrefs =
+        HomeVisualPrefs()
+
+    private var homeBannerView:
+        ImageView? = null
+
+    private var homeSubtitle:
+        TextView? = null
+
+    private var homeButtonsRow:
+        LinearLayout? = null
+
     override fun onCreate(
         savedInstanceState: Bundle?
     ) {
@@ -175,6 +206,12 @@ class MainActivity : AppCompatActivity() {
          * do celular, tablet, TV Box ou TV.
          */
         applyResponsiveSizing()
+
+        /*
+         * Cria o banner da HOME no topo e captura os
+         * elementos que já existem no XML.
+         */
+        prepareHomeAppearance()
 
         store =
             SecureStore(this)
@@ -1987,6 +2024,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
 
                 applyAppearance(
+                    config.appearance,
                     wallpaper,
                     banner
                 )
@@ -2140,7 +2178,252 @@ class MainActivity : AppCompatActivity() {
      * =====================================================
      */
 
+    private fun prepareHomeAppearance() {
+
+        /*
+         * O XML original possui:
+         * 0 = título
+         * 1 = subtítulo
+         * 2 = linha dos três botões
+         *
+         * Guardamos essas referências antes de inserir
+         * o banner como o novo primeiro item.
+         */
+        if (
+            homeSubtitle ==
+            null
+        ) {
+
+            homeSubtitle =
+                b.homePanel
+                    .getChildAt(
+                        1
+                    )
+                    as? TextView
+        }
+
+        if (
+            homeButtonsRow ==
+            null
+        ) {
+
+            homeButtonsRow =
+                b.homeLive.parent
+                    as? LinearLayout
+        }
+
+        if (
+            homeBannerView ==
+            null
+        ) {
+
+            val banner =
+                ImageView(this)
+                    .apply {
+
+                        scaleType =
+                            ImageView.ScaleType.CENTER_CROP
+
+                        adjustViewBounds =
+                            false
+
+                        visibility =
+                            View.GONE
+
+                        contentDescription =
+                            "Banner da tela inicial"
+
+                        setBackgroundColor(
+                            Color.rgb(
+                                8,
+                                14,
+                                24
+                            )
+                        )
+                    }
+
+            b.homePanel
+                .addView(
+                    banner,
+                    0
+                )
+
+            homeBannerView =
+                banner
+        }
+
+        /*
+         * Antes o painel inteiro ficava centralizado.
+         * Como a linha de botões tinha layout_weight=1,
+         * os botões acabavam ocupando quase toda a tela.
+         *
+         * Agora tudo começa pelo topo:
+         * BANNER -> TÍTULO -> SUBTÍTULO -> BOTÕES.
+         */
+        b.homePanel.gravity =
+            Gravity.TOP or
+                Gravity.CENTER_HORIZONTAL
+    }
+
+
+    private fun parseHomeVisualPrefs(
+        rawSupportMessage: String
+    ): HomeVisualPrefs {
+
+        val markerRegex =
+            Regex(
+                """\[\[LPSM_HOME\|([^\]]+)]]""",
+                RegexOption.IGNORE_CASE
+            )
+
+        val match =
+            markerRegex
+                .find(
+                    rawSupportMessage
+                )
+
+        var style =
+            "standard"
+
+        var showBanner =
+            true
+
+        var accent =
+            "7C4DFF"
+
+        match
+            ?.groupValues
+            ?.getOrNull(
+                1
+            )
+            ?.split(
+                "|"
+            )
+            ?.forEach {
+                    part ->
+
+                val separator =
+                    part.indexOf(
+                        "="
+                    )
+
+                if (
+                    separator <=
+                    0
+                ) {
+
+                    return@forEach
+                }
+
+                val key =
+                    part
+                        .substring(
+                            0,
+                            separator
+                        )
+                        .trim()
+                        .lowercase()
+
+                val value =
+                    part
+                        .substring(
+                            separator +
+                                1
+                        )
+                        .trim()
+
+                when (
+                    key
+                ) {
+
+                    "style" -> {
+
+                        style =
+                            value
+                                .lowercase()
+                    }
+
+                    "banner" -> {
+
+                        showBanner =
+                            value !=
+                                "0" &&
+                                !value.equals(
+                                    "false",
+                                    true
+                                )
+                    }
+
+                    "accent" -> {
+
+                        accent =
+                            value
+                                .replace(
+                                    "#",
+                                    ""
+                                )
+                                .trim()
+                                .uppercase()
+                    }
+                }
+            }
+
+        if (
+            style !in
+            listOf(
+                "standard",
+                "compact",
+                "classic"
+            )
+        ) {
+
+            style =
+                "standard"
+        }
+
+        if (
+            !Regex(
+                "^[0-9A-F]{6}$"
+            )
+                .matches(
+                    accent
+                )
+        ) {
+
+            accent =
+                "7C4DFF"
+        }
+
+        val cleanMessage =
+            rawSupportMessage
+                .replace(
+                    markerRegex,
+                    ""
+                )
+                .trim()
+                .ifBlank {
+
+                    "Escolha o que deseja assistir"
+                }
+
+        return HomeVisualPrefs(
+            message =
+                cleanMessage,
+
+            style =
+                style,
+
+            showBanner =
+                showBanner,
+
+            accentHex =
+                accent
+        )
+    }
+
+
     private fun applyAppearance(
+        appearance: Appearance,
         wallpaper: Bitmap?,
         banner: Bitmap?
     ) {
@@ -2150,11 +2433,693 @@ class MainActivity : AppCompatActivity() {
                 wallpaper
             )
 
+        /*
+         * Mantém o banner também na tela de falha,
+         * como já acontecia antes.
+         */
         b.failureBanner
             .setImageBitmap(
                 banner
             )
+
+        homeVisualPrefs =
+            parseHomeVisualPrefs(
+                appearance
+                    .supportMessage
+            )
+
+        applyHomeAppearance(
+            appearance =
+                appearance,
+
+            banner =
+                banner
+        )
     }
+
+
+    private fun applyHomeAppearance(
+        appearance: Appearance,
+        banner: Bitmap?
+    ) {
+
+        prepareHomeAppearance()
+
+        val prefs =
+            homeVisualPrefs
+
+        /*
+         * Mensagem real da HOME, sem o marcador técnico
+         * [[LPSM_HOME|...]].
+         */
+        homeSubtitle
+            ?.text =
+            prefs.message
+
+        val accentColor =
+            try {
+
+                Color.parseColor(
+                    "#${prefs.accentHex}"
+                )
+
+            } catch (
+                _: Exception
+            ) {
+
+                Color.parseColor(
+                    "#7C4DFF"
+                )
+            }
+
+        val accentFocused =
+            lightenColor(
+                accentColor,
+                0.20f
+            )
+
+        val homeTint =
+            android.content.res
+                .ColorStateList(
+                    arrayOf(
+                        intArrayOf(
+                            android.R.attr
+                                .state_focused
+                        ),
+                        intArrayOf(
+                            android.R.attr
+                                .state_selected
+                        ),
+                        intArrayOf()
+                    ),
+                    intArrayOf(
+                        accentFocused,
+                        accentFocused,
+                        accentColor
+                    )
+                )
+
+        val heightDp =
+            screenHeightDp()
+
+        val veryCompact =
+            isVeryCompactScreen()
+
+        val compact =
+            isCompactScreen()
+
+        /*
+         * Cada modelo possui dimensões realmente diferentes.
+         * Não usamos mais layout_weight=1 na linha dos botões.
+         */
+        val bannerHeightDp:
+            Int
+
+        val buttonsHeightDp:
+            Int
+
+        val buttonTextSize:
+            Float
+
+        val welcomeTextSize:
+            Float
+
+        val panelTopPaddingDp:
+            Int
+
+        when (
+            prefs.style
+        ) {
+
+            "compact" -> {
+
+                bannerHeightDp =
+                    when {
+                        heightDp <=
+                            380 ->
+                            72
+
+                        heightDp <=
+                            520 ->
+                            88
+
+                        heightDp <=
+                            700 ->
+                            105
+
+                        else ->
+                            125
+                    }
+
+                buttonsHeightDp =
+                    when {
+                        veryCompact ->
+                            60
+
+                        compact ->
+                            68
+
+                        else ->
+                            78
+                    }
+
+                buttonTextSize =
+                    when {
+                        veryCompact ->
+                            11f
+
+                        compact ->
+                            13f
+
+                        else ->
+                            15f
+                    }
+
+                welcomeTextSize =
+                    when {
+                        veryCompact ->
+                            17f
+
+                        compact ->
+                            20f
+
+                        else ->
+                            23f
+                    }
+
+                panelTopPaddingDp =
+                    6
+            }
+
+            "classic" -> {
+
+                bannerHeightDp =
+                    when {
+                        heightDp <=
+                            380 ->
+                            82
+
+                        heightDp <=
+                            520 ->
+                            100
+
+                        heightDp <=
+                            700 ->
+                            125
+
+                        else ->
+                            145
+                    }
+
+                /*
+                 * No clássico, os três botões ficam empilhados.
+                 */
+                buttonsHeightDp =
+                    when {
+                        veryCompact ->
+                            132
+
+                        compact ->
+                            154
+
+                        else ->
+                            174
+                    }
+
+                buttonTextSize =
+                    when {
+                        veryCompact ->
+                            11f
+
+                        compact ->
+                            13f
+
+                        else ->
+                            15f
+                    }
+
+                welcomeTextSize =
+                    when {
+                        veryCompact ->
+                            18f
+
+                        compact ->
+                            21f
+
+                        else ->
+                            24f
+                    }
+
+                panelTopPaddingDp =
+                    8
+            }
+
+            else -> {
+
+                /*
+                 * MODELO PADRÃO:
+                 * banner maior em cima e três cartões menores abaixo.
+                 */
+                bannerHeightDp =
+                    when {
+                        heightDp <=
+                            380 ->
+                            92
+
+                        heightDp <=
+                            520 ->
+                            118
+
+                        heightDp <=
+                            700 ->
+                            148
+
+                        else ->
+                            178
+                    }
+
+                buttonsHeightDp =
+                    when {
+                        veryCompact ->
+                            72
+
+                        compact ->
+                            88
+
+                        else ->
+                            105
+                    }
+
+                buttonTextSize =
+                    when {
+                        veryCompact ->
+                            12f
+
+                        compact ->
+                            15f
+
+                        else ->
+                            17f
+                    }
+
+                welcomeTextSize =
+                    when {
+                        veryCompact ->
+                            18f
+
+                        compact ->
+                            21f
+
+                        else ->
+                            25f
+                    }
+
+                panelTopPaddingDp =
+                    8
+            }
+        }
+
+        b.homePanel
+            .setPadding(
+                dp(
+                    8
+                ),
+                dp(
+                    panelTopPaddingDp
+                ),
+                dp(
+                    8
+                ),
+                dp(
+                    8
+                )
+            )
+
+        b.homeWelcome.textSize =
+            welcomeTextSize
+
+        homeSubtitle
+            ?.textSize =
+            when {
+
+                veryCompact ->
+                    10f
+
+                compact ->
+                    12f
+
+                else ->
+                    14f
+            }
+
+        /*
+         * Banner de verdade no TOPO da HOME.
+         *
+         * Se "Mostrar banner" estiver ligado e existir URL,
+         * o espaço fica reservado no topo mesmo se a imagem
+         * demorar ou falhar ao baixar.
+         */
+        val shouldShowBanner =
+            prefs.showBanner &&
+                appearance
+                    .bannerUrl
+                    .isNotBlank()
+
+        homeBannerView
+            ?.apply {
+
+                visibility =
+                    if (
+                        shouldShowBanner
+                    ) {
+
+                        View.VISIBLE
+
+                    } else {
+
+                        View.GONE
+                    }
+
+                setImageBitmap(
+                    if (
+                        shouldShowBanner
+                    ) {
+
+                        banner
+
+                    } else {
+
+                        null
+                    }
+                )
+
+                layoutParams =
+                    LinearLayout
+                        .LayoutParams(
+                            LinearLayout
+                                .LayoutParams
+                                .MATCH_PARENT,
+
+                            if (
+                                shouldShowBanner
+                            ) {
+
+                                dp(
+                                    bannerHeightDp
+                                )
+
+                            } else {
+
+                                0
+                            }
+                        )
+                        .apply {
+
+                            setMargins(
+                                dp(
+                                    8
+                                ),
+                                0,
+                                dp(
+                                    8
+                                ),
+                                dp(
+                                    if (
+                                        shouldShowBanner
+                                    ) {
+                                        8
+                                    } else {
+                                        0
+                                    }
+                                )
+                            )
+                        }
+            }
+
+        val row =
+            homeButtonsRow
+
+        if (
+            row !=
+            null
+        ) {
+
+            val classic =
+                prefs.style ==
+                    "classic"
+
+            row.orientation =
+                if (
+                    classic
+                ) {
+
+                    LinearLayout.VERTICAL
+
+                } else {
+
+                    LinearLayout.HORIZONTAL
+                }
+
+            row.gravity =
+                Gravity.CENTER
+
+            row.setPadding(
+                dp(
+                    if (
+                        compact
+                    ) {
+                        2
+                    } else {
+                        5
+                    }
+                ),
+                0,
+                dp(
+                    if (
+                        compact
+                    ) {
+                        2
+                    } else {
+                        5
+                    }
+                ),
+                0
+            )
+
+            row.layoutParams =
+                LinearLayout
+                    .LayoutParams(
+                        LinearLayout
+                            .LayoutParams
+                            .MATCH_PARENT,
+
+                        dp(
+                            buttonsHeightDp
+                        ),
+                        0f
+                    )
+                    .apply {
+
+                        setMargins(
+                            0,
+                            dp(
+                                if (
+                                    prefs.style ==
+                                    "compact"
+                                ) {
+                                    6
+                                } else {
+                                    10
+                                }
+                            ),
+                            0,
+                            0
+                        )
+                    }
+
+            listOf(
+                b.homeLive,
+                b.homeVod,
+                b.homeSeries
+            )
+                .forEach {
+                        button ->
+
+                    button.textSize =
+                        buttonTextSize
+
+                    button.minHeight =
+                        0
+
+                    button.minimumHeight =
+                        0
+
+                    button.minWidth =
+                        0
+
+                    button.minimumWidth =
+                        0
+
+                    button.backgroundTintList =
+                        homeTint
+
+                    button.setPadding(
+                        dp(
+                            8
+                        ),
+                        dp(
+                            4
+                        ),
+                        dp(
+                            8
+                        ),
+                        dp(
+                            4
+                        )
+                    )
+
+                    button.layoutParams =
+                        if (
+                            classic
+                        ) {
+
+                            LinearLayout
+                                .LayoutParams(
+                                    LinearLayout
+                                        .LayoutParams
+                                        .MATCH_PARENT,
+                                    0,
+                                    1f
+                                )
+                                .apply {
+
+                                    setMargins(
+                                        dp(
+                                            4
+                                        ),
+                                        dp(
+                                            2
+                                        ),
+                                        dp(
+                                            4
+                                        ),
+                                        dp(
+                                            2
+                                        )
+                                    )
+                                }
+
+                        } else {
+
+                            LinearLayout
+                                .LayoutParams(
+                                    0,
+                                    LinearLayout
+                                        .LayoutParams
+                                        .MATCH_PARENT,
+                                    1f
+                                )
+                                .apply {
+
+                                    setMargins(
+                                        dp(
+                                            4
+                                        ),
+                                        0,
+                                        dp(
+                                            4
+                                        ),
+                                        0
+                                    )
+                                }
+                        }
+                }
+        }
+
+        /*
+         * Força novo cálculo das medidas imediatamente.
+         */
+        b.homePanel
+            .requestLayout()
+    }
+
+
+    private fun lightenColor(
+        color: Int,
+        amount: Float
+    ): Int {
+
+        val safeAmount =
+            amount
+                .coerceIn(
+                    0f,
+                    1f
+                )
+
+        val red =
+            (
+                Color.red(
+                    color
+                ) +
+                (
+                    255 -
+                    Color.red(
+                        color
+                    )
+                    ) *
+                safeAmount
+                )
+                .toInt()
+                .coerceIn(
+                    0,
+                    255
+                )
+
+        val green =
+            (
+                Color.green(
+                    color
+                ) +
+                (
+                    255 -
+                    Color.green(
+                        color
+                    )
+                    ) *
+                safeAmount
+                )
+                .toInt()
+                .coerceIn(
+                    0,
+                    255
+                )
+
+        val blue =
+            (
+                Color.blue(
+                    color
+                ) +
+                (
+                    255 -
+                    Color.blue(
+                        color
+                    )
+                    ) *
+                safeAmount
+                )
+                .toInt()
+                .coerceIn(
+                    0,
+                    255
+                )
+
+        return Color.rgb(
+            red,
+            green,
+            blue
+        )
+    }
+
 
     private fun loadBitmap(
         url: String,
@@ -2183,24 +3148,54 @@ class MainActivity : AppCompatActivity() {
             connection.readTimeout =
                 15_000
 
-            connection
-                .inputStream
-                .use {
+            connection.instanceFollowRedirects =
+                true
 
-                    BitmapFactory
-                        .decodeStream(
-                            it,
-                            null,
+            connection.setRequestProperty(
+                "User-Agent",
+                "LPSM-Player/2.2.9 Android"
+            )
 
-                            BitmapFactory
-                                .Options()
-                                .apply {
+            connection.setRequestProperty(
+                "Accept",
+                "image/*,*/*;q=0.8"
+            )
 
-                                    inSampleSize =
-                                        sampleSize
-                                }
-                        )
-                }
+            connection.connect()
+
+            if (
+                connection.responseCode !in
+                200..299
+            ) {
+
+                connection.disconnect()
+
+                return null
+            }
+
+            val bitmap =
+                connection
+                    .inputStream
+                    .use {
+
+                        BitmapFactory
+                            .decodeStream(
+                                it,
+                                null,
+
+                                BitmapFactory
+                                    .Options()
+                                    .apply {
+
+                                        inSampleSize =
+                                            sampleSize
+                                    }
+                            )
+                    }
+
+            connection.disconnect()
+
+            bitmap
 
         } catch (
             _: Exception
@@ -2209,6 +3204,7 @@ class MainActivity : AppCompatActivity() {
             null
         }
     }
+
 
     /*
      * =====================================================
@@ -2438,8 +3434,8 @@ class MainActivity : AppCompatActivity() {
 
             } else {
 
-                config.appearance
-                    .supportMessage
+                homeVisualPrefs
+                    .message
                     .ifBlank {
 
                         "Somente conteúdo autorizado"
