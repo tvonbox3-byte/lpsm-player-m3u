@@ -71,6 +71,18 @@ await store.load();
 
 
 /*
+ * Presença dos aparelhos fica somente em memória.
+ * Não é necessário gravar no Supabase a cada poucos segundos.
+ * Se o servidor reiniciar, todos aparecem OFFLINE até o próximo sinal.
+ */
+const DEVICE_ONLINE_WINDOW_MS =
+  45 * 1000;
+
+const devicePresence =
+  new Map();
+
+
+/*
  * ==========================================
  * MAC
  * ==========================================
@@ -130,6 +142,49 @@ const active =
       ) >
       new Date()
     );
+
+
+const presenceForClient =
+  client => {
+
+    const lastSeenAt =
+      devicePresence.get(
+        client.id
+      ) ||
+      null;
+
+    const age =
+      lastSeenAt
+        ? Date.now() -
+          Date.parse(lastSeenAt)
+        : Infinity;
+
+    return {
+
+      online:
+        age >= 0 &&
+        age <=
+          DEVICE_ONLINE_WINDOW_MS,
+
+      lastSeenAt
+    };
+  };
+
+
+const markClientOnline =
+  client => {
+
+    const lastSeenAt =
+      new Date()
+        .toISOString();
+
+    devicePresence.set(
+      client.id,
+      lastSeenAt
+    );
+
+    return lastSeenAt;
+  };
 
 
 /*
@@ -1489,6 +1544,11 @@ async function api(
     }
 
 
+    markClientOnline(
+      client
+    );
+
+
     return json(
       res,
       200,
@@ -1513,6 +1573,98 @@ async function api(
             30 *
             86400
           )
+      }
+    );
+  }
+
+
+  /*
+   * ========================================
+   * PRESENÇA DO APK
+   * ========================================
+   *
+   * O aplicativo envia este sinal enquanto está aberto.
+   * O servidor calcula OFFLINE automaticamente quando o
+   * sinal fica mais antigo que a janela configurada.
+   */
+  if (
+    req.method ===
+      'POST' &&
+
+    path ===
+      '/api/device/heartbeat'
+  ) {
+
+    const deviceToken =
+      token(
+        req
+      );
+
+
+    if (
+      !deviceToken ||
+      deviceToken.role !==
+        'device'
+    ) {
+
+      return json(
+        res,
+        401,
+        {
+          error:
+            'Não autorizado'
+        }
+      );
+    }
+
+
+    const client =
+      store.data.clients
+        .find(
+          item =>
+            item.id ===
+              deviceToken.clientId &&
+            normalizeMac(
+              item.macAddress ||
+              item.deviceId
+            ) ===
+              deviceToken.macAddress
+        );
+
+
+    if (
+      !client ||
+      !active(client)
+    ) {
+
+      return json(
+        res,
+        403,
+        {
+          error:
+            'Cliente inativo ou expirado'
+        }
+      );
+    }
+
+
+    const lastSeenAt =
+      markClientOnline(
+        client
+      );
+
+
+    return json(
+      res,
+      200,
+      {
+        online:
+          true,
+
+        lastSeenAt,
+
+        nextHeartbeatSeconds:
+          15
       }
     );
   }
@@ -1598,6 +1750,11 @@ async function api(
         }
       );
     }
+
+
+    markClientOnline(
+      client
+    );
 
 
     /*
@@ -1771,10 +1928,27 @@ async function api(
 
         ...store.data,
 
+        clients:
+          store.data.clients
+            .map(
+              client => ({
+
+                ...client,
+
+                ...presenceForClient(
+                  client
+                )
+              })
+            ),
+
         pendingDevices:
           store.data
             .pendingDevices ||
           [],
+
+        presenceWindowSeconds:
+          DEVICE_ONLINE_WINDOW_MS /
+          1000,
 
         admin:
           undefined
