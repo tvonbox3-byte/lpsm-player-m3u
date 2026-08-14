@@ -46,9 +46,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var b: ActivityMainBinding
     private lateinit var store: SecureStore
     private lateinit var api: LpsmApi
+    private lateinit var playlistCache: PlaylistCache
 
     private val pool =
-        Executors.newSingleThreadExecutor()
+        Executors.newFixedThreadPool(4)
 
     private var entries =
         listOf<MediaEntry>()
@@ -185,6 +186,13 @@ class MainActivity : AppCompatActivity() {
         val accentHex: String = "7C4DFF"
     )
 
+    private data class EntryIndexes(
+        val byType: Map<ContentType, List<MediaEntry>>,
+        val allGroups: Map<String, List<MediaEntry>>,
+        val groupsByType:
+            Map<ContentType, Map<String, List<MediaEntry>>>
+    )
+
     private var homeVisualPrefs =
         HomeVisualPrefs()
 
@@ -234,6 +242,9 @@ class MainActivity : AppCompatActivity() {
 
         api =
             LpsmApi(store)
+
+        playlistCache =
+            PlaylistCache(this)
 
         b.deviceId.text =
             macAddress
@@ -1181,22 +1192,22 @@ class MainActivity : AppCompatActivity() {
 
             screenWidthDp() <
                 650 ->
-                96
+                125
 
             screenWidthDp() <
                 800 ->
-                112
+                155
 
             screenWidthDp() <
                 1000 ->
-                132
+                205
 
             screenWidthDp() <
                 1300 ->
-                170
+                260
 
             else ->
-                220
+                310
         }
     }
 
@@ -1263,22 +1274,22 @@ class MainActivity : AppCompatActivity() {
 
             screenWidthDp() <
                 650 ->
-                130
+                150
 
             screenWidthDp() <
                 800 ->
-                155
-
-            screenWidthDp() <
-                1000 ->
                 190
 
             screenWidthDp() <
+                1000 ->
+                250
+
+            screenWidthDp() <
                 1300 ->
-                255
+                320
 
             else ->
-                340
+                400
         }
     }
 
@@ -1315,31 +1326,25 @@ class MainActivity : AppCompatActivity() {
     private fun sidePreviewVideoHeightDp():
         Int {
 
-        return when {
-
-            screenHeightDp() <=
-                340 ->
-                60
-
-            screenHeightDp() <=
-                380 ->
-                70
-
-            screenHeightDp() <=
-                430 ->
-                82
-
-            screenHeightDp() <=
-                520 ->
-                102
-
-            screenHeightDp() <=
-                700 ->
-                145
-
-            else ->
-                190
-        }
+        /*
+         * Na TV ao vivo a prévia deve ser realmente visível à distância.
+         * Ela fica quase quadrada, limitada pela altura disponível para que
+         * o nome do canal e o botão continuem aparecendo abaixo.
+         */
+        return (
+            sidePreviewWidthDp() -
+                8
+            )
+            .coerceAtMost(
+                (
+                    screenHeightDp() *
+                        0.58f
+                    )
+                    .toInt()
+            )
+            .coerceAtLeast(
+                88
+            )
     }
 
     private fun applyResponsiveSizing() {
@@ -1602,8 +1607,7 @@ class MainActivity : AppCompatActivity() {
 
         if (
             imageContainer ==
-                null ||
-            !isCompactScreen()
+                null
         ) {
             return
         }
@@ -1623,8 +1627,16 @@ class MainActivity : AppCompatActivity() {
                     430 ->
                     84
 
+                screenHeightDp() <=
+                    520 ->
+                    92
+
+                screenHeightDp() <=
+                    700 ->
+                    104
+
                 else ->
-                    96
+                    112
             }
 
         val imageWidth =
@@ -1632,18 +1644,26 @@ class MainActivity : AppCompatActivity() {
 
                 screenHeightDp() <=
                     340 ->
-                    88
+                    50
 
                 screenHeightDp() <=
                     380 ->
-                    100
+                    54
 
                 screenHeightDp() <=
                     430 ->
-                    112
+                    60
+
+                screenHeightDp() <=
+                    520 ->
+                    66
+
+                screenHeightDp() <=
+                    700 ->
+                    76
 
                 else ->
-                    132
+                    86
             }
 
         view.layoutParams =
@@ -1672,28 +1692,36 @@ class MainActivity : AppCompatActivity() {
                         )
                 }
 
+        view.findViewById<ImageView?>(
+            R.id.mediaImage
+        )
+            ?.scaleType =
+            ImageView.ScaleType.CENTER_INSIDE
+
         view.findViewById<TextView?>(
             R.id.title
         )
             ?.textSize =
-            if (
-                isVeryCompactScreen()
-            ) {
-                12f
-            } else {
-                14f
+            when {
+
+                screenHeightDp() <= 340 -> 13f
+                screenHeightDp() <= 380 -> 14f
+                screenHeightDp() <= 430 -> 15f
+                screenHeightDp() <= 700 -> 17f
+                else -> 19f
             }
 
         view.findViewById<TextView?>(
             R.id.subtitle
         )
             ?.textSize =
-            if (
-                isVeryCompactScreen()
-            ) {
-                9f
-            } else {
-                11f
+            when {
+
+                screenHeightDp() <= 340 -> 9f
+                screenHeightDp() <= 380 -> 10f
+                screenHeightDp() <= 520 -> 11f
+                screenHeightDp() <= 700 -> 12f
+                else -> 13f
             }
     }
 
@@ -2108,45 +2136,53 @@ class MainActivity : AppCompatActivity() {
             lastConfig =
                 config
 
-            val wallpaper =
-                loadBitmap(
-                    config.appearance
-                        .wallpaperUrl,
-                    4
-                )
+            /*
+             * Banner e papel de parede não podem mais atrasar a lista.
+             * Eles são baixados em paralelo e aparecem assim que estiverem
+             * prontos.
+             */
+            val wallpaperFuture =
+                pool.submit<Bitmap?> {
+                    loadBitmap(
+                        config.appearance
+                            .wallpaperUrl,
+                        4
+                    )
+                }
 
-            val banner =
-                loadBitmap(
-                    config.appearance
-                        .bannerUrl,
-                    2
-                )
+            val bannerFuture =
+                pool.submit<Bitmap?> {
+                    loadBitmap(
+                        config.appearance
+                            .bannerUrl,
+                        2
+                    )
+                }
 
-            runOnUiThread {
+            pool.execute {
 
-                applyAppearance(
-                    config.appearance,
-                    wallpaper,
-                    banner
-                )
+                val wallpaper =
+                    try {
+                        wallpaperFuture.get()
+                    } catch (_: Throwable) {
+                        null
+                    }
 
-                b.loadingLabel.text =
-                    "Carregando ${config.playlists.size} lista(s)..."
+                val banner =
+                    try {
+                        bannerFuture.get()
+                    } catch (_: Throwable) {
+                        null
+                    }
+
+                runOnUiThread {
+                    applyAppearance(
+                        config.appearance,
+                        wallpaper,
+                        banner
+                    )
+                }
             }
-
-            val all =
-                ArrayList<MediaEntry>(
-                    8_192
-                )
-
-            val guides =
-                mutableMapOf<
-                    String,
-                    String
-                    >()
-
-            val errors =
-                mutableListOf<String>()
 
             val uniquePlaylists =
                 config.playlists
@@ -2156,6 +2192,73 @@ class MainActivity : AppCompatActivity() {
                             .trim()
                             .lowercase()
                     }
+
+            val cacheSignature =
+                playlistCache
+                    .signature(
+                        uniquePlaylists
+                    )
+
+            /*
+             * Mostra a última cópia autorizada primeiro. A lista atualizada
+             * continua sendo baixada abaixo sem travar a navegação.
+             */
+            val cachedEntries =
+                playlistCache
+                    .read(
+                        cacheSignature
+                    )
+
+            if (
+                cachedEntries
+                    .isNotEmpty()
+            ) {
+
+                val cachedIndexes =
+                    buildEntryIndexes(
+                        cachedEntries
+                    )
+
+                runOnUiThread {
+
+                    entries =
+                        cachedEntries
+
+                    applyEntryIndexes(
+                        cachedIndexes
+                    )
+
+                    epg =
+                        emptyMap()
+
+                    showContent(
+                        config,
+                        0
+                    )
+                }
+            }
+
+            runOnUiThread {
+
+                if (
+                    cachedEntries
+                        .isEmpty()
+                ) {
+                    b.loadingLabel.text =
+                        "Carregando ${uniquePlaylists.size} lista(s)..."
+                }
+            }
+
+            val all =
+                ArrayList<MediaEntry>(
+                    8_192
+                )
+
+            val xmltvUrls =
+                LinkedHashSet<String>()
+
+            val errors =
+                mutableListOf<String>()
 
             for (
                 playlist in
@@ -2204,20 +2307,9 @@ class MainActivity : AppCompatActivity() {
                             .isNotBlank()
                     ) {
 
-                        try {
-
-                            guides +=
-                                XmlTvParser
-                                    .current(
-                                        api.download(
-                                            playlist.xmltvUrl
-                                        )
-                                    )
-
-                        } catch (
-                            _: Exception
-                        ) {
-                        }
+                        xmltvUrls +=
+                            playlist.xmltvUrl
+                                .trim()
                     }
 
                 } catch (
@@ -2229,11 +2321,38 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            val freshEntries =
+                all.toList()
+
+            val freshIndexes =
+                if (
+                    freshEntries
+                        .isNotEmpty()
+                ) {
+                    buildEntryIndexes(
+                        freshEntries
+                    )
+                } else {
+                    null
+                }
+
             runOnUiThread {
 
                 if (
-                    all.isEmpty()
+                    freshEntries
+                        .isEmpty()
                 ) {
+
+                    if (
+                        cachedEntries
+                            .isNotEmpty()
+                    ) {
+
+                        b.message.text =
+                            "Usando a última lista salva. A atualização do servidor está indisponível."
+
+                        return@runOnUiThread
+                    }
 
                     val detail =
                         if (
@@ -2251,23 +2370,98 @@ class MainActivity : AppCompatActivity() {
                     showFailure(
                         config,
                         detail,
-                        banner
+                        null
                     )
 
                 } else {
 
-                    entries =
-                        all.toList()
+                    val wasBrowsing =
+                        b.content.visibility ==
+                            View.VISIBLE
 
-                    rebuildIndex()
+                    entries =
+                        freshEntries
+
+                    applyEntryIndexes(
+                        requireNotNull(
+                            freshIndexes
+                        )
+                    )
 
                     epg =
-                        guides
+                        emptyMap()
 
-                    showContent(
-                        config,
-                        errors.size
+                    if (
+                        wasBrowsing
+                    ) {
+
+                        render()
+
+                    } else {
+
+                        showContent(
+                            config,
+                            errors.size
+                        )
+                    }
+                }
+            }
+
+            if (
+                freshEntries
+                    .isNotEmpty()
+            ) {
+
+                playlistCache
+                    .write(
+                        cacheSignature,
+                        freshEntries
                     )
+            }
+
+            /*
+             * O guia EPG é complementar. Ele passa a carregar somente
+             * depois de a lista já estar liberada para o cliente.
+             */
+            if (
+                freshEntries
+                    .isNotEmpty() &&
+                xmltvUrls
+                    .isNotEmpty()
+            ) {
+
+                pool.execute {
+
+                    val guides =
+                        mutableMapOf<String, String>()
+
+                    xmltvUrls
+                        .forEach { url ->
+
+                            try {
+
+                                guides +=
+                                    XmlTvParser
+                                        .current(
+                                            api.download(
+                                                url
+                                            )
+                                        )
+
+                            } catch (_: Throwable) {
+                            }
+                        }
+
+                    if (
+                        guides
+                            .isNotEmpty()
+                    ) {
+
+                        runOnUiThread {
+                            epg =
+                                guides.toMap()
+                        }
+                    }
                 }
             }
         }
@@ -5616,14 +5810,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun rebuildIndex() {
 
-        entriesByType =
-            entries.groupBy {
+        applyEntryIndexes(
+            buildEntryIndexes(
+                entries
+            )
+        )
+    }
+
+    private fun buildEntryIndexes(
+        source: List<MediaEntry>
+    ): EntryIndexes {
+
+        val byType =
+            source.groupBy {
 
                 it.type
             }
 
-        groupsAll =
-            entries.groupBy {
+        val allGroups =
+            source.groupBy {
 
                 it.group
                     .ifBlank {
@@ -5632,8 +5837,8 @@ class MainActivity : AppCompatActivity() {
                     }
             }
 
-        groupsByType =
-            entriesByType
+        val indexedGroupsByType =
+            byType
                 .mapValues {
                         (_, values) ->
 
@@ -5646,6 +5851,26 @@ class MainActivity : AppCompatActivity() {
                             }
                     }
                 }
+
+        return EntryIndexes(
+            byType = byType,
+            allGroups = allGroups,
+            groupsByType = indexedGroupsByType
+        )
+    }
+
+    private fun applyEntryIndexes(
+        indexes: EntryIndexes
+    ) {
+
+        entriesByType =
+            indexes.byType
+
+        groupsAll =
+            indexes.allGroups
+
+        groupsByType =
+            indexes.groupsByType
     }
 
     /*
