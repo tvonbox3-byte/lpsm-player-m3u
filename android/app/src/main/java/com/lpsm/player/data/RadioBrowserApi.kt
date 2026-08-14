@@ -14,9 +14,19 @@ import java.net.URL
  */
 object RadioBrowserApi {
 
-    private const val QUERY =
-        "/json/stations/bycountrycodeexact/BR" +
-            "?hidebroken=true&order=clickcount&reverse=true&limit=450"
+    private val queries =
+        listOf(
+            "/json/stations/bycityexact/Vacaria" +
+                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
+            "/json/stations/bycity/Vacaria" +
+                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
+            "/json/stations/bycityexact/Xanxer%C3%AA" +
+                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
+            "/json/stations/bycity/Xanxere" +
+                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
+            "/json/stations/bycountrycodeexact/BR" +
+                "?hidebroken=true&order=clickcount&reverse=true&limit=450"
+        )
 
     private val servers =
         listOf(
@@ -26,21 +36,95 @@ object RadioBrowserApi {
 
     fun brazilianStations(): List<MediaEntry> {
         var lastError: Throwable? = null
+        val result = ArrayList<MediaEntry>()
+        val seenUrls = HashSet<String>()
+        val seenNames = HashSet<String>()
 
-        for (server in servers) {
-            try {
-                val stations = download("$server$QUERY")
-                if (stations.isNotEmpty()) return stations
-            } catch (error: Throwable) {
-                lastError = error
+        fun append(stations: List<MediaEntry>) {
+            for (station in stations) {
+                val urlKey = station.url.trim().lowercase()
+                val nameKey = station.name.normalizedRadioName()
+
+                if (seenUrls.add(urlKey) && seenNames.add(nameKey)) {
+                    result += station
+                }
             }
         }
 
-        throw IllegalStateException(
-            "Nao foi possivel carregar as radios agora.",
-            lastError
-        )
+        // Estas emissoras usam os enderecos publicados pelos proprios sites.
+        // Alem de garantir Vacaria no topo, isto substitui cadastros antigos do
+        // catalogo publico (principalmente o da Radio Viva).
+        append(vacariaAndRegionStations())
+
+        for (server in servers) {
+            var serverWorked = false
+
+            for (query in queries) {
+                try {
+                    append(download("$server$query"))
+                    serverWorked = true
+                } catch (error: Throwable) {
+                    lastError = error
+                }
+            }
+
+            if (serverWorked && result.isNotEmpty()) return result
+        }
+
+        if (result.isNotEmpty()) return result
+
+        throw IllegalStateException("Nao foi possivel carregar as radios agora.", lastError)
     }
+
+    private fun vacariaAndRegionStations(): List<MediaEntry> =
+        listOf(
+            localStation(
+                name = "Radio Esmeralda 96.5 FM - Vacaria",
+                url = "https://stm7.conectastreaming.com:8476/stream",
+                id = "lpsm-vacaria-esmeralda-965"
+            ),
+            localStation(
+                name = "Radio 93.1 FM - Vacaria",
+                url = "https://stm4.conectastreaming.com:6708/stream",
+                id = "lpsm-vacaria-931"
+            ),
+            localStation(
+                name = "Maisnova 101.5 FM - Vacaria",
+                url = "https://painel.sintonizar.tv.br/stream/mnvacaria",
+                id = "lpsm-vacaria-maisnova-1015"
+            ),
+            localStation(
+                name = "Tua Radio Fatima 90.5 FM - Vacaria",
+                url = "https://painel.sintonizar.tv.br/stream/fatima",
+                id = "lpsm-vacaria-fatima-905"
+            ),
+            localStation(
+                name = "Radio Viva 94.5 FM - Serra Gaucha",
+                url = "https://8547.brasilstream.com.br/stream?origem=siteviva",
+                id = "lpsm-serra-viva-945"
+            ),
+            localStation(
+                name = "Momento FM 97.9 - Xanxere",
+                url = "https://stm10.virtualcast.com.br:8318/momentoxanxere",
+                id = "lpsm-xanxere-momento-979",
+                group = "Xanxere - SC"
+            )
+        )
+
+    private fun localStation(
+        name: String,
+        url: String,
+        id: String,
+        group: String = "Vacaria e Regiao"
+    ) =
+        MediaEntry(
+            name = name,
+            url = url,
+            logo = "",
+            group = group,
+            tvgId = id,
+            type = ContentType.LIVE
+        )
 
     private fun download(address: String): List<MediaEntry> {
         val connection =
@@ -99,8 +183,27 @@ object RadioBrowserApi {
                     .trim()
                     .ifBlank { "Radio sem nome" }
 
+            // Ha varios cadastros antigos com o nome Radio Viva. Mantemos
+            // somente o stream oficial fixado acima para evitar a opcao muda.
+            val normalizedName = name.normalizedRadioName()
+            if (
+                "radio viva" in normalizedName ||
+                "momento fm" in normalizedName
+            ) {
+                continue
+            }
+
+            val city = station.optString("city").trim()
             val state = station.optString("state").trim()
-            val group = state.ifBlank { "Brasil" }
+            val group =
+                when {
+                    city.equals("Vacaria", ignoreCase = true) ->
+                        "Vacaria e Regiao"
+                    city.equals("Xanxere", ignoreCase = true) ||
+                        city.equals("Xanxerê", ignoreCase = true) ->
+                        "Xanxere - SC"
+                    else -> state.ifBlank { city.ifBlank { "Brasil" } }
+                }
 
             result +=
                 MediaEntry(
@@ -115,4 +218,10 @@ object RadioBrowserApi {
 
         return result
     }
+
+    private fun String.normalizedRadioName(): String =
+        lowercase()
+            .replace("rádio", "radio")
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
 }
