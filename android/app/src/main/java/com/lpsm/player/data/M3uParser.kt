@@ -22,11 +22,11 @@ object M3uParser {
     private val seasonEpisodePatterns =
         listOf(
             Regex(
-                """(?i)\bS(\d{1,2})\s*E(\d{1,3})\b"""
+                """(?i)\bS(\d{1,2})\s*[-._ ]*EP?\s*\.?\s*(\d{1,3})\b"""
             ),
 
             Regex(
-                """(?i)\bT(\d{1,2})\s*E(\d{1,3})\b"""
+                """(?i)\bT(\d{1,2})\s*[-._ ]*EP?\s*\.?\s*(\d{1,3})\b"""
             ),
 
             Regex(
@@ -45,7 +45,7 @@ object M3uParser {
      */
     private val episodeOnlyPattern =
         Regex(
-            """(?i)\b(?:ep|epis[oó]dio|episode)\s*\.?\s*(\d{1,3})\b"""
+            """(?i)\b(?:ep|epis[oó]dio|episode|cap(?:[ií]tulo)?)\s*\.?\s*(\d{1,3})\b"""
         )
 
     private data class EpisodeInfo(
@@ -59,8 +59,56 @@ object M3uParser {
         limit: Int = 60_000
     ): List<MediaEntry> {
 
-        val output =
-            ArrayList<MediaEntry>(4096)
+        /*
+         * Listas grandes costumam vir na ordem TV, filmes e, por ultimo,
+         * series. Parar simplesmente no limite fazia as categorias finais
+         * desaparecerem. Mantemos o mesmo teto de memoria, mas reservamos
+         * espaco para os tres tipos e continuamos examinando o arquivo.
+         */
+        val buckets =
+            linkedMapOf(
+                ContentType.LIVE to ArrayList<MediaEntry>(),
+                ContentType.VOD to ArrayList<MediaEntry>(),
+                ContentType.SERIES to ArrayList<MediaEntry>()
+            )
+
+        val reserved =
+            mapOf(
+                ContentType.LIVE to (limit * 12 / 100),
+                ContentType.VOD to (limit * 45 / 100),
+                ContentType.SERIES to (limit * 43 / 100)
+            )
+
+        var kept = 0
+
+        fun keep(entry: MediaEntry) {
+            if (limit <= 0) return
+
+            val target = buckets.getValue(entry.type)
+
+            if (kept < limit) {
+                target += entry
+                kept += 1
+                return
+            }
+
+            val targetReserve = reserved.getValue(entry.type)
+            if (target.size >= targetReserve) return
+
+            val victim =
+                buckets.entries
+                    .filter {
+                        it.key != entry.type &&
+                            it.value.size > reserved.getValue(it.key)
+                    }
+                    .maxByOrNull {
+                        it.value.size - reserved.getValue(it.key)
+                    }
+                    ?: return
+
+            victim.value.removeAt(victim.value.lastIndex)
+            target += entry
+        }
 
         var metadata = ""
 
@@ -158,7 +206,7 @@ object M3uParser {
                                     ""
                                 }
 
-                            output +=
+                            keep(
                                 MediaEntry(
                                     name = name,
                                     url = line,
@@ -192,21 +240,80 @@ object M3uParser {
                                             null
                                         }
                                 )
+                            )
 
                             metadata = ""
-
-                            if (
-                                output.size >=
-                                limit
-                            ) {
-                                return@useLines
-                            }
                         }
                     }
                 }
             }
 
-        return output
+        val keptEntries =
+            buildList {
+                addAll(buckets.getValue(ContentType.LIVE))
+                addAll(buckets.getValue(ContentType.VOD))
+                addAll(buckets.getValue(ContentType.SERIES))
+            }
+
+        return normalizeSeriesGroups(keptEntries)
+    }
+
+    /*
+     * Alguns fornecedores marcam apenas parte dos episodios de uma mesma
+     * categoria. Quando pelo menos um terco do grupo tem sinal claro de
+     * serie e nao ha URL de TV ao vivo, aplicamos o tipo ao grupo inteiro.
+     */
+    private fun normalizeSeriesGroups(
+        source: List<MediaEntry>
+    ): List<MediaEntry> {
+        val promotedGroups =
+            source
+                .groupBy { it.group.trim().lowercase() }
+                .filterValues { items ->
+                    val seriesCount =
+                        items.count { it.type == ContentType.SERIES }
+
+                    val hasLiveStream =
+                        items.any {
+                            val path =
+                                it.url.lowercase()
+                                    .substringBefore('?')
+                                    .substringBefore('#')
+
+                            "/live/" in path || path.endsWith(".ts")
+                        }
+
+                    !hasLiveStream &&
+                        seriesCount > 0 &&
+                        (
+                            items.size <= 4 ||
+                                seriesCount * 3 >= items.size
+                            )
+                }
+                .keys
+
+        if (promotedGroups.isEmpty()) return source
+
+        return source.map { entry ->
+            if (
+                entry.group.trim().lowercase() !in promotedGroups ||
+                entry.type == ContentType.SERIES
+            ) {
+                entry
+            } else {
+                val episodeInfo = parseEpisodeInfo(entry.name)
+
+                entry.copy(
+                    type = ContentType.SERIES,
+                    seriesName =
+                        episodeInfo.seriesName.ifBlank {
+                            cleanSeriesName(entry.name)
+                        },
+                    season = episodeInfo.season,
+                    episode = episodeInfo.episode
+                )
+            }
+        }
     }
 
     private fun detectType(
