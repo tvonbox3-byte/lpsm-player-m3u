@@ -95,9 +95,132 @@
       font-weight: 400;
     }
 
+
+    .appearance-editor {
+      display: block;
+    }
+
+    .appearance-section-title {
+      margin: 0 0 4px;
+    }
+
+    .home-style-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .home-style-card {
+      position: relative;
+      display: block;
+      padding: 10px;
+      border: 2px solid rgba(255,255,255,.09);
+      border-radius: 14px;
+      background: rgba(8,17,30,.75);
+      cursor: pointer;
+      transition: .18s ease;
+    }
+
+    .home-style-card:has(input:checked) {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 2px rgba(139,92,246,.18);
+    }
+
+    .home-style-card input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .home-style-card strong,
+    .home-style-card small {
+      display: block;
+      text-align: center;
+    }
+
+    .home-style-card small {
+      margin-top: 3px;
+      color: #8f9bad;
+    }
+
+    .home-style-mini {
+      height: 90px;
+      margin-bottom: 8px;
+      padding: 8px;
+      border-radius: 10px;
+      background: #07101d;
+      overflow: hidden;
+    }
+
+    .mini-banner {
+      display: block;
+      height: 38px;
+      border-radius: 6px;
+      background: linear-gradient(135deg,#28114f,#7042c1,#151d3b);
+    }
+
+    .mini-buttons {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 5px;
+      margin-top: 7px;
+    }
+
+    .mini-buttons i {
+      display: block;
+      height: 26px;
+      border-radius: 5px;
+      background: #6843a7;
+    }
+
+    .home-style-mini.compact .mini-banner { height: 28px; }
+    .home-style-mini.compact .mini-buttons i { height: 19px; }
+    .home-style-mini.classic .mini-buttons i {
+      background: transparent;
+      border: 1px solid #7448b5;
+    }
+
+    .appearance-fields {
+      display: grid;
+      grid-template-columns: repeat(2,minmax(0,1fr));
+      gap: 14px;
+    }
+
+    .appearance-fields .wide {
+      grid-column: 1 / -1;
+    }
+
+    .accent-row {
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #accentColorInput {
+      width: 58px;
+      height: 42px;
+      padding: 2px;
+      cursor: pointer;
+    }
+
+    .appearance-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
     @media (max-width: 760px) {
-      .appearance-preview-grid {
+      .appearance-preview-grid,
+      .home-style-grid,
+      .appearance-fields {
         grid-template-columns: 1fr;
+      }
+
+      .appearance-fields .wide {
+        grid-column: auto;
       }
     }
   </style>
@@ -182,80 +305,132 @@
     <div id="appearance" class="tab hidden">
       <div class="section-title">
         <div>
-          <h2>Aparência do LPSM</h2>
+          <h2>Aparência da tela inicial</h2>
           <p class="meta">
-            Altere o banner, o papel de parede e a mensagem exibida pelo aplicativo.
+            Escolha o modelo da HOME, banner, papel de parede e cor principal.
+            As mudanças entram no aplicativo quando ele carregar a configuração novamente.
           </p>
         </div>
       </div>
 
-      <form id="appearanceForm" class="card form-grid">
-        <label>
-          URL do banner
-          <input
-            id="bannerUrlInput"
-            name="bannerUrl"
-            type="url"
-            placeholder="https://site.com/banner.jpg"
-          >
-          <span class="appearance-tip">
-            Recomendado: imagem horizontal, por exemplo 1920 × 600.
-          </span>
-        </label>
+      <form id="appearanceForm" class="card appearance-editor">
 
-        <label>
-          URL do papel de parede
-          <input
-            id="wallpaperUrlInput"
-            name="wallpaperUrl"
-            type="url"
-            placeholder="https://site.com/fundo.jpg"
-          >
-          <span class="appearance-tip">
-            Recomendado: 1920 × 1080 ou outra imagem 16:9.
-          </span>
-        </label>
+        <!-- O backend atual já salva supportMessage.
+             Este campo fica escondido e guarda também as preferências da HOME. -->
+        <input id="supportMessageStorage" name="supportMessage" type="hidden">
 
-        <label class="wide">
-          Mensagem de suporte
-          <input
-            id="supportMessageInput"
-            name="supportMessage"
-            maxlength="180"
-            placeholder="Ex.: Suporte LPSM • WhatsApp..."
-          >
-        </label>
+        <h3 class="appearance-section-title">Modelo da aparência</h3>
+        <p class="appearance-help">Escolha como os três botões da tela inicial serão mostrados.</p>
 
-        <button>Salvar aparência</button>
+        <div class="home-style-grid">
+          <label class="home-style-card" data-style-card="standard">
+            <input type="radio" name="homeStyleUi" value="standard" checked>
+            <div class="home-style-mini standard">
+              <span class="mini-banner"></span>
+              <span class="mini-buttons"><i></i><i></i><i></i></span>
+            </div>
+            <strong>Modelo Padrão</strong>
+            <small>Banner maior e cartões com ícone</small>
+          </label>
+
+          <label class="home-style-card" data-style-card="compact">
+            <input type="radio" name="homeStyleUi" value="compact">
+            <div class="home-style-mini compact">
+              <span class="mini-banner"></span>
+              <span class="mini-buttons"><i></i><i></i><i></i></span>
+            </div>
+            <strong>Modelo Compacto</strong>
+            <small>Mais espaço e botões menores</small>
+          </label>
+
+          <label class="home-style-card" data-style-card="classic">
+            <input type="radio" name="homeStyleUi" value="classic">
+            <div class="home-style-mini classic">
+              <span class="mini-banner"></span>
+              <span class="mini-buttons"><i></i><i></i><i></i></span>
+            </div>
+            <strong>Modelo Clássico</strong>
+            <small>Visual mais discreto e equilibrado</small>
+          </label>
+        </div>
+
+        <div class="appearance-fields">
+          <label>
+            Banner no topo
+            <input
+              id="bannerUrlInput"
+              name="bannerUrl"
+              type="url"
+              placeholder="https://site.com/banner.jpg"
+            >
+            <span class="appearance-tip">Recomendado: 1920 × 600 ou proporção horizontal semelhante.</span>
+          </label>
+
+          <label>
+            Mostrar banner
+            <select id="showBannerInput">
+              <option value="1">Sim</option>
+              <option value="0">Não</option>
+            </select>
+          </label>
+
+          <label>
+            Papel de parede
+            <input
+              id="wallpaperUrlInput"
+              name="wallpaperUrl"
+              type="url"
+              placeholder="https://site.com/fundo.jpg"
+            >
+            <span class="appearance-tip">Recomendado: 1920 × 1080.</span>
+          </label>
+
+          <label>
+            Cor principal
+            <div class="accent-row">
+              <input id="accentColorInput" type="color" value="#7C4DFF">
+              <input id="accentColorText" type="text" value="#7C4DFF" maxlength="7">
+            </div>
+          </label>
+
+          <label class="wide">
+            Mensagem abaixo do título
+            <input
+              id="supportMessageInput"
+              type="text"
+              maxlength="120"
+              placeholder="Escolha o que deseja assistir"
+            >
+          </label>
+        </div>
+
+        <div class="appearance-actions">
+          <button id="restoreAppearanceDefault" type="button" class="ghost">Restaurar padrão</button>
+          <button type="submit">Salvar alterações</button>
+        </div>
       </form>
 
       <div class="appearance-preview-grid">
         <article class="appearance-preview-card">
           <h3>Prévia do banner</h3>
-
           <div class="appearance-preview-box banner">
             <img id="bannerPreview" alt="Prévia do banner" hidden>
-            <div id="bannerEmpty" class="appearance-preview-empty">
-              Cole uma URL de imagem para visualizar o banner.
-            </div>
+            <div id="bannerEmpty" class="appearance-preview-empty">Cole uma URL para visualizar o banner.</div>
           </div>
         </article>
 
         <article class="appearance-preview-card">
           <h3>Prévia do papel de parede</h3>
-
           <div class="appearance-preview-box wallpaper">
             <img id="wallpaperPreview" alt="Prévia do papel de parede" hidden>
-            <div id="wallpaperEmpty" class="appearance-preview-empty">
-              Cole uma URL de imagem para visualizar o fundo.
-            </div>
+            <div id="wallpaperEmpty" class="appearance-preview-empty">Cole uma URL para visualizar o fundo.</div>
           </div>
         </article>
       </div>
 
       <div class="appearance-message-preview">
         <strong>Prévia da mensagem</strong>
-        <div id="supportPreview">Nenhuma mensagem configurada.</div>
+        <div id="supportPreview">Escolha o que deseja assistir</div>
       </div>
     </div>
 
@@ -450,137 +625,170 @@
 (function () {
 
   const get =
-    id =>
-      document.getElementById(id);
+    id => document.getElementById(id);
 
-  function updateImagePreview(
-    inputId,
-    imageId,
-    emptyId
-  ) {
+  const markerRegex =
+    /\[\[LPSM_HOME\|([^\]]+)\]\]/i;
 
+  function parseStoredAppearance() {
+    const storage = get('supportMessageStorage');
+    if (!storage) return;
+
+    const raw = String(storage.value || '').trim();
+    const match = raw.match(markerRegex);
+    const cleanMessage = raw.replace(markerRegex, '').trim();
+
+    let style = 'standard';
+    let banner = '1';
+    let accent = '7C4DFF';
+
+    if (match) {
+      const parts = String(match[1] || '').split('|');
+      for (const part of parts) {
+        const pos = part.indexOf('=');
+        if (pos <= 0) continue;
+        const key = part.slice(0,pos).trim().toLowerCase();
+        const value = part.slice(pos+1).trim();
+        if (key === 'style') style = value.toLowerCase();
+        if (key === 'banner') banner = value;
+        if (key === 'accent') accent = value.replace('#','').toUpperCase();
+      }
+    }
+
+    if (!['standard','compact','classic'].includes(style)) {
+      style = 'standard';
+    }
+
+    document.querySelectorAll('input[name="homeStyleUi"]').forEach(input => {
+      input.checked = input.value === style;
+    });
+
+    get('showBannerInput').value =
+      (banner === '0' || banner === 'false') ? '0' : '1';
+
+    if (!/^[0-9A-F]{6}$/.test(accent)) accent = '7C4DFF';
+
+    get('accentColorInput').value = '#' + accent;
+    get('accentColorText').value = '#' + accent;
+    get('supportMessageInput').value =
+      cleanMessage || 'Escolha o que deseja assistir';
+
+    updateAllPreviews();
+  }
+
+  function buildStoredAppearance() {
+    const storage = get('supportMessageStorage');
+    if (!storage) return;
+
+    const style =
+      document.querySelector('input[name="homeStyleUi"]:checked')?.value || 'standard';
+
+    const banner = get('showBannerInput')?.value === '0' ? '0' : '1';
+
+    let accent = String(get('accentColorText')?.value || '#7C4DFF')
+      .replace('#','')
+      .trim()
+      .toUpperCase();
+
+    if (!/^[0-9A-F]{6}$/.test(accent)) accent = '7C4DFF';
+
+    const message =
+      String(get('supportMessageInput')?.value || '')
+        .replace(markerRegex,'')
+        .trim() || 'Escolha o que deseja assistir';
+
+    storage.value =
+      `${message}\n[[LPSM_HOME|style=${style}|banner=${banner}|accent=${accent}]]`;
+  }
+
+  function updateImagePreview(inputId,imageId,emptyId) {
     const input = get(inputId);
     const image = get(imageId);
     const empty = get(emptyId);
+    if (!input || !image || !empty) return;
 
-    if (!input || !image || !empty) {
-      return;
-    }
-
-    const url =
-      String(input.value || '').trim();
-
+    const url = String(input.value || '').trim();
     if (!url) {
       image.hidden = true;
       image.removeAttribute('src');
       empty.hidden = false;
-      empty.textContent =
-        'Cole uma URL de imagem para visualizar.';
+      empty.textContent = 'Cole uma URL de imagem para visualizar.';
       return;
     }
 
-    image.onload =
-      () => {
-        image.hidden = false;
-        empty.hidden = true;
-      };
+    image.onload = () => {
+      image.hidden = false;
+      empty.hidden = true;
+    };
 
-    image.onerror =
-      () => {
-        image.hidden = true;
-        empty.hidden = false;
-        empty.textContent =
-          'Não foi possível carregar esta imagem. Verifique a URL.';
-      };
+    image.onerror = () => {
+      image.hidden = true;
+      empty.hidden = false;
+      empty.textContent = 'Não foi possível carregar esta imagem. Verifique a URL.';
+    };
 
-    empty.textContent =
-      'Carregando imagem...';
-
+    empty.textContent = 'Carregando imagem...';
     empty.hidden = false;
     image.src = url;
   }
 
-  function updateSupportPreview() {
-
-    const input =
-      get('supportMessageInput');
-
-    const preview =
-      get('supportPreview');
-
-    if (!input || !preview) {
-      return;
-    }
-
+  function updateMessagePreview() {
+    const preview = get('supportPreview');
+    if (!preview) return;
     preview.textContent =
-      String(input.value || '').trim() ||
-      'Nenhuma mensagem configurada.';
+      String(get('supportMessageInput')?.value || '').trim() ||
+      'Escolha o que deseja assistir';
   }
 
-  function syncAppearancePreview() {
-
-    updateImagePreview(
-      'bannerUrlInput',
-      'bannerPreview',
-      'bannerEmpty'
-    );
-
-    updateImagePreview(
-      'wallpaperUrlInput',
-      'wallpaperPreview',
-      'wallpaperEmpty'
-    );
-
-    updateSupportPreview();
+  function updateAllPreviews() {
+    updateImagePreview('bannerUrlInput','bannerPreview','bannerEmpty');
+    updateImagePreview('wallpaperUrlInput','wallpaperPreview','wallpaperEmpty');
+    updateMessagePreview();
   }
 
-  document.addEventListener(
-    'DOMContentLoaded',
-    () => {
+  function syncAccentFromColor() {
+    const value = String(get('accentColorInput')?.value || '#7C4DFF').toUpperCase();
+    get('accentColorText').value = value;
+  }
 
-      get('bannerUrlInput')
-        ?.addEventListener(
-          'input',
-          syncAppearancePreview
-        );
-
-      get('wallpaperUrlInput')
-        ?.addEventListener(
-          'input',
-          syncAppearancePreview
-        );
-
-      get('supportMessageInput')
-        ?.addEventListener(
-          'input',
-          updateSupportPreview
-        );
-
-      document
-        .querySelector(
-          '[data-tab="appearance"]'
-        )
-        ?.addEventListener(
-          'click',
-          () => {
-            setTimeout(
-              syncAppearancePreview,
-              120
-            );
-          }
-        );
-
-      setTimeout(
-        syncAppearancePreview,
-        700
-      );
-
-      setTimeout(
-        syncAppearancePreview,
-        1800
-      );
+  function syncAccentFromText() {
+    let value = String(get('accentColorText')?.value || '').trim().toUpperCase();
+    if (!value.startsWith('#')) value = '#' + value;
+    if (/^#[0-9A-F]{6}$/.test(value)) {
+      get('accentColorInput').value = value;
     }
-  );
+  }
+
+  function restoreDefault() {
+    document.querySelector('input[name="homeStyleUi"][value="standard"]').checked = true;
+    get('showBannerInput').value = '1';
+    get('accentColorInput').value = '#7C4DFF';
+    get('accentColorText').value = '#7C4DFF';
+    get('supportMessageInput').value = 'Escolha o que deseja assistir';
+    updateAllPreviews();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = get('appearanceForm');
+
+    form?.addEventListener('submit', () => {
+      buildStoredAppearance();
+    }, true);
+
+    get('bannerUrlInput')?.addEventListener('input', updateAllPreviews);
+    get('wallpaperUrlInput')?.addEventListener('input', updateAllPreviews);
+    get('supportMessageInput')?.addEventListener('input', updateMessagePreview);
+    get('accentColorInput')?.addEventListener('input', syncAccentFromColor);
+    get('accentColorText')?.addEventListener('input', syncAccentFromText);
+    get('restoreAppearanceDefault')?.addEventListener('click', restoreDefault);
+
+    document.querySelector('[data-tab="appearance"]')?.addEventListener('click', () => {
+      setTimeout(parseStoredAppearance, 150);
+    });
+
+    setTimeout(parseStoredAppearance, 900);
+    setTimeout(parseStoredAppearance, 1900);
+  });
 
 })();
 </script>
