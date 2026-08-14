@@ -307,8 +307,8 @@
         <div>
           <h2>Aparência da tela inicial</h2>
           <p class="meta">
-            Escolha o modelo da HOME, banner, papel de parede e cor principal.
-            As mudanças entram no aplicativo quando ele carregar a configuração novamente.
+            Você pode salvar somente o banner. Papel de parede, mensagem e cor são opcionais.
+            O modelo escolhido também será aplicado quando o aplicativo carregar a configuração novamente.
           </p>
         </div>
       </div>
@@ -406,7 +406,7 @@
 
         <div class="appearance-actions">
           <button id="restoreAppearanceDefault" type="button" class="ghost">Restaurar padrão</button>
-          <button type="submit">Salvar alterações</button>
+          <button type="submit">Salvar aparência</button>
         </div>
       </form>
 
@@ -631,164 +631,672 @@
     /\[\[LPSM_HOME\|([^\]]+)\]\]/i;
 
   function parseStoredAppearance() {
-    const storage = get('supportMessageStorage');
-    if (!storage) return;
 
-    const raw = String(storage.value || '').trim();
-    const match = raw.match(markerRegex);
-    const cleanMessage = raw.replace(markerRegex, '').trim();
+    const storage =
+      get('supportMessageStorage');
 
-    let style = 'standard';
-    let banner = '1';
-    let accent = '7C4DFF';
-
-    if (match) {
-      const parts = String(match[1] || '').split('|');
-      for (const part of parts) {
-        const pos = part.indexOf('=');
-        if (pos <= 0) continue;
-        const key = part.slice(0,pos).trim().toLowerCase();
-        const value = part.slice(pos+1).trim();
-        if (key === 'style') style = value.toLowerCase();
-        if (key === 'banner') banner = value;
-        if (key === 'accent') accent = value.replace('#','').toUpperCase();
-      }
-    }
-
-    if (!['standard','compact','classic'].includes(style)) {
-      style = 'standard';
-    }
-
-    document.querySelectorAll('input[name="homeStyleUi"]').forEach(input => {
-      input.checked = input.value === style;
-    });
-
-    get('showBannerInput').value =
-      (banner === '0' || banner === 'false') ? '0' : '1';
-
-    if (!/^[0-9A-F]{6}$/.test(accent)) accent = '7C4DFF';
-
-    get('accentColorInput').value = '#' + accent;
-    get('accentColorText').value = '#' + accent;
-    get('supportMessageInput').value =
-      cleanMessage || 'Escolha o que deseja assistir';
-
-    updateAllPreviews();
-  }
-
-  function buildStoredAppearance() {
-    const storage = get('supportMessageStorage');
-    if (!storage) return;
-
-    const style =
-      document.querySelector('input[name="homeStyleUi"]:checked')?.value || 'standard';
-
-    const banner = get('showBannerInput')?.value === '0' ? '0' : '1';
-
-    let accent = String(get('accentColorText')?.value || '#7C4DFF')
-      .replace('#','')
-      .trim()
-      .toUpperCase();
-
-    if (!/^[0-9A-F]{6}$/.test(accent)) accent = '7C4DFF';
-
-    const message =
-      String(get('supportMessageInput')?.value || '')
-        .replace(markerRegex,'')
-        .trim() || 'Escolha o que deseja assistir';
-
-    storage.value =
-      `${message}\n[[LPSM_HOME|style=${style}|banner=${banner}|accent=${accent}]]`;
-  }
-
-  function updateImagePreview(inputId,imageId,emptyId) {
-    const input = get(inputId);
-    const image = get(imageId);
-    const empty = get(emptyId);
-    if (!input || !image || !empty) return;
-
-    const url = String(input.value || '').trim();
-    if (!url) {
-      image.hidden = true;
-      image.removeAttribute('src');
-      empty.hidden = false;
-      empty.textContent = 'Cole uma URL de imagem para visualizar.';
+    if (!storage) {
       return;
     }
 
-    image.onload = () => {
-      image.hidden = false;
-      empty.hidden = true;
-    };
+    const raw =
+      String(storage.value || '').trim();
 
-    image.onerror = () => {
-      image.hidden = true;
-      empty.hidden = false;
-      empty.textContent = 'Não foi possível carregar esta imagem. Verifique a URL.';
-    };
+    const match =
+      raw.match(markerRegex);
 
-    empty.textContent = 'Carregando imagem...';
-    empty.hidden = false;
-    image.src = url;
-  }
+    const cleanMessage =
+      raw
+        .replace(markerRegex, '')
+        .trim();
 
-  function updateMessagePreview() {
-    const preview = get('supportPreview');
-    if (!preview) return;
-    preview.textContent =
-      String(get('supportMessageInput')?.value || '').trim() ||
-      'Escolha o que deseja assistir';
-  }
+    let style =
+      'standard';
 
-  function updateAllPreviews() {
-    updateImagePreview('bannerUrlInput','bannerPreview','bannerEmpty');
-    updateImagePreview('wallpaperUrlInput','wallpaperPreview','wallpaperEmpty');
-    updateMessagePreview();
-  }
+    let banner =
+      '1';
 
-  function syncAccentFromColor() {
-    const value = String(get('accentColorInput')?.value || '#7C4DFF').toUpperCase();
-    get('accentColorText').value = value;
-  }
+    let accent =
+      '7C4DFF';
 
-  function syncAccentFromText() {
-    let value = String(get('accentColorText')?.value || '').trim().toUpperCase();
-    if (!value.startsWith('#')) value = '#' + value;
-    if (/^#[0-9A-F]{6}$/.test(value)) {
-      get('accentColorInput').value = value;
+    if (match) {
+
+      const parts =
+        String(match[1] || '')
+          .split('|');
+
+      for (const part of parts) {
+
+        const pos =
+          part.indexOf('=');
+
+        if (pos <= 0) {
+          continue;
+        }
+
+        const key =
+          part
+            .slice(0, pos)
+            .trim()
+            .toLowerCase();
+
+        const value =
+          part
+            .slice(pos + 1)
+            .trim();
+
+        if (key === 'style') {
+          style =
+            value.toLowerCase();
+        }
+
+        if (key === 'banner') {
+          banner =
+            value;
+        }
+
+        if (key === 'accent') {
+          accent =
+            value
+              .replace('#', '')
+              .toUpperCase();
+        }
+      }
     }
-  }
 
-  function restoreDefault() {
-    document.querySelector('input[name="homeStyleUi"][value="standard"]').checked = true;
-    get('showBannerInput').value = '1';
-    get('accentColorInput').value = '#7C4DFF';
-    get('accentColorText').value = '#7C4DFF';
-    get('supportMessageInput').value = 'Escolha o que deseja assistir';
+    if (
+      ![
+        'standard',
+        'compact',
+        'classic'
+      ].includes(style)
+    ) {
+      style =
+        'standard';
+    }
+
+    document
+      .querySelectorAll(
+        'input[name="homeStyleUi"]'
+      )
+      .forEach(
+        input => {
+
+          input.checked =
+            input.value === style;
+        }
+      );
+
+    const showBanner =
+      get('showBannerInput');
+
+    if (showBanner) {
+
+      showBanner.value =
+        (
+          banner === '0' ||
+          banner === 'false'
+        )
+          ? '0'
+          : '1';
+    }
+
+    if (
+      !/^[0-9A-F]{6}$/.test(
+        accent
+      )
+    ) {
+      accent =
+        '7C4DFF';
+    }
+
+    const accentColor =
+      get('accentColorInput');
+
+    const accentText =
+      get('accentColorText');
+
+    if (accentColor) {
+      accentColor.value =
+        '#' + accent;
+    }
+
+    if (accentText) {
+      accentText.value =
+        '#' + accent;
+    }
+
+    const message =
+      get('supportMessageInput');
+
+    if (message) {
+      message.value =
+        cleanMessage;
+    }
+
     updateAllPreviews();
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = get('appearanceForm');
 
-    form?.addEventListener('submit', () => {
-      buildStoredAppearance();
-    }, true);
+  function buildStoredAppearance() {
 
-    get('bannerUrlInput')?.addEventListener('input', updateAllPreviews);
-    get('wallpaperUrlInput')?.addEventListener('input', updateAllPreviews);
-    get('supportMessageInput')?.addEventListener('input', updateMessagePreview);
-    get('accentColorInput')?.addEventListener('input', syncAccentFromColor);
-    get('accentColorText')?.addEventListener('input', syncAccentFromText);
-    get('restoreAppearanceDefault')?.addEventListener('click', restoreDefault);
+    const storage =
+      get('supportMessageStorage');
 
-    document.querySelector('[data-tab="appearance"]')?.addEventListener('click', () => {
-      setTimeout(parseStoredAppearance, 150);
-    });
+    if (!storage) {
+      return '';
+    }
 
-    setTimeout(parseStoredAppearance, 900);
-    setTimeout(parseStoredAppearance, 1900);
-  });
+    const style =
+      document.querySelector(
+        'input[name="homeStyleUi"]:checked'
+      )?.value ||
+      'standard';
+
+    const banner =
+      get('showBannerInput')
+        ?.value === '0'
+        ? '0'
+        : '1';
+
+    let accent =
+      String(
+        get('accentColorText')
+          ?.value ||
+        '#7C4DFF'
+      )
+        .replace('#', '')
+        .trim()
+        .toUpperCase();
+
+    if (
+      !/^[0-9A-F]{6}$/.test(
+        accent
+      )
+    ) {
+      accent =
+        '7C4DFF';
+    }
+
+    const message =
+      String(
+        get('supportMessageInput')
+          ?.value ||
+        ''
+      )
+        .replace(markerRegex, '')
+        .trim();
+
+    /*
+     * Mesmo sem mensagem, o marcador continua sendo salvo.
+     * É ele que faz Padrão / Compacto / Clássico funcionar.
+     */
+    const marker =
+      `[[LPSM_HOME|style=${style}|banner=${banner}|accent=${accent}]]`;
+
+    storage.value =
+      message
+        ? `${message}
+${marker}`
+        : marker;
+
+    return storage.value;
+  }
+
+
+  function updateImagePreview(
+    inputId,
+    imageId,
+    emptyId
+  ) {
+
+    const input =
+      get(inputId);
+
+    const image =
+      get(imageId);
+
+    const empty =
+      get(emptyId);
+
+    if (
+      !input ||
+      !image ||
+      !empty
+    ) {
+      return;
+    }
+
+    const url =
+      String(
+        input.value ||
+        ''
+      ).trim();
+
+    if (!url) {
+
+      image.hidden =
+        true;
+
+      image.removeAttribute(
+        'src'
+      );
+
+      empty.hidden =
+        false;
+
+      empty.textContent =
+        'Nenhuma imagem configurada.';
+
+      return;
+    }
+
+    image.onload =
+      () => {
+
+        image.hidden =
+          false;
+
+        empty.hidden =
+          true;
+      };
+
+    image.onerror =
+      () => {
+
+        image.hidden =
+          true;
+
+        empty.hidden =
+          false;
+
+        empty.textContent =
+          'Não foi possível carregar esta imagem. Verifique a URL.';
+      };
+
+    empty.textContent =
+      'Carregando imagem...';
+
+    empty.hidden =
+      false;
+
+    image.src =
+      url;
+  }
+
+
+  function updateMessagePreview() {
+
+    const preview =
+      get('supportPreview');
+
+    if (!preview) {
+      return;
+    }
+
+    preview.textContent =
+      String(
+        get('supportMessageInput')
+          ?.value ||
+        ''
+      ).trim() ||
+      'Sem mensagem extra.';
+  }
+
+
+  function updateAllPreviews() {
+
+    updateImagePreview(
+      'bannerUrlInput',
+      'bannerPreview',
+      'bannerEmpty'
+    );
+
+    updateImagePreview(
+      'wallpaperUrlInput',
+      'wallpaperPreview',
+      'wallpaperEmpty'
+    );
+
+    updateMessagePreview();
+  }
+
+
+  function syncAccentFromColor() {
+
+    const value =
+      String(
+        get('accentColorInput')
+          ?.value ||
+        '#7C4DFF'
+      ).toUpperCase();
+
+    const text =
+      get('accentColorText');
+
+    if (text) {
+      text.value =
+        value;
+    }
+  }
+
+
+  function syncAccentFromText() {
+
+    let value =
+      String(
+        get('accentColorText')
+          ?.value ||
+        ''
+      )
+        .trim()
+        .toUpperCase();
+
+    if (
+      !value.startsWith('#')
+    ) {
+      value =
+        '#' + value;
+    }
+
+    if (
+      /^#[0-9A-F]{6}$/.test(
+        value
+      )
+    ) {
+
+      const color =
+        get('accentColorInput');
+
+      if (color) {
+        color.value =
+          value;
+      }
+    }
+  }
+
+
+  function restoreDefault() {
+
+    const standard =
+      document.querySelector(
+        'input[name="homeStyleUi"][value="standard"]'
+      );
+
+    if (standard) {
+      standard.checked =
+        true;
+    }
+
+    const banner =
+      get('showBannerInput');
+
+    if (banner) {
+      banner.value =
+        '1';
+    }
+
+    const accentColor =
+      get('accentColorInput');
+
+    const accentText =
+      get('accentColorText');
+
+    if (accentColor) {
+      accentColor.value =
+        '#7C4DFF';
+    }
+
+    if (accentText) {
+      accentText.value =
+        '#7C4DFF';
+    }
+
+    const message =
+      get('supportMessageInput');
+
+    if (message) {
+      message.value =
+        '';
+    }
+
+    updateAllPreviews();
+  }
+
+
+  async function saveAppearance(
+    event
+  ) {
+
+    event.preventDefault();
+
+    const form =
+      event.currentTarget;
+
+    const submit =
+      event.submitter ||
+      form.querySelector(
+        'button[type="submit"]'
+      );
+
+    if (submit) {
+      submit.disabled =
+        true;
+
+      submit.textContent =
+        'Salvando...';
+    }
+
+    try {
+
+      const storedMessage =
+        buildStoredAppearance();
+
+      /*
+       * Nenhum destes campos é obrigatório.
+       *
+       * Pode salvar:
+       * - somente banner
+       * - somente modelo
+       * - banner + modelo
+       * - wallpaper
+       * - mensagem
+       * - qualquer combinação
+       */
+      const payload = {
+
+        bannerUrl:
+          String(
+            get('bannerUrlInput')
+              ?.value ||
+            ''
+          ).trim(),
+
+        wallpaperUrl:
+          String(
+            get('wallpaperUrlInput')
+              ?.value ||
+            ''
+          ).trim(),
+
+        supportMessage:
+          storedMessage
+      };
+
+      const response =
+        await fetch(
+          '/api/admin/appearance',
+          {
+            method: 'PUT',
+
+            headers: {
+              'content-type':
+                'application/json',
+
+              authorization:
+                `Bearer ${localStorage.lpsmToken || ''}`
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              )
+          }
+        );
+
+      const text =
+        await response.text();
+
+      let data =
+        {};
+
+      try {
+        data =
+          text
+            ? JSON.parse(text)
+            : {};
+      } catch {
+        data =
+          {};
+      }
+
+      if (!response.ok) {
+
+        throw new Error(
+          data.error ||
+          `Erro ${response.status}`
+        );
+      }
+
+      /*
+       * Atualiza o campo escondido com exatamente
+       * o que voltou do servidor.
+       */
+      if (
+        data.supportMessage !==
+        undefined
+      ) {
+
+        get('supportMessageStorage').value =
+          data.supportMessage ||
+          '';
+      }
+
+      alert(
+        'Aparência salva com sucesso. Feche e abra o LPSM para aplicar.'
+      );
+
+      parseStoredAppearance();
+
+    } catch (error) {
+
+      alert(
+        `Não foi possível salvar a aparência: ${error.message}`
+      );
+
+    } finally {
+
+      if (submit) {
+        submit.disabled =
+          false;
+
+        submit.textContent =
+          'Salvar aparência';
+      }
+    }
+  }
+
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+
+      /*
+       * O app.js antigo também cria um onsubmit.
+       * Aqui substituímos por este salvamento,
+       * que já entende os modelos da nova HOME.
+       */
+      setTimeout(
+        () => {
+
+          const form =
+            get('appearanceForm');
+
+          if (form) {
+            form.onsubmit =
+              saveAppearance;
+          }
+        },
+        300
+      );
+
+      get('bannerUrlInput')
+        ?.addEventListener(
+          'input',
+          updateAllPreviews
+        );
+
+      get('wallpaperUrlInput')
+        ?.addEventListener(
+          'input',
+          updateAllPreviews
+        );
+
+      get('supportMessageInput')
+        ?.addEventListener(
+          'input',
+          updateMessagePreview
+        );
+
+      get('accentColorInput')
+        ?.addEventListener(
+          'input',
+          syncAccentFromColor
+        );
+
+      get('accentColorText')
+        ?.addEventListener(
+          'input',
+          syncAccentFromText
+        );
+
+      get('restoreAppearanceDefault')
+        ?.addEventListener(
+          'click',
+          restoreDefault
+        );
+
+      document
+        .querySelector(
+          '[data-tab="appearance"]'
+        )
+        ?.addEventListener(
+          'click',
+          () => {
+
+            setTimeout(
+              parseStoredAppearance,
+              180
+            );
+          }
+        );
+
+      /*
+       * O app.js carrega o estado de forma assíncrona.
+       * Estes disparos pegam o valor salvo assim que
+       * ele chegar ao formulário.
+       */
+      setTimeout(
+        parseStoredAppearance,
+        900
+      );
+
+      setTimeout(
+        parseStoredAppearance,
+        1900
+      );
+    }
+  );
 
 })();
 </script>
