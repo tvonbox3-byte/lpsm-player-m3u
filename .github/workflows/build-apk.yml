@@ -91,11 +91,14 @@ jobs:
           VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
           VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
         run: |
+          APK_SHA256=$(sha256sum android/app/build/outputs/apk/release/LPSM-Player.apk | cut -d ' ' -f1)
+
           cat > update.json <<EOF
           {
             "versionCode": ${VERSION_CODE},
             "versionName": "${VERSION_NAME}",
             "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/LPSM-Player.apk",
+            "sha256": "${APK_SHA256}",
             "force": false,
             "message": "Uma nova versão do LPSM está disponível."
           }
