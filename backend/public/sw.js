@@ -1,9 +1,9 @@
-const CACHE_NAME = 'lpsm-control-20260814-security-1';
+const CACHE_NAME = 'lpsm-control-20260814-presence-1';
 
 const APP_SHELL = [
   '/',
-  '/styles.css?v=20260814-security-1',
-  '/app.js?v=20260814-security-1'
+  '/styles.css?v=20260814-presence-1',
+  '/app.js?v=20260814-presence-1'
 ];
 
 self.addEventListener('install', event => {
