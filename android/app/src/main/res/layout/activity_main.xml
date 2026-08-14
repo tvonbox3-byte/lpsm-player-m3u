@@ -316,6 +316,18 @@
                     android:textColor="@color/text"
                     android:textSize="17sp" />
 
+                <Button
+                    android:id="@+id/homeAccount"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:maxHeight="105dp"
+                    android:minHeight="65dp"
+                    android:text="CONTA"
+                    android:textColor="@color/text"
+                    android:textSize="17sp" />
+
             </LinearLayout>
 
         </LinearLayout>
@@ -759,6 +771,27 @@
                 android:text="A lista está temporariamente indisponível."
                 android:textColor="@color/text"
                 android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/failureMac"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="#FFE500"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/failureSupport"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:drawableStart="@drawable/ic_support_robot"
+                android:drawablePadding="8dp"
+                android:text="SUPORTE: (54) 99714-6384"
+                android:textColor="@color/text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
             <Button
                 android:id="@+id/retryButton"
