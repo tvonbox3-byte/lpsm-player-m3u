@@ -2,7 +2,7 @@
 
 O objetivo é reaproveitar o serviço que já possui o endereço:
 
-`https://lpsm-backend.onrender.com`
+`https://lpsm-player-backend.onrender.com`
 
 Assim o aplicativo Android deste pacote já aponta para o endereço certo.
 
@@ -14,7 +14,7 @@ Não envie arquivos `.env`, chaves de assinatura ou arquivos JSON reais da pasta
 
 ## 2. Render — trocar a origem do serviço existente
 
-No serviço `lpsm-backend`:
+No serviço `lpsm-player-backend`:
 
 - Settings → Source → Edit
 - escolha o novo repositório `tvonbox3-byte/lpsm-player-m3u`
@@ -27,9 +27,11 @@ No serviço `lpsm-backend`:
 
 Defina:
 
-- `ADMIN_USER` = `admin`
+- `ADMIN_USER` = um nome que não seja fácil de adivinhar
 - `ADMIN_PASSWORD` = uma senha nova e forte
 - `TOKEN_SECRET` = um valor aleatório longo (mínimo 32 bytes)
+- `SUPABASE_URL` = endereço do projeto Supabase
+- `SUPABASE_SECRET_KEY` = chave secreta do servidor Supabase (nunca use no APK)
 
 Depois salve e faça o deploy.
 
@@ -37,17 +39,17 @@ Depois salve e faça o deploy.
 
 Abra:
 
-- `https://lpsm-backend.onrender.com/api/health` → deve retornar JSON com `ok: true`.
-- `https://lpsm-backend.onrender.com` → deve abrir o painel **LPSM Control** para listas M3U.
+- `https://lpsm-player-backend.onrender.com/api/health` → deve retornar JSON com `ok: true`.
+- `https://lpsm-player-backend.onrender.com` → deve abrir o painel **LPSM Control** para listas M3U.
 
 ## 5. Android
 
 O projeto Android já está configurado com:
 
-`https://lpsm-backend.onrender.com`
+`https://lpsm-player-backend.onrender.com`
 
 Abra a pasta `android` no Android Studio, use JDK 17 + SDK 35 e gere o APK com `assembleDebug`.
 
 ## Aviso sobre o plano Free do Render
 
-O backend atual grava clientes e listas em JSON. Em instâncias sem disco persistente, esses dados podem ser perdidos em reinícios/deploys. Para uso definitivo com clientes, migre a persistência para PostgreSQL/Supabase ou outro banco persistente antes de depender do serviço em produção.
+O serviço publicado usa Supabase para não perder clientes e listas quando o Render reiniciar. No plano gratuito, o servidor entra em repouso após 15 minutos sem tráfego e pode levar cerca de um minuto para despertar. Isso é uma limitação da hospedagem, não um erro do LPSM.
