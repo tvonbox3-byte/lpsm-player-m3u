@@ -339,6 +339,41 @@ class LpsmApi(
                 "/api/device/config"
             )
 
+        val config =
+            parseConfig(
+                json
+            )
+
+        store.saveDeviceConfig(
+            json.toString()
+        )
+
+        return config
+    }
+
+
+    fun cachedConfig(): DeviceConfig? {
+
+        return try {
+
+            store.cachedDeviceConfig()
+                ?.let {
+                    parseConfig(
+                        JSONObject(it)
+                    )
+                }
+
+        } catch (_: Throwable) {
+
+            null
+        }
+    }
+
+
+    private fun parseConfig(
+        json: JSONObject
+    ): DeviceConfig {
+
 
         val appearanceJson =
             json.optJSONObject(
