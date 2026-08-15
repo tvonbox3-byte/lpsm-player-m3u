@@ -2,6 +2,7 @@ package com.lpsm.player.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.security.SecureRandom
@@ -17,6 +18,21 @@ class SecureStore(context: Context) {
     private val prefs: SharedPreferences = createSecurePreferences()
 
     private fun createSecurePreferences(): SharedPreferences {
+        /*
+         * O Android Keystore usado pelo EncryptedSharedPreferences exige API
+         * 23. Em Android 5.0/5.1 usamos o armazenamento privado do próprio
+         * aplicativo para manter o APK universal sem impedir a abertura.
+         */
+        if (
+            Build.VERSION.SDK_INT <
+            Build.VERSION_CODES.M
+        ) {
+            return appContext.getSharedPreferences(
+                "lpsm_secure_fallback",
+                Context.MODE_PRIVATE
+            )
+        }
+
         fun encrypted(): SharedPreferences {
             val masterKey = MasterKey.Builder(appContext)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
