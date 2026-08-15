@@ -153,7 +153,7 @@ class UpdateActivity : AppCompatActivity() {
          */
         mainHandler.postDelayed(
             startupFallback,
-            2_500
+            850
         )
 
 

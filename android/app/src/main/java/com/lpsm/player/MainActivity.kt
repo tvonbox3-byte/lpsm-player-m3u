@@ -2073,10 +2073,75 @@ class MainActivity : AppCompatActivity() {
     private fun loadConfig() {
 
         showLoading(
-            "Carregando configuração e aparência..."
+            "Abrindo LPSM..."
         )
 
         pool.execute {
+
+            /*
+             * TV Boxes mais simples demoram muito mais que celulares para
+             * esperar rede, descompactar a lista e montar todos os índices.
+             * A configuração autorizada salva abre a HOME imediatamente;
+             * a lista salva e a validação online continuam em segundo plano.
+             */
+            var openedFromCache =
+                false
+
+            api.cachedConfig()
+                ?.let { cachedConfig ->
+
+                    openedFromCache =
+                        true
+
+                    lastConfig =
+                        cachedConfig
+
+                    runOnUiThread {
+
+                        showContent(
+                            cachedConfig,
+                            0
+                        )
+                    }
+
+                    val cachedPlaylists =
+                        cachedConfig.playlists
+                            .distinctBy {
+                                it.url
+                                    .trim()
+                                    .lowercase()
+                            }
+
+                    val startupEntries =
+                        playlistCache.read(
+                            playlistCache.signature(
+                                cachedPlaylists
+                            )
+                        )
+
+                    if (
+                        startupEntries.isNotEmpty()
+                    ) {
+
+                        val startupIndexes =
+                            buildEntryIndexes(
+                                startupEntries
+                            )
+
+                        runOnUiThread {
+
+                            entries =
+                                startupEntries
+
+                            applyEntryIndexes(
+                                startupIndexes
+                            )
+
+                            epg =
+                                emptyMap()
+                        }
+                    }
+                }
 
             val config =
                 try {
@@ -2115,7 +2180,9 @@ class MainActivity : AppCompatActivity() {
 
                             showActivation()
 
-                        } else {
+                        } else if (
+                            !openedFromCache
+                        ) {
 
                             showFailure(
                                 lastConfig,
