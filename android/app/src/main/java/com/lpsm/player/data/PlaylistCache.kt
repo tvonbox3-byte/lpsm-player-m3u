@@ -54,7 +54,7 @@ class PlaylistCache(
 
     fun read(
         expectedSignature: String,
-        maxAgeMillis: Long = 24L * 60L * 60L * 1000L
+        maxAgeMillis: Long = 7L * 24L * 60L * 60L * 1000L
     ): List<MediaEntry> {
 
         if (!file.isFile) {

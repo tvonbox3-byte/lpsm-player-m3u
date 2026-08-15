@@ -52,6 +52,27 @@ class SecureStore(context: Context) {
         get() = prefs.getString("server", null) ?: com.lpsm.player.BuildConfig.API_BASE_URL
         set(value) = prefs.edit().putString("server", value.trimEnd('/')).apply()
 
+    fun saveDeviceConfig(json: String) {
+        prefs.edit()
+            .putString("device_config_json", json)
+            .putLong("device_config_saved_at", System.currentTimeMillis())
+            .apply()
+    }
+
+    fun cachedDeviceConfig(
+        maxAgeMillis: Long = 7L * 24L * 60L * 60L * 1000L
+    ): String? {
+        val savedAt = prefs.getLong("device_config_saved_at", 0L)
+        if (
+            savedAt <= 0L ||
+            System.currentTimeMillis() - savedAt > maxAgeMillis
+        ) {
+            return null
+        }
+        return prefs.getString("device_config_json", null)
+            ?.takeIf { it.isNotBlank() }
+    }
+
     val installMac: String
         get() {
             identity.getString("install_mac", null)?.let { return it }
