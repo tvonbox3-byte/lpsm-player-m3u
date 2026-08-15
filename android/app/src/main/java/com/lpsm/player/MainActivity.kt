@@ -2081,28 +2081,16 @@ class MainActivity : AppCompatActivity() {
             /*
              * TV Boxes mais simples demoram muito mais que celulares para
              * esperar rede, descompactar a lista e montar todos os índices.
-             * A configuração autorizada salva abre a HOME imediatamente;
-             * a lista salva e a validação online continuam em segundo plano.
+             * A HOME só pode abrir pelo modo rápido quando a configuração
+             * e uma lista local com conteúdo estiverem disponíveis. Abrir
+             * somente com a configuração deixava algumas TV Boxes presas em 0.
+             * A validação online continua em segundo plano.
              */
             var openedFromCache =
                 false
 
             api.cachedConfig()
                 ?.let { cachedConfig ->
-
-                    openedFromCache =
-                        true
-
-                    lastConfig =
-                        cachedConfig
-
-                    runOnUiThread {
-
-                        showContent(
-                            cachedConfig,
-                            0
-                        )
-                    }
 
                     val cachedPlaylists =
                         cachedConfig.playlists
@@ -2123,6 +2111,12 @@ class MainActivity : AppCompatActivity() {
                         startupEntries.isNotEmpty()
                     ) {
 
+                        openedFromCache =
+                            true
+
+                        lastConfig =
+                            cachedConfig
+
                         val startupIndexes =
                             buildEntryIndexes(
                                 startupEntries
@@ -2140,19 +2134,10 @@ class MainActivity : AppCompatActivity() {
                             epg =
                                 emptyMap()
 
-                            /*
-                             * Em TV Boxes lentas a pessoa pode entrar em
-                             * canais antes de o cache terminar. Nesse caso a
-                             * tela já aberta precisa receber os dados; sem
-                             * este render ela permanecia mostrando tudo 0.
-                             */
-                            if (
-                                b.content.visibility ==
-                                View.VISIBLE
-                            ) {
-
-                                render()
-                            }
+                            showContent(
+                                cachedConfig,
+                                0
+                            )
                         }
                     }
                 }
