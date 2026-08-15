@@ -2139,6 +2139,20 @@ class MainActivity : AppCompatActivity() {
 
                             epg =
                                 emptyMap()
+
+                            /*
+                             * Em TV Boxes lentas a pessoa pode entrar em
+                             * canais antes de o cache terminar. Nesse caso a
+                             * tela já aberta precisa receber os dados; sem
+                             * este render ela permanecia mostrando tudo 0.
+                             */
+                            if (
+                                b.content.visibility ==
+                                View.VISIBLE
+                            ) {
+
+                                render()
+                            }
                         }
                     }
                 }
@@ -2288,6 +2302,10 @@ class MainActivity : AppCompatActivity() {
 
                 runOnUiThread {
 
+                    val wasBrowsing =
+                        b.content.visibility ==
+                            View.VISIBLE
+
                     entries =
                         cachedEntries
 
@@ -2298,10 +2316,19 @@ class MainActivity : AppCompatActivity() {
                     epg =
                         emptyMap()
 
-                    showContent(
-                        config,
-                        0
-                    )
+                    if (
+                        wasBrowsing
+                    ) {
+
+                        render()
+
+                    } else {
+
+                        showContent(
+                            config,
+                            0
+                        )
+                    }
                 }
             }
 

@@ -10,11 +10,12 @@ android {
     defaultConfig {
         applicationId = "com.lpsm.player"
 
-        minSdk = 23
+        // APK universal: Android 5.0+ em celular, tablet, TV Box e Android TV.
+        minSdk = 21
         targetSdk = 35
 
-        versionCode = 35
-        versionName = "2.2.18"
+        versionCode = 36
+        versionName = "2.2.19"
 
         buildConfigField(
             "String",
