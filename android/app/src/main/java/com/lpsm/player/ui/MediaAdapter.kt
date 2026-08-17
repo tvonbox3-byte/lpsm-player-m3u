@@ -574,21 +574,35 @@ class MediaAdapter(
         item: MediaEntry
     ) {
 
+        /*
+         * BUILD 42 - TV BOX / FAVORITOS
+         *
+         * Algumas boxes enviam o OK/clique enquanto o RecyclerView ainda esta
+         * calculando layout. A gravacao do favorito acontecia, mas uma atualizacao
+         * imediata do adapter/tela podia derrubar a Activity. Persistimos primeiro
+         * e postamos apenas a atualizacao daquele item para o proximo ciclo da UI.
+         */
         val added =
-            store.toggleFavorite(
-                item.url
-            )
+            try {
+                store.toggleFavorite(
+                    item.url
+                )
+            } catch (_: Throwable) {
+                return
+            }
 
-        val position =
-            holder.bindingAdapterPosition
+        holder.itemView.post {
+            val position =
+                holder.bindingAdapterPosition
 
-        if (
-            position !=
-            RecyclerView.NO_POSITION
-        ) {
-            notifyItemChanged(
-                position
-            )
+            if (
+                position !=
+                RecyclerView.NO_POSITION
+            ) {
+                notifyItemChanged(
+                    position
+                )
+            }
         }
 
         favoriteChanged(

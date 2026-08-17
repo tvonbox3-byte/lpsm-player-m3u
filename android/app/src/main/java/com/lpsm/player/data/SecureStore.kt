@@ -116,7 +116,10 @@ class SecureStore(context: Context) {
             favorites.add(url)
             true
         }
-        prefs.edit().putStringSet("favorites", favorites).apply()
+        // commit() garante que o favorito esteja persistido antes de a TV Box
+        // processar o proximo evento do controle remoto. E uma escrita pequena
+        // e evita estados intermediarios em firmwares Android TV mais antigos.
+        prefs.edit().putStringSet("favorites", favorites).commit()
         return added
     }
 

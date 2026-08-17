@@ -2,9 +2,11 @@ package com.lpsm.player.ui
 
 import android.app.UiModeManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
@@ -180,6 +182,23 @@ class PlayerActivity : AppCompatActivity() {
             }
 
         /*
+         * ==================================================
+         * ESPELHAMENTO / TRANSMISSÃO PARA TV (CELULAR)
+         * ==================================================
+         *
+         * Usa a tela de Cast/Transmitir nativa do Android.
+         * Dessa forma o LPSM não força um protocolo próprio e
+         * continua compatível com os recursos disponibilizados
+         * pelo fabricante do celular/TV.
+         */
+        b.castButton.visibility =
+            if (tvLikeDevice) View.GONE else View.VISIBLE
+
+        b.castButton.setOnClickListener {
+            openCastSettings()
+        }
+
+        /*
          * PLAYER
          */
         b.playerView.isFocusable =
@@ -213,6 +232,36 @@ class PlayerActivity : AppCompatActivity() {
         super.onStart()
 
         startPlayer()
+    }
+
+
+    private fun openCastSettings() {
+
+        /*
+         * Primeiro tenta abrir diretamente a tela "Transmitir"
+         * do Android. Em firmwares que não expõem essa tela,
+         * usamos as configurações sem fio como alternativa.
+         */
+        val castIntent =
+            Intent(Settings.ACTION_CAST_SETTINGS)
+
+        val canOpenCast =
+            castIntent.resolveActivity(packageManager) != null
+
+        val targetIntent =
+            if (canOpenCast) {
+                castIntent
+            } else {
+                Intent(Settings.ACTION_WIRELESS_SETTINGS)
+            }
+
+        runCatching {
+            startActivity(targetIntent)
+        }.onFailure {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
     }
 
 

@@ -14,7 +14,7 @@ android {
         minSdk = 21
         targetSdk = 35
 
-        versionCode = 41
+        versionCode = 44
         versionName = "2.2.23"
 
         buildConfigField(

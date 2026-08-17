@@ -13,7 +13,10 @@ import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -160,6 +163,16 @@ class MainActivity : AppCompatActivity() {
         String? = null
 
     /*
+     * BUILD 44 - FULLSCREEN SEM REINICIAR O STREAM
+     *
+     * Mantemos o mesmo ExoPlayer da previa ao entrar em tela cheia.
+     * Isso evita tela preta, novo buffer e o pequeno "salto para tras"
+     * observado em algumas TV Boxes quando uma segunda Activity era aberta.
+     */
+    private var previewFullscreen = false
+    private var fullscreenOverlay: FrameLayout? = null
+
+    /*
      * Atraso da prévia.
      *
      * Evita abrir dezenas de streams
@@ -289,6 +302,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         preparePreviewPlayerView()
+        configureTvSearchKeyboard()
 
         /*
          * LISTA PRINCIPAL
@@ -332,6 +346,16 @@ class MainActivity : AppCompatActivity() {
                  */
                 { _, added ->
 
+                    /*
+                     * BUILD 42 - TV BOX / FAVORITOS
+                     *
+                     * O item ja atualiza a propria estrela no MediaAdapter.
+                     * Recriar toda a tela aqui (render()) logo depois do OK/clique
+                     * podia desmontar o RecyclerView enquanto o controle ainda
+                     * entregava o evento, causando fechamento em algumas boxes.
+                     * Mantemos somente o feedback visual e deixamos a lista
+                     * intacta.
+                     */
                     toast(
                         if (added) {
                             "Adicionado aos favoritos"
@@ -339,10 +363,6 @@ class MainActivity : AppCompatActivity() {
                             "Removido dos favoritos"
                         }
                     )
-
-                    b.list.post {
-                        render()
-                    }
                 }
             )
 
@@ -379,6 +399,8 @@ class MainActivity : AppCompatActivity() {
                             selectedEntry = it
                             playPreviewNow(it)
                             b.previewWatch.text = "TOCANDO"
+                        } else if (filter == ContentType.LIVE) {
+                            enterPreviewFullscreen(it)
                         } else {
                             openPlayer(it)
                         }
@@ -534,6 +556,24 @@ class MainActivity : AppCompatActivity() {
             b.favorites
         ).forEach { button ->
             button.nextFocusUpId = b.search.id
+
+            /*
+             * Segurar UP serve para percorrer a lista rapidamente.
+             * Ao chegar nos filtros, repeticoes do mesmo toque nao podem
+             * jogar o foco no campo Pesquisar e abrir o teclado.
+             * Um toque novo e curto em UP continua levando a busca.
+             */
+            button.setOnKeyListener { _, keyCode, event ->
+                if (
+                    keyCode == KeyEvent.KEYCODE_DPAD_UP &&
+                    event.action == KeyEvent.ACTION_DOWN &&
+                    event.repeatCount > 0
+                ) {
+                    true
+                } else {
+                    false
+                }
+            }
         }
 
         /*
@@ -548,29 +588,33 @@ class MainActivity : AppCompatActivity() {
         b.search.setOnKeyListener { _, keyCode, event ->
             if (
                 event.action !=
-                android.view.KeyEvent.ACTION_DOWN
+                KeyEvent.ACTION_DOWN
             ) {
                 return@setOnKeyListener false
             }
 
             when (keyCode) {
 
-                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
-
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    hideSearchKeyboard()
+                    b.search.clearFocus()
                     preferredTopFilter()
                         .requestFocus()
-
                     true
                 }
 
-                android.view.KeyEvent.KEYCODE_BACK -> {
-
+                KeyEvent.KEYCODE_BACK -> {
+                    hideSearchKeyboard()
                     b.search.clearFocus()
-
                     preferredTopFilter()
                         .requestFocus()
-
                     true
+                }
+
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER -> {
+                    showSearchKeyboard()
+                    false
                 }
 
                 else ->
@@ -686,7 +730,7 @@ class MainActivity : AppCompatActivity() {
                     item.url
                 ) {
 
-                    openPlayer(
+                    enterPreviewFullscreen(
                         item
                     )
 
@@ -1799,6 +1843,154 @@ class MainActivity : AppCompatActivity() {
         previewFrame.addView(
             previewPlayerView
         )
+
+        /*
+         * O proprio quadrado da previa pode abrir a tela cheia.
+         * Em TV Box o OK sobre a previa faz a mesma coisa.
+         */
+        previewFrame.isClickable = true
+        previewFrame.isFocusable = true
+        previewFrame.isFocusableInTouchMode = false
+        previewFrame.setOnClickListener {
+            currentPreviewEntry()?.let { entry ->
+                if (radioMode) {
+                    playPreviewNow(entry)
+                } else if (filter == ContentType.LIVE) {
+                    enterPreviewFullscreen(entry)
+                } else {
+                    openPlayer(entry)
+                }
+            }
+        }
+    }
+
+    private fun configureTvSearchKeyboard() {
+        /*
+         * Em muitas boxes, um EditText que recebe foco por acidente abre o
+         * teclado imediatamente. Desligamos essa abertura automatica e
+         * mostramos o teclado apenas quando o usuario realmente entra na busca.
+         */
+        if (android.os.Build.VERSION.SDK_INT >= 21) {
+            b.search.showSoftInputOnFocus = false
+        }
+
+        b.search.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                /* foco visual apenas; teclado abre no OK/clique */
+            } else {
+                hideSearchKeyboard()
+            }
+        }
+
+        b.search.setOnClickListener {
+            showSearchKeyboard()
+        }
+    }
+
+    private fun showSearchKeyboard() {
+        if (android.os.Build.VERSION.SDK_INT >= 21) {
+            b.search.showSoftInputOnFocus = true
+        }
+        b.search.requestFocus()
+        b.search.post {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(b.search, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun hideSearchKeyboard() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(b.search.windowToken, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 21) {
+            b.search.showSoftInputOnFocus = false
+        }
+    }
+
+    private fun enterPreviewFullscreen(entry: MediaEntry) {
+        selectedEntry = entry
+
+        /* Se a previa ainda nao iniciou, iniciamos uma unica vez. */
+        if (previewPlayingUrl != entry.url || previewPlayer == null) {
+            playPreviewNow(entry)
+        }
+
+        if (previewFullscreen) return
+
+        val playerView = previewPlayerView ?: return
+        val oldParent = playerView.parent as? ViewGroup ?: return
+        oldParent.removeView(playerView)
+
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener { exitPreviewFullscreen() }
+        }
+
+        overlay.addView(
+            playerView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        (b.root as ViewGroup).addView(
+            overlay,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        fullscreenOverlay = overlay
+        previewFullscreen = true
+
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+
+        overlay.requestFocus()
+    }
+
+    private fun exitPreviewFullscreen() {
+        if (!previewFullscreen) return
+
+        val playerView = previewPlayerView
+        val overlay = fullscreenOverlay
+
+        if (playerView != null) {
+            (playerView.parent as? ViewGroup)?.removeView(playerView)
+
+            val previewFrame =
+                b.previewPanel.getChildAt(0) as? FrameLayout
+
+            previewFrame?.addView(
+                playerView,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+
+        overlay?.let {
+            (it.parent as? ViewGroup)?.removeView(it)
+        }
+
+        fullscreenOverlay = null
+        previewFullscreen = false
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+
+        b.list.post {
+            val entry = selectedEntry
+            val adapter = b.list.adapter as? MediaAdapter
+            if (entry != null && adapter != null) {
+                /* preserva a posicao atual; nao volta a lista para tras */
+                b.list.requestFocus()
+            }
+        }
     }
 
     private fun schedulePreview(
@@ -6302,6 +6494,11 @@ class MainActivity : AppCompatActivity() {
         "Usado para compatibilidade com TV Box"
     )
     override fun onBackPressed() {
+
+        if (previewFullscreen) {
+            exitPreviewFullscreen()
+            return
+        }
 
         if (
             selectedSeriesName !=

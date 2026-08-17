@@ -69,4 +69,32 @@
         android:textSize="11sp"
         android:textStyle="bold" />
 
+
+    <!--
+        CELULAR:
+        abre a tela de transmissão/espelhamento do próprio Android.
+        A TV precisa aceitar Cast/Miracast ou tecnologia compatível
+        disponibilizada pelo fabricante do aparelho.
+    -->
+    <TextView
+        android:id="@+id/castButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="12dp"
+        android:layout_marginBottom="12dp"
+        android:background="#B008111E"
+        android:clickable="true"
+        android:focusable="false"
+        android:gravity="center"
+        android:minHeight="36dp"
+        android:paddingStart="12dp"
+        android:paddingTop="7dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="7dp"
+        android:text="ESPELHAR NA TV"
+        android:textColor="@android:color/white"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
 </FrameLayout>
