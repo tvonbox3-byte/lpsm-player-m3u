@@ -76,7 +76,7 @@ await store.load();
  * Se o servidor reiniciar, todos aparecem OFFLINE até o próximo sinal.
  */
 const DEVICE_ONLINE_WINDOW_MS =
-  45 * 1000;
+  30 * 1000;
 
 const devicePresence =
   new Map();
@@ -1664,7 +1664,7 @@ async function api(
         lastSeenAt,
 
         nextHeartbeatSeconds:
-          15
+          10
       }
     );
   }

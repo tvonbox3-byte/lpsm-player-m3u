@@ -145,6 +145,6 @@ class LpsmApplication :
 
     companion object {
         private const val HEARTBEAT_INTERVAL_MS =
-            15_000L
+            10_000L
     }
 }

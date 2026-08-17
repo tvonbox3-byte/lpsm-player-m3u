@@ -892,7 +892,8 @@ class LpsmApi(
 
     fun downloadPlaylist(
         url: String,
-        limit: Int
+        limit: Int,
+        onPartial: ((List<MediaEntry>) -> Unit)? = null
     ): List<MediaEntry> {
 
         val connection =
@@ -1120,7 +1121,8 @@ class LpsmApi(
                 val parsed =
                     M3uParser.parse(
                         it,
-                        limit
+                        limit,
+                        onPartial
                     )
 
 

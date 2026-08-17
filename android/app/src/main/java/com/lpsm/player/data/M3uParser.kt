@@ -56,7 +56,8 @@ object M3uParser {
 
     fun parse(
         reader: Reader,
-        limit: Int = 60_000
+        limit: Int = 60_000,
+        onPartial: ((List<MediaEntry>) -> Unit)? = null
     ): List<MediaEntry> {
 
         /*
@@ -81,6 +82,29 @@ object M3uParser {
 
         var kept = 0
 
+        /*
+         * BUILD 41 - carregamento progressivo.
+         * Algumas TV Boxes levam muito tempo para percorrer listas enormes.
+         * Liberamos uma primeira amostra rapidamente e continuamos lendo o
+         * restante sem deixar TV/Filmes/Séries vazios durante todo o processo.
+         */
+        var partialStage = 0
+        val partialMarks = intArrayOf(800, 4_000, 12_000)
+
+        fun emitPartialIfNeeded() {
+            val callback = onPartial ?: return
+            if (partialStage >= partialMarks.size) return
+            if (kept < partialMarks[partialStage]) return
+
+            val snapshot = buildList {
+                addAll(buckets.getValue(ContentType.LIVE))
+                addAll(buckets.getValue(ContentType.VOD))
+                addAll(buckets.getValue(ContentType.SERIES))
+            }
+            callback(snapshot)
+            partialStage += 1
+        }
+
         fun keep(entry: MediaEntry) {
             if (limit <= 0) return
 
@@ -89,6 +113,7 @@ object M3uParser {
             if (kept < limit) {
                 target += entry
                 kept += 1
+                emitPartialIfNeeded()
                 return
             }
 
@@ -108,6 +133,7 @@ object M3uParser {
 
             victim.value.removeAt(victim.value.lastIndex)
             target += entry
+            emitPartialIfNeeded()
         }
 
         var metadata = ""

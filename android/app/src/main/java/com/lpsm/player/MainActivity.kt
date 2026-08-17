@@ -2127,6 +2127,10 @@ class MainActivity : AppCompatActivity() {
                             cachedConfig,
                             0
                         )
+                        if (entries.isEmpty()) {
+                            b.message.text =
+                                "Carregando sua lista em segundo plano..."
+                        }
                     }
                 }
 
@@ -2201,6 +2205,10 @@ class MainActivity : AppCompatActivity() {
                         config,
                         0
                     )
+                    if (entries.isEmpty()) {
+                        b.message.text =
+                            "Carregando sua lista em segundo plano..."
+                    }
                 }
             }
 
@@ -2373,7 +2381,38 @@ class MainActivity : AppCompatActivity() {
                         api.downloadPlaylist(
                             playlist.url,
                             remaining
-                        )
+                        ) { partial ->
+
+                            /*
+                             * BUILD 41: libera conteúdo parcial enquanto a
+                             * lista grande ainda está chegando/processando.
+                             * Assim uma box lenta já consegue navegar em vez
+                             * de permanecer com as seções vazias.
+                             */
+                            val progressive =
+                                ArrayList<MediaEntry>(
+                                    all.size + partial.size
+                                ).apply {
+                                    addAll(all)
+                                    addAll(partial)
+                                }
+
+                            val progressiveIndexes =
+                                buildEntryIndexes(progressive)
+
+                            runOnUiThread {
+                                entries = progressive
+                                applyEntryIndexes(progressiveIndexes)
+                                epg = emptyMap()
+
+                                b.message.text =
+                                    "Lista carregando... ${progressive.size} itens disponíveis"
+
+                                if (b.content.visibility == View.VISIBLE) {
+                                    render()
+                                }
+                            }
+                        }
 
                     if (
                         parsed.isEmpty()
@@ -2488,6 +2527,11 @@ class MainActivity : AppCompatActivity() {
                             config,
                             errors.size
                         )
+                    }
+
+                    if (errors.isEmpty()) {
+                        b.message.text =
+                            "Lista pronta • ${freshEntries.size} itens"
                     }
                 }
             }
