@@ -1,6 +1,7 @@
 package com.lpsm.player
 
 import android.app.Dialog
+import android.app.ActivityManager
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
@@ -48,8 +49,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var api: LpsmApi
     private lateinit var playlistCache: PlaylistCache
 
-    private val pool =
-        Executors.newFixedThreadPool(4)
+    /*
+     * TV Boxes de entrada frequentemente têm 1 GB de RAM ou menos.
+     * Quatro tarefas pesadas ao mesmo tempo (M3U + imagens + índices)
+     * causavam disputa de CPU/memória e a tela parecia ficar travada em
+     * "Carregando". Em aparelhos low-RAM usamos apenas 2 workers.
+     */
+    private val pool by lazy {
+        Executors.newFixedThreadPool(
+            if (isLowRamDevice()) 2 else 4
+        )
+    }
 
     private var entries =
         listOf<MediaEntry>()
@@ -207,6 +217,14 @@ class MainActivity : AppCompatActivity() {
 
     private var homeButtonsRow:
         LinearLayout? = null
+
+    private fun isLowRamDevice(): Boolean {
+        val manager =
+            getSystemService(ACTIVITY_SERVICE) as? ActivityManager
+
+        return manager?.isLowRamDevice == true ||
+            (manager?.memoryClass ?: 256) <= 128
+    }
 
     override fun onCreate(
         savedInstanceState: Bundle?
@@ -2089,6 +2107,9 @@ class MainActivity : AppCompatActivity() {
             var openedFromCache =
                 false
 
+            var startupCacheSignature: String? = null
+            var startupCachedEntries: List<MediaEntry> = emptyList()
+
             api.cachedConfig()
                 ?.let { cachedConfig ->
 
@@ -2100,12 +2121,18 @@ class MainActivity : AppCompatActivity() {
                                     .lowercase()
                             }
 
+                    val signature =
+                        playlistCache.signature(
+                            cachedPlaylists
+                        )
+
                     val startupEntries =
                         playlistCache.read(
-                            playlistCache.signature(
-                                cachedPlaylists
-                            )
+                            signature
                         )
+
+                    startupCacheSignature = signature
+                    startupCachedEntries = startupEntries
 
                     if (
                         startupEntries.isNotEmpty()
@@ -2269,15 +2296,27 @@ class MainActivity : AppCompatActivity() {
              * Mostra a última cópia autorizada primeiro. A lista atualizada
              * continua sendo baixada abaixo sem travar a navegação.
              */
+            /*
+             * Se a mesma lista já foi aberta no começo, não descompacta e
+             * indexa o arquivo inteiro uma segunda vez. Isso fazia diferença
+             * grande em boxes com armazenamento e CPU lentos.
+             */
             val cachedEntries =
-                playlistCache
-                    .read(
+                if (
+                    startupCacheSignature == cacheSignature &&
+                    startupCachedEntries.isNotEmpty()
+                ) {
+                    startupCachedEntries
+                } else {
+                    playlistCache.read(
                         cacheSignature
                     )
+                }
 
             if (
                 cachedEntries
-                    .isNotEmpty()
+                    .isNotEmpty() &&
+                !(openedFromCache && startupCacheSignature == cacheSignature)
             ) {
 
                 val cachedIndexes =
@@ -2325,6 +2364,19 @@ class MainActivity : AppCompatActivity() {
                 ) {
                     b.loadingLabel.text =
                         "Carregando ${uniquePlaylists.size} lista(s)..."
+                }
+            }
+
+            /*
+             * Com cache válido a HOME já está utilizável. Damos um pequeno
+             * intervalo para a primeira renderização terminar antes de iniciar
+             * download/parsing pesado em boxes mais fracas.
+             */
+            if (openedFromCache && isLowRamDevice()) {
+                try {
+                    Thread.sleep(900)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
                 }
             }
 
@@ -6110,7 +6162,7 @@ class MainActivity : AppCompatActivity() {
 
                 val loaded =
                     RadioBrowserApi
-                        .brazilianStations()
+                        .brazilianStations(applicationContext)
 
                 runOnUiThread {
 

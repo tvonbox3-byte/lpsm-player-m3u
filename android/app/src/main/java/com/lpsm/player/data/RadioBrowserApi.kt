@@ -1,79 +1,90 @@
 package com.lpsm.player.data
 
+import android.content.Context
 import com.lpsm.player.model.ContentType
 import com.lpsm.player.model.MediaEntry
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
  * Catalogo independente de radios brasileiras.
  *
- * A consulta e feita somente quando a pessoa abre a secao Radios. Assim a
- * inicializacao do LPSM e o carregamento das listas M3U continuam leves.
+ * 2.2.22:
+ * - uma unica consulta nacional por tentativa (antes eram varias consultas sequenciais)
+ * - timeouts curtos com failover de servidor
+ * - cache local por 24h, deixando as proximas aberturas praticamente imediatas
+ * - catalogo maior, incluindo automaticamente emissoras AM cadastradas no Radio Browser
+ * - emissoras de Vacaria/regiao continuam fixadas no topo como fallback instantaneo
  */
 object RadioBrowserApi {
 
-    private val queries =
-        listOf(
-            "/json/stations/bycityexact/Vacaria" +
-                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
-            "/json/stations/bycity/Vacaria" +
-                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
-            "/json/stations/bycityexact/Xanxer%C3%AA" +
-                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
-            "/json/stations/bycity/Xanxere" +
-                "?hidebroken=true&order=clickcount&reverse=true&limit=100",
-            "/json/stations/bycountrycodeexact/BR" +
-                "?hidebroken=true&order=clickcount&reverse=true&limit=450"
-        )
+    private const val PREFS = "lpsm_radio_cache"
+    private const val KEY_JSON = "stations_json"
+    private const val KEY_TIME = "stations_time"
+    private const val CACHE_TTL_MS = 24L * 60L * 60L * 1000L
+
+    // Uma consulta grande e mais rapida que cinco consultas pequenas executadas em serie.
+    private const val BRAZIL_QUERY =
+        "/json/stations/bycountrycodeexact/BR" +
+            "?hidebroken=true&order=clickcount&reverse=true&limit=1000"
 
     private val servers =
         listOf(
             "https://all.api.radio-browser.info",
-            "https://de1.api.radio-browser.info"
+            "https://de1.api.radio-browser.info",
+            "https://nl1.api.radio-browser.info"
         )
 
-    fun brazilianStations(): List<MediaEntry> {
+    fun brazilianStations(context: Context): List<MediaEntry> {
+        val fixed = vacariaAndRegionStations()
+
+        readCache(context)?.let { cached ->
+            return merge(fixed, cached)
+        }
+
         var lastError: Throwable? = null
-        val result = ArrayList<MediaEntry>()
+
+        for (server in servers) {
+            try {
+                val downloaded = download("$server$BRAZIL_QUERY")
+                if (downloaded.isNotEmpty()) {
+                    writeCache(context, downloaded)
+                    return merge(fixed, downloaded)
+                }
+            } catch (error: Throwable) {
+                lastError = error
+            }
+        }
+
+        // Mesmo sem internet/API, as radios locais conhecidas aparecem de imediato.
+        if (fixed.isNotEmpty()) return fixed
+
+        throw IllegalStateException("Nao foi possivel carregar as radios agora.", lastError)
+    }
+
+    private fun merge(
+        first: List<MediaEntry>,
+        second: List<MediaEntry>
+    ): List<MediaEntry> {
+        val result = ArrayList<MediaEntry>(first.size + second.size)
         val seenUrls = HashSet<String>()
         val seenNames = HashSet<String>()
 
-        fun append(stations: List<MediaEntry>) {
-            for (station in stations) {
+        fun append(items: List<MediaEntry>) {
+            for (station in items) {
                 val urlKey = station.url.trim().lowercase()
                 val nameKey = station.name.normalizedRadioName()
-
-                if (seenUrls.add(urlKey) && seenNames.add(nameKey)) {
+                if (urlKey.isNotBlank() && seenUrls.add(urlKey) && seenNames.add(nameKey)) {
                     result += station
                 }
             }
         }
 
-        // Estas emissoras usam os enderecos publicados pelos proprios sites.
-        // Alem de garantir Vacaria no topo, isto substitui cadastros antigos do
-        // catalogo publico (principalmente o da Radio Viva).
-        append(vacariaAndRegionStations())
-
-        for (server in servers) {
-            var serverWorked = false
-
-            for (query in queries) {
-                try {
-                    append(download("$server$query"))
-                    serverWorked = true
-                } catch (error: Throwable) {
-                    lastError = error
-                }
-            }
-
-            if (serverWorked && result.isNotEmpty()) return result
-        }
-
-        if (result.isNotEmpty()) return result
-
-        throw IllegalStateException("Nao foi possivel carregar as radios agora.", lastError)
+        append(first)
+        append(second)
+        return result
     }
 
     private fun vacariaAndRegionStations(): List<MediaEntry> =
@@ -129,11 +140,12 @@ object RadioBrowserApi {
     private fun download(address: String): List<MediaEntry> {
         val connection =
             (URL(address).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 12_000
-                readTimeout = 20_000
+                connectTimeout = 4_000
+                readTimeout = 8_000
                 instanceFollowRedirects = true
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/json")
+                setRequestProperty("Accept-Encoding", "gzip")
                 setRequestProperty("User-Agent", "LPSM-Player/Android")
             }
 
@@ -161,7 +173,6 @@ object RadioBrowserApi {
 
         for (index in 0 until array.length()) {
             val station = array.optJSONObject(index) ?: continue
-
             if (station.optInt("lastcheckok", 0) != 1) continue
 
             val streamUrl =
@@ -171,37 +182,31 @@ object RadioBrowserApi {
 
             if (
                 streamUrl.isBlank() ||
-                !(streamUrl.startsWith("https://") ||
-                    streamUrl.startsWith("http://")) ||
+                !(streamUrl.startsWith("https://") || streamUrl.startsWith("http://")) ||
                 !seen.add(streamUrl.lowercase())
-            ) {
-                continue
-            }
+            ) continue
 
-            val name =
-                station.optString("name")
-                    .trim()
-                    .ifBlank { "Radio sem nome" }
-
-            // Ha varios cadastros antigos com o nome Radio Viva. Mantemos
-            // somente o stream oficial fixado acima para evitar a opcao muda.
+            val name = station.optString("name").trim().ifBlank { "Radio sem nome" }
             val normalizedName = name.normalizedRadioName()
-            if (
-                "radio viva" in normalizedName ||
-                "momento fm" in normalizedName
-            ) {
-                continue
-            }
+
+            // Evita duplicatas quebradas das emissoras que ja estao fixadas acima.
+            if ("radio viva" in normalizedName || "momento fm" in normalizedName) continue
 
             val city = station.optString("city").trim()
             val state = station.optString("state").trim()
+            val tags = station.optString("tags").lowercase()
+
+            val looksAm =
+                Regex("(?i)(^|\\s)AM(\\s|$)").containsMatchIn(name) ||
+                    Regex("(?i)\\b\\d{3,4}\\s*k?hz\\b").containsMatchIn(name) ||
+                    tags.split(',').any { it.trim() in setOf("am", "am radio", "radio am") }
+
             val group =
                 when {
-                    city.equals("Vacaria", ignoreCase = true) ->
-                        "Vacaria e Regiao"
+                    city.equals("Vacaria", ignoreCase = true) -> "Vacaria e Regiao"
                     city.equals("Xanxere", ignoreCase = true) ||
-                        city.equals("Xanxerê", ignoreCase = true) ->
-                        "Xanxere - SC"
+                        city.equals("Xanxerê", ignoreCase = true) -> "Xanxere - SC"
+                    looksAm -> "Radios AM - Brasil"
                     else -> state.ifBlank { city.ifBlank { "Brasil" } }
                 }
 
@@ -217,6 +222,59 @@ object RadioBrowserApi {
         }
 
         return result
+    }
+
+    private fun writeCache(context: Context, stations: List<MediaEntry>) {
+        try {
+            val array = JSONArray()
+            stations.forEach { item ->
+                array.put(
+                    JSONObject()
+                        .put("name", item.name)
+                        .put("url", item.url)
+                        .put("logo", item.logo)
+                        .put("group", item.group)
+                        .put("tvgId", item.tvgId)
+                )
+            }
+
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_JSON, array.toString())
+                .putLong(KEY_TIME, System.currentTimeMillis())
+                .apply()
+        } catch (_: Throwable) {
+            // Cache nunca pode impedir a secao Radios de funcionar.
+        }
+    }
+
+    private fun readCache(context: Context): List<MediaEntry>? {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val savedAt = prefs.getLong(KEY_TIME, 0L)
+            val body = prefs.getString(KEY_JSON, null) ?: return null
+            if (savedAt <= 0L || System.currentTimeMillis() - savedAt > CACHE_TTL_MS) return null
+
+            val array = JSONArray(body)
+            val result = ArrayList<MediaEntry>(array.length())
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val url = item.optString("url").trim()
+                if (url.isBlank()) continue
+                result +=
+                    MediaEntry(
+                        name = item.optString("name").trim().ifBlank { "Radio sem nome" },
+                        url = url,
+                        logo = item.optString("logo").trim(),
+                        group = item.optString("group").trim().ifBlank { "Brasil" },
+                        tvgId = item.optString("tvgId").trim(),
+                        type = ContentType.LIVE
+                    )
+            }
+            result.takeIf { it.isNotEmpty() }
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun String.normalizedRadioName(): String =

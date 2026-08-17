@@ -26,17 +26,20 @@ class LpsmApi(
 
     companion object {
 
+        // Falhar cedo é melhor do que deixar uma TV Box presa vários
+        // minutos na tela de carregamento. O cache local assume quando a
+        // conexão está lenta ou o servidor não responde.
         private const val API_CONNECT_TIMEOUT =
-            15_000
+            10_000
 
         private const val API_READ_TIMEOUT =
-            30_000
+            18_000
 
         private const val PLAYLIST_CONNECT_TIMEOUT =
-            20_000
+            12_000
 
         private const val PLAYLIST_READ_TIMEOUT =
-            90_000
+            45_000
 
         private const val MAX_REDIRECTS =
             8
