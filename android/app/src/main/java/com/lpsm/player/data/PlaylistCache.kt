@@ -24,11 +24,32 @@ class PlaylistCache(
     context: Context
 ) {
 
+    /*
+     * filesDir nao e limpo automaticamente pelo Android como cacheDir.
+     * Isso evita que TV Boxes com pouco armazenamento percam a lista e
+     * precisem processar dezenas de milhares de itens em toda abertura.
+     */
     private val file =
+        File(
+            context.filesDir,
+            "authorized_playlist_v1.gz"
+        )
+
+    private val legacyCacheFile =
         File(
             context.cacheDir,
             "authorized_playlist_v1.gz"
         )
+
+    init {
+        if (!file.isFile && legacyCacheFile.isFile) {
+            try {
+                legacyCacheFile.copyTo(file, overwrite = false)
+            } catch (_: Throwable) {
+                // Se a migracao falhar, a lista sera recriada normalmente.
+            }
+        }
+    }
 
     fun signature(
         playlists: List<Playlist>

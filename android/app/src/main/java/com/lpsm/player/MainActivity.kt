@@ -2107,65 +2107,26 @@ class MainActivity : AppCompatActivity() {
             var openedFromCache =
                 false
 
-            var startupCacheSignature: String? = null
-            var startupCachedEntries: List<MediaEntry> = emptyList()
-
+            /*
+             * FAST START 2.2.23
+             *
+             * A HOME nao precisa esperar a lista M3U ser descompactada.
+             * Em TV Boxes fracas, ler e agrupar ate 60 mil itens antes de
+             * desenhar a HOME era o maior gargalo. Agora mostramos a HOME
+             * imediatamente com a ultima configuracao autorizada e fazemos
+             * cache, indices, M3U e EPG somente em segundo plano.
+             */
             api.cachedConfig()
                 ?.let { cachedConfig ->
 
-                    val cachedPlaylists =
-                        cachedConfig.playlists
-                            .distinctBy {
-                                it.url
-                                    .trim()
-                                    .lowercase()
-                            }
+                    openedFromCache = true
+                    lastConfig = cachedConfig
 
-                    val signature =
-                        playlistCache.signature(
-                            cachedPlaylists
+                    runOnUiThread {
+                        showContent(
+                            cachedConfig,
+                            0
                         )
-
-                    val startupEntries =
-                        playlistCache.read(
-                            signature
-                        )
-
-                    startupCacheSignature = signature
-                    startupCachedEntries = startupEntries
-
-                    if (
-                        startupEntries.isNotEmpty()
-                    ) {
-
-                        openedFromCache =
-                            true
-
-                        lastConfig =
-                            cachedConfig
-
-                        val startupIndexes =
-                            buildEntryIndexes(
-                                startupEntries
-                            )
-
-                        runOnUiThread {
-
-                            entries =
-                                startupEntries
-
-                            applyEntryIndexes(
-                                startupIndexes
-                            )
-
-                            epg =
-                                emptyMap()
-
-                            showContent(
-                                cachedConfig,
-                                0
-                            )
-                        }
                     }
                 }
 
@@ -2228,6 +2189,20 @@ class MainActivity : AppCompatActivity() {
 
             lastConfig =
                 config
+
+            /*
+             * Se nao havia configuracao local (primeira abertura/limpeza de
+             * dados), a resposta pequena do painel ja e suficiente para
+             * liberar a HOME. A lista grande continua abaixo em background.
+             */
+            if (!openedFromCache) {
+                runOnUiThread {
+                    showContent(
+                        config,
+                        0
+                    )
+                }
+            }
 
             /*
              * Banner e papel de parede não podem mais atrasar a lista.
@@ -2302,21 +2277,13 @@ class MainActivity : AppCompatActivity() {
              * grande em boxes com armazenamento e CPU lentos.
              */
             val cachedEntries =
-                if (
-                    startupCacheSignature == cacheSignature &&
-                    startupCachedEntries.isNotEmpty()
-                ) {
-                    startupCachedEntries
-                } else {
-                    playlistCache.read(
-                        cacheSignature
-                    )
-                }
+                playlistCache.read(
+                    cacheSignature
+                )
 
             if (
                 cachedEntries
-                    .isNotEmpty() &&
-                !(openedFromCache && startupCacheSignature == cacheSignature)
+                    .isNotEmpty()
             ) {
 
                 val cachedIndexes =
@@ -2364,19 +2331,6 @@ class MainActivity : AppCompatActivity() {
                 ) {
                     b.loadingLabel.text =
                         "Carregando ${uniquePlaylists.size} lista(s)..."
-                }
-            }
-
-            /*
-             * Com cache válido a HOME já está utilizável. Damos um pequeno
-             * intervalo para a primeira renderização terminar antes de iniciar
-             * download/parsing pesado em boxes mais fracas.
-             */
-            if (openedFromCache && isLowRamDevice()) {
-                try {
-                    Thread.sleep(900)
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
                 }
             }
 
