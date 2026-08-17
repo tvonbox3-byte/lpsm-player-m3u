@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LPSM Monitor</title>
+<link rel="stylesheet" href="/monitor.css">
+</head>
+<body>
+<main>
+  <header><h1>LPSM Monitor</h1><span id="status">Conectando...</span></header>
+  <section class="card">
+    <div><strong id="client">Cliente</strong></div>
+    <div id="now">Aguardando reprodução...</div>
+    <video id="video" controls autoplay playsinline></video>
+    <p id="hint"></p>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script src="/monitor.js"></script>
+</body>
+</html>

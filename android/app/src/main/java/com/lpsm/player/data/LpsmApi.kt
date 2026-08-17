@@ -318,12 +318,24 @@ class LpsmApi(
      * =====================================================
      */
 
-    fun heartbeat() {
+    fun heartbeat(
+        name: String = "",
+        url: String = "",
+        group: String = "",
+        type: String = ""
+    ) {
+
+        val payload =
+            JSONObject()
+                .put("nowPlayingName", name)
+                .put("nowPlayingUrl", url)
+                .put("nowPlayingGroup", group)
+                .put("nowPlayingType", type)
 
         call(
             "/api/device/heartbeat",
             "POST",
-            JSONObject()
+            payload
         )
     }
 

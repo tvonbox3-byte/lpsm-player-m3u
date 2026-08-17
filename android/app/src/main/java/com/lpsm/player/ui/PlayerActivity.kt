@@ -22,6 +22,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 
 import com.lpsm.player.databinding.ActivityPlayerBinding
+import com.lpsm.player.LpsmApplication
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -277,6 +278,14 @@ class PlayerActivity : AppCompatActivity() {
             intent.getStringExtra(
                 "url"
             ) ?: return
+
+        (application as? LpsmApplication)
+            ?.setNowPlaying(
+                intent.getStringExtra("name") ?: "",
+                url,
+                intent.getStringExtra("group") ?: "",
+                intent.getStringExtra("type") ?: ""
+            )
 
         if (
             player != null

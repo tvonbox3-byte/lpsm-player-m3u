@@ -261,84 +261,91 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="10dp"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:paddingStart="5dp"
                 android:paddingEnd="5dp">
 
-                <Button
-                    android:id="@+id/homeLive"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_margin="4dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
                     android:layout_weight="1"
-                    android:maxHeight="105dp"
-                    android:minHeight="65dp"
-                    android:text="TV AO VIVO"
-                    android:textColor="@color/text"
-                    android:textSize="17sp" />
+                    android:gravity="center"
+                    android:orientation="horizontal">
 
-                <Button
-                    android:id="@+id/homeVod"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:maxHeight="105dp"
-                    android:minHeight="65dp"
-                    android:text="FILMES"
-                    android:textColor="@color/text"
-                    android:textSize="17sp" />
+                    <Button
+                        android:id="@+id/homeLive"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_margin="4dp"
+                        android:layout_weight="1"
+                        android:maxHeight="92dp"
+                        android:minHeight="58dp"
+                        android:text="TV AO VIVO"
+                        android:textColor="@color/text"
+                        android:textSize="16sp" />
 
-                <Button
-                    android:id="@+id/homeSeries"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:maxHeight="105dp"
-                    android:minHeight="65dp"
-                    android:text="SÉRIES"
-                    android:textColor="@color/text"
-                    android:textSize="17sp" />
+                    <Button
+                        android:id="@+id/homeVod"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_margin="4dp"
+                        android:layout_weight="1"
+                        android:maxHeight="92dp"
+                        android:minHeight="58dp"
+                        android:text="FILMES"
+                        android:textColor="@color/text"
+                        android:textSize="16sp" />
 
-                <Button
-                    android:id="@+id/homeRadio"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:maxHeight="105dp"
-                    android:minHeight="65dp"
-                    android:text="RÁDIOS"
-                    android:textColor="@color/text"
-                    android:textSize="17sp" />
+                    <Button
+                        android:id="@+id/homeSeries"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_margin="4dp"
+                        android:layout_weight="1"
+                        android:maxHeight="92dp"
+                        android:minHeight="58dp"
+                        android:text="SÉRIES"
+                        android:textColor="@color/text"
+                        android:textSize="16sp" />
+
+                    <Button
+                        android:id="@+id/homeRadio"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_margin="4dp"
+                        android:layout_weight="1"
+                        android:maxHeight="92dp"
+                        android:minHeight="58dp"
+                        android:text="RÁDIOS"
+                        android:textColor="@color/text"
+                        android:textSize="16sp" />
+
+                    <Button
+                        android:id="@+id/homeAccount"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_margin="4dp"
+                        android:layout_weight="1"
+                        android:maxHeight="92dp"
+                        android:minHeight="58dp"
+                        android:text="CONTA"
+                        android:textColor="@color/text"
+                        android:textSize="16sp" />
+
+                </LinearLayout>
 
                 <Button
                     android:id="@+id/homeYoutube"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:maxHeight="105dp"
-                    android:minHeight="65dp"
+                    android:layout_width="210dp"
+                    android:layout_height="54dp"
+                    android:layout_marginTop="5dp"
+                    android:layout_marginBottom="3dp"
                     android:text="YOUTUBE"
                     android:textColor="@color/text"
-                    android:textSize="17sp" />
-
-                <Button
-                    android:id="@+id/homeAccount"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:maxHeight="105dp"
-                    android:minHeight="65dp"
-                    android:text="CONTA"
-                    android:textColor="@color/text"
-                    android:textSize="17sp" />
+                    android:textSize="16sp" />
 
             </LinearLayout>
 

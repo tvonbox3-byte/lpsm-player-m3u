@@ -81,6 +81,13 @@ const DEVICE_ONLINE_WINDOW_MS =
 const devicePresence =
   new Map();
 
+/*
+ * Conteúdo atual fica somente em memória.
+ * A URL nunca entra no estado geral do painel.
+ */
+const devicePlayback =
+  new Map();
+
 
 /*
  * ==========================================
@@ -159,6 +166,9 @@ const presenceForClient =
           Date.parse(lastSeenAt)
         : Infinity;
 
+    const playing =
+      devicePlayback.get(client.id) || null;
+
     return {
 
       online:
@@ -166,7 +176,16 @@ const presenceForClient =
         age <=
           DEVICE_ONLINE_WINDOW_MS,
 
-      lastSeenAt
+      lastSeenAt,
+
+      nowPlaying: playing
+        ? {
+            name: playing.name,
+            group: playing.group,
+            type: playing.type,
+            updatedAt: playing.updatedAt
+          }
+        : null
     };
   };
 
@@ -1648,6 +1667,30 @@ async function api(
     }
 
 
+    const data =
+      await body(req);
+
+    const nowPlayingName =
+      String(data.nowPlayingName || '').slice(0, 180);
+    const nowPlayingUrl =
+      cleanUrl(data.nowPlayingUrl).slice(0, 4096);
+    const nowPlayingGroup =
+      String(data.nowPlayingGroup || '').slice(0, 180);
+    const nowPlayingType =
+      String(data.nowPlayingType || '').slice(0, 32);
+
+    if (nowPlayingName && isHttpUrl(nowPlayingUrl)) {
+      devicePlayback.set(client.id, {
+        name: nowPlayingName,
+        url: nowPlayingUrl,
+        group: nowPlayingGroup,
+        type: nowPlayingType,
+        updatedAt: new Date().toISOString()
+      });
+    } else {
+      devicePlayback.delete(client.id);
+    }
+
     const lastSeenAt =
       markClientOnline(
         client
@@ -1954,6 +1997,47 @@ async function api(
           undefined
       }
     );
+  }
+
+
+  /*
+   * ========================================
+   * MONITOR - MESMO STREAM DO CLIENTE
+   * ========================================
+   * Retorna a URL somente quando o administrador
+   * abre o monitor daquele cliente.
+   */
+  const monitorMatch =
+    path.match(/^\/api\/admin\/monitor\/([^/]+)$/);
+
+  if (req.method === 'GET' && monitorMatch) {
+    const clientId = decodeURIComponent(monitorMatch[1]);
+    const client = store.data.clients.find(item => item.id === clientId);
+
+    if (!client) {
+      return json(res, 404, { error: 'Cliente não encontrado' });
+    }
+
+    const presence = presenceForClient(client);
+    const playing = devicePlayback.get(client.id) || null;
+
+    return json(res, 200, {
+      client: {
+        id: client.id,
+        name: client.name,
+        online: presence.online,
+        lastSeenAt: presence.lastSeenAt
+      },
+      nowPlaying: playing
+        ? {
+            name: playing.name,
+            group: playing.group,
+            type: playing.type,
+            url: playing.url,
+            updatedAt: playing.updatedAt
+          }
+        : null
+    });
   }
 
 

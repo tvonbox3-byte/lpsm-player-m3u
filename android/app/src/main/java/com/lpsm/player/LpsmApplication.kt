@@ -53,7 +53,12 @@ class LpsmApplication :
 
                     executor.execute {
                         try {
-                            api.heartbeat()
+                            api.heartbeat(
+                                nowPlayingName,
+                                nowPlayingUrl,
+                                nowPlayingGroup,
+                                nowPlayingType
+                            )
                         } catch (_: Exception) {
                             // A presença é informativa e nunca pode fechar o app.
                         }
@@ -66,6 +71,42 @@ class LpsmApplication :
                 )
             }
         }
+
+
+    @Volatile
+    var nowPlayingName: String = ""
+        private set
+
+    @Volatile
+    var nowPlayingUrl: String = ""
+        private set
+
+    @Volatile
+    var nowPlayingGroup: String = ""
+        private set
+
+    @Volatile
+    var nowPlayingType: String = ""
+        private set
+
+    fun setNowPlaying(
+        name: String,
+        url: String,
+        group: String = "",
+        type: String = ""
+    ) {
+        nowPlayingName = name.take(180)
+        nowPlayingUrl = url.take(4096)
+        nowPlayingGroup = group.take(180)
+        nowPlayingType = type.take(32)
+    }
+
+    fun clearNowPlaying() {
+        nowPlayingName = ""
+        nowPlayingUrl = ""
+        nowPlayingGroup = ""
+        nowPlayingType = ""
+    }
 
     override fun onCreate() {
         super.onCreate()

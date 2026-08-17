@@ -1302,6 +1302,15 @@ function render() {
 
                   <br>
 
+                  Assistindo agora:
+                  ${
+                    client.nowPlaying?.name
+                      ? `<strong>${esc(client.nowPlaying.name)}</strong>`
+                      : 'Nada informado'
+                  }
+
+                  <br>
+
                   ${
                     source
                       ? `
@@ -1333,6 +1342,19 @@ function render() {
                 </div>
 
                 <div class="actions">
+
+                  ${
+                    client.online === true && client.nowPlaying?.name
+                      ? `
+                        <button
+                          class="ghost monitor-client"
+                          data-id="${client.id}"
+                        >
+                          Ver agora
+                        </button>
+                      `
+                      : ''
+                  }
 
                   <button
                     class="ghost edit-client"
@@ -3014,3 +3036,14 @@ document.body.onclick =
       );
     }
   };
+
+
+// Build 46: abre monitor em janela separada sem pesar o painel principal.
+document.addEventListener('click', event => {
+  const button = event.target.closest('.monitor-client');
+  if (!button) return;
+  const token = sessionStorage.lpsmToken || '';
+  if (!token) return;
+  localStorage.setItem('lpsmMonitorToken', token);
+  window.open(`/monitor.html?client=${encodeURIComponent(button.dataset.id)}`, '_blank', 'noopener');
+});

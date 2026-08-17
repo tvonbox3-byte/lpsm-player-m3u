@@ -532,11 +532,21 @@ class MainActivity : AppCompatActivity() {
         b.homeSeries.nextFocusLeftId = b.homeVod.id
         b.homeSeries.nextFocusRightId = b.homeRadio.id
         b.homeRadio.nextFocusLeftId = b.homeSeries.id
-        b.homeRadio.nextFocusRightId = b.homeYoutube.id
-        b.homeYoutube.nextFocusLeftId = b.homeRadio.id
-        b.homeYoutube.nextFocusRightId = b.homeAccount.id
-        b.homeAccount.nextFocusLeftId = b.homeYoutube.id
+        b.homeRadio.nextFocusRightId = b.homeAccount.id
+        b.homeAccount.nextFocusLeftId = b.homeRadio.id
         b.homeAccount.nextFocusRightId = b.homeLive.id
+
+        // YouTube fica embaixo para não alargar a Home.
+        listOf(
+            b.homeLive,
+            b.homeVod,
+            b.homeSeries,
+            b.homeRadio,
+            b.homeAccount
+        ).forEach { it.nextFocusDownId = b.homeYoutube.id }
+        b.homeYoutube.nextFocusUpId = b.homeRadio.id
+        b.homeYoutube.nextFocusLeftId = b.homeYoutube.id
+        b.homeYoutube.nextFocusRightId = b.homeYoutube.id
 
         /*
          * FILTROS SUPERIORES - esquerda / direita
@@ -2103,6 +2113,14 @@ class MainActivity : AppCompatActivity() {
 
         previewPlayingUrl =
             entry.url
+
+        (application as? LpsmApplication)
+            ?.setNowPlaying(
+                displayTitle(entry),
+                entry.url,
+                entry.group,
+                entry.type.name
+            )
 
         previewPlayer
             ?.apply {
@@ -6308,6 +6326,14 @@ class MainActivity : AppCompatActivity() {
                 .putExtra(
                     "url",
                     entry.url
+                )
+                .putExtra(
+                    "group",
+                    entry.group
+                )
+                .putExtra(
+                    "type",
+                    entry.type.name
                 )
         )
     }
