@@ -1,5 +1,7 @@
 package com.lpsm.player
 
+import android.text.InputType
+
 import android.app.Dialog
 import android.app.ActivityManager
 import android.content.Intent
@@ -46,6 +48,9 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
+
+    private val adultPin = "0202"
+    private var allowSearchFocus = false
 
     private lateinit var b: ActivityMainBinding
     private lateinit var store: SecureStore
@@ -443,6 +448,13 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
+        b.homeYoutube
+            .setOnClickListener {
+                startActivity(
+                    Intent(this, YoutubeActivity::class.java)
+                )
+            }
+
         b.homeAccount
             .setOnClickListener {
 
@@ -492,6 +504,7 @@ class MainActivity : AppCompatActivity() {
             b.homeVod,
             b.homeSeries,
             b.homeRadio,
+            b.homeYoutube,
             b.homeAccount,
             b.all,
             b.live,
@@ -519,8 +532,10 @@ class MainActivity : AppCompatActivity() {
         b.homeSeries.nextFocusLeftId = b.homeVod.id
         b.homeSeries.nextFocusRightId = b.homeRadio.id
         b.homeRadio.nextFocusLeftId = b.homeSeries.id
-        b.homeRadio.nextFocusRightId = b.homeAccount.id
-        b.homeAccount.nextFocusLeftId = b.homeRadio.id
+        b.homeRadio.nextFocusRightId = b.homeYoutube.id
+        b.homeYoutube.nextFocusLeftId = b.homeRadio.id
+        b.homeYoutube.nextFocusRightId = b.homeAccount.id
+        b.homeAccount.nextFocusLeftId = b.homeYoutube.id
         b.homeAccount.nextFocusRightId = b.homeLive.id
 
         /*
@@ -566,10 +581,14 @@ class MainActivity : AppCompatActivity() {
             button.setOnKeyListener { _, keyCode, event ->
                 if (
                     keyCode == KeyEvent.KEYCODE_DPAD_UP &&
-                    event.action == KeyEvent.ACTION_DOWN &&
-                    event.repeatCount > 0
+                    event.action == KeyEvent.ACTION_DOWN
                 ) {
-                    true
+                    if (event.repeatCount > 0) {
+                        true
+                    } else {
+                        allowSearchFocus = true
+                        false
+                    }
                 } else {
                     false
                 }
@@ -900,6 +919,11 @@ class MainActivity : AppCompatActivity() {
     private fun handleCategoryClick(
         category: String
     ) {
+
+        if (isAdultCategory(category)) {
+            requestAdultPin(category)
+            return
+        }
 
         if (
             filter ==
@@ -1876,18 +1900,28 @@ class MainActivity : AppCompatActivity() {
 
         b.search.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
-                /* foco visual apenas; teclado abre no OK/clique */
+                if (!allowSearchFocus) {
+                    b.search.post {
+                        b.search.clearFocus()
+                        preferredTopFilter().requestFocus()
+                    }
+                } else {
+                    allowSearchFocus = false
+                    showSearchKeyboard()
+                }
             } else {
                 hideSearchKeyboard()
             }
         }
 
         b.search.setOnClickListener {
+            allowSearchFocus = true
             showSearchKeyboard()
         }
     }
 
     private fun showSearchKeyboard() {
+        allowSearchFocus = true
         if (android.os.Build.VERSION.SDK_INT >= 21) {
             b.search.showSoftInputOnFocus = true
         }
@@ -4324,6 +4358,50 @@ class MainActivity : AppCompatActivity() {
             )
     }
 
+    private var unlockedAdultGroup: String? = null
+
+    private fun requestAdultPin(category: String) {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "PIN"
+            isSingleLine = true
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Conteúdo adulto")
+            .setMessage("Digite o PIN para acessar esta categoria.")
+            .setView(input)
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton("Entrar", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            ok.setOnClickListener {
+                if (input.text.toString() == adultPin) {
+                    unlockedAdultGroup = category
+                    favoritesOnly = false
+                    selectedGroup = category
+                    selectedEntry = null
+                    stopPreview()
+                    resetPreviewText()
+                    dialog.dismiss()
+                    render()
+                    focusFirstMedia()
+                } else {
+                    input.error = "PIN incorreto"
+                    input.selectAll()
+                }
+            }
+            input.requestFocus()
+        }
+
+        dialog.setOnDismissListener {
+            hideSearchKeyboard()
+        }
+        dialog.show()
+    }
+
     private fun liveCategoryPriority(
         category: String
     ): Int {
@@ -4338,6 +4416,13 @@ class MainActivity : AppCompatActivity() {
                 value
             ) ->
                 1000
+
+            listOf(
+                "jogos de hoje",
+                "jogos hoje",
+                "jogo de hoje"
+            ).any { it in value } ->
+                -20
 
             listOf(
                 "rio grande do sul",
@@ -4594,6 +4679,10 @@ class MainActivity : AppCompatActivity() {
                         it.url in
                         favoriteUrls
 
+                val adultOkay =
+                    !isAdultCategory(it.group) ||
+                        (selectedGroup != null && selectedGroup == unlockedAdultGroup)
+
                 val queryOkay =
                     query.isBlank() ||
 
@@ -4614,6 +4703,7 @@ class MainActivity : AppCompatActivity() {
                             )
 
                 favoriteOkay &&
+                    adultOkay &&
                     queryOkay
             }
 
@@ -6651,6 +6741,22 @@ class MainActivity : AppCompatActivity() {
      * CICLO DE VIDA
      * =====================================================
      */
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (
+            event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount > 0 &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) &&
+            b.search.hasFocus()
+        ) {
+            b.search.clearFocus()
+            preferredTopFilter().requestFocus()
+            return true
+        }
+
+        return super.dispatchKeyEvent(event)
+    }
 
     override fun onConfigurationChanged(
         newConfig: Configuration

@@ -317,6 +317,18 @@
                     android:textSize="17sp" />
 
                 <Button
+                    android:id="@+id/homeYoutube"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:maxHeight="105dp"
+                    android:minHeight="65dp"
+                    android:text="YOUTUBE"
+                    android:textColor="@color/text"
+                    android:textSize="17sp" />
+
+                <Button
                     android:id="@+id/homeAccount"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"

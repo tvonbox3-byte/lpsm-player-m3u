@@ -84,6 +84,12 @@
             e depois abre MainActivity.
         -->
         <activity
+            android:name=".YoutubeActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="false"
             android:screenOrientation="landscape"
