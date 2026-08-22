@@ -25,10 +25,10 @@ object RadioBrowserApi {
     private const val KEY_TIME = "stations_time"
     private const val CACHE_TTL_MS = 24L * 60L * 60L * 1000L
 
-    // Uma consulta grande e mais rapida que cinco consultas pequenas executadas em serie.
+    // 350 emissoras preservam variedade sem sobrecarregar boxes com pouca memoria.
     private const val BRAZIL_QUERY =
         "/json/stations/bycountrycodeexact/BR" +
-            "?hidebroken=true&order=clickcount&reverse=true&limit=1000"
+            "?hidebroken=true&order=clickcount&reverse=true&limit=350"
 
     private val servers =
         listOf(
@@ -38,11 +38,37 @@ object RadioBrowserApi {
         )
 
     fun brazilianStations(context: Context): List<MediaEntry> {
-        val fixed = vacariaAndRegionStations()
+        val immediate = initialStations(context)
 
-        readCache(context)?.let { cached ->
-            return merge(fixed, cached)
+        if (!needsRefresh(context)) return immediate
+
+        return try {
+            refreshBrazilianStations(context)
+        } catch (error: Throwable) {
+            if (immediate.isNotEmpty()) immediate else throw error
         }
+    }
+
+    fun featuredStations(): List<MediaEntry> =
+        vacariaAndRegionStations()
+
+    /** Entrega inclusive cache vencido; a renovacao acontece em segundo plano. */
+    fun initialStations(context: Context): List<MediaEntry> =
+        merge(
+            vacariaAndRegionStations(),
+            readCache(context, allowExpired = true).orEmpty()
+        )
+
+    fun needsRefresh(context: Context): Boolean {
+        val savedAt =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getLong(KEY_TIME, 0L)
+        return savedAt <= 0L ||
+            System.currentTimeMillis() - savedAt > CACHE_TTL_MS
+    }
+
+    fun refreshBrazilianStations(context: Context): List<MediaEntry> {
+        val fixed = vacariaAndRegionStations()
 
         var lastError: Throwable? = null
 
@@ -140,8 +166,8 @@ object RadioBrowserApi {
     private fun download(address: String): List<MediaEntry> {
         val connection =
             (URL(address).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 4_000
-                readTimeout = 8_000
+                connectTimeout = 2_500
+                readTimeout = 5_000
                 instanceFollowRedirects = true
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/json")
@@ -248,12 +274,18 @@ object RadioBrowserApi {
         }
     }
 
-    private fun readCache(context: Context): List<MediaEntry>? {
+    private fun readCache(
+        context: Context,
+        allowExpired: Boolean = false
+    ): List<MediaEntry>? {
         return try {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val savedAt = prefs.getLong(KEY_TIME, 0L)
             val body = prefs.getString(KEY_JSON, null) ?: return null
-            if (savedAt <= 0L || System.currentTimeMillis() - savedAt > CACHE_TTL_MS) return null
+            if (
+                savedAt <= 0L ||
+                (!allowExpired && System.currentTimeMillis() - savedAt > CACHE_TTL_MS)
+            ) return null
 
             val array = JSONArray(body)
             val result = ArrayList<MediaEntry>(array.length())

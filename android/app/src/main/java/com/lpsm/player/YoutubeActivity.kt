@@ -1,200 +1,314 @@
 package com.lpsm.player
 
-import android.annotation.SuppressLint
-import android.graphics.Bitmap
+import android.content.ClipData
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.view.KeyEvent
+import android.os.Environment
+import android.provider.Settings
 import android.view.View
-import android.view.inputmethod.InputMethodManager
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Button
-import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
+import java.util.concurrent.Executors
 
-/**
- * YouTube em modo quiosque dentro do LPSM.
- * Nenhum link pode abrir navegador, loja ou outro aplicativo.
- * Ideal para TV Boxes alugadas/bloqueadas.
- */
+/** Tela nativa: nunca abre navegador ou WebView. */
 class YoutubeActivity : AppCompatActivity() {
 
-    private lateinit var web: WebView
-    private lateinit var search: EditText
-    private lateinit var go: Button
+    companion object {
+        private const val SMARTTUBE_URL =
+            "https://github.com/yuliskov/SmartTube/releases/download/32.10s/SmartTube_stable_32.10_universal.apk"
+        private const val SMARTTUBE_SHA256 =
+            "48044b306ded06cab939e81ad53be76a9c7b44c82a29c8bcaac8c2d8687b1579"
+        private const val SMARTTUBE_FILE = "SmartTube-stable.apk"
+    }
 
-    private val allowedHosts = setOf(
-        "youtube.com",
-        "www.youtube.com",
-        "m.youtube.com",
-        "music.youtube.com",
-        "youtube-nocookie.com",
-        "www.youtube-nocookie.com"
-    )
+    private val officialYoutubePackages =
+        listOf("com.google.android.youtube.tv", "com.google.android.youtube")
 
-    @SuppressLint("SetJavaScriptEnabled")
+    private val smartTubePackages =
+        listOf(
+            "org.smarttube.stable",
+            "org.smarttube.beta",
+            "com.teamsmart.videomanager.tv",
+            "com.liskovsoft.smarttubetv.beta"
+        )
+
+    private val executor = Executors.newSingleThreadExecutor()
+    private lateinit var openSmartTube: Button
+    private lateinit var status: TextView
+    private lateinit var progress: ProgressBar
+    private var waitingForPermission = false
+    private var waitingForInstallResult = false
+    private var downloading = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_youtube)
 
-        web = findViewById(R.id.youtubeWeb)
-        search = findViewById(R.id.youtubeSearch)
-        go = findViewById(R.id.youtubeGo)
+        val openYoutube = findViewById<Button>(R.id.youtubeOpen)
+        openSmartTube = findViewById(R.id.smartTubeOpen)
+        val close = findViewById<Button>(R.id.youtubeClose)
+        status = findViewById(R.id.youtubeStatus)
+        progress = findViewById(R.id.youtubeProgress)
 
-        web.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            mediaPlaybackRequiresUserGesture = false
-            cacheMode = WebSettings.LOAD_DEFAULT
-            allowFileAccess = false
-            allowContentAccess = false
-            setSupportMultipleWindows(false)
-            javaScriptCanOpenWindowsAutomatically = false
-            builtInZoomControls = false
-            displayZoomControls = false
-            userAgentString =
-                "Mozilla/5.0 (Linux; Android 11; Android TV) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Chrome/120.0.0.0 Safari/537.36"
-        }
-
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(
-                view: WebView?,
-                request: WebResourceRequest?
-            ): Boolean {
-                val uri = request?.url ?: return true
-                return blockExternalNavigation(uri)
-            }
-
-            @Deprecated("Deprecated in Java")
-            override fun shouldOverrideUrlLoading(
-                view: WebView?,
-                url: String?
-            ): Boolean {
-                val uri = runCatching { Uri.parse(url ?: "") }.getOrNull()
-                    ?: return true
-                return blockExternalNavigation(uri)
-            }
-
-            override fun onPageStarted(
-                view: WebView?,
-                url: String?,
-                favicon: Bitmap?
-            ) {
-                super.onPageStarted(view, url, favicon)
-                // Nunca entrega foco para barras/links externos.
-                web.isFocusable = true
+        openYoutube.setOnClickListener {
+            if (!openFirstInstalled(officialYoutubePackages)) {
+                showNotInstalled("YouTube")
             }
         }
 
-        web.webChromeClient = object : WebChromeClient() {
-            override fun onCreateWindow(
-                view: WebView?,
-                isDialog: Boolean,
-                isUserGesture: Boolean,
-                resultMsg: android.os.Message?
-            ): Boolean = false
-        }
-
-        web.isFocusable = true
-        web.isFocusableInTouchMode = true
-
-        go.setOnClickListener { performSearch() }
-
-        search.setOnEditorActionListener { _, _, _ ->
-            performSearch()
-            true
-        }
-
-        search.setOnKeyListener { _, keyCode, event ->
-            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_CENTER,
-                KeyEvent.KEYCODE_ENTER -> {
-                    showKeyboard()
-                    false
-                }
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    hideKeyboard()
-                    web.requestFocus()
-                    true
-                }
-                else -> false
+        openSmartTube.setOnClickListener {
+            if (!openFirstInstalled(smartTubePackages)) {
+                confirmSmartTubeDownload()
             }
         }
 
-        web.setOnKeyListener { _, keyCode, event ->
-            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+        close.setOnClickListener { finish() }
 
-            if (keyCode == KeyEvent.KEYCODE_BACK && web.canGoBack()) {
-                web.goBack()
-                true
-            } else {
-                false
-            }
-        }
-
-        // Fica sempre dentro desta Activity. Não dispara ACTION_VIEW.
-        web.loadUrl("https://www.youtube.com/tv")
-        web.requestFocus()
+        openYoutube.nextFocusDownId = openSmartTube.id
+        openYoutube.nextFocusUpId = close.id
+        openSmartTube.nextFocusUpId = openYoutube.id
+        openSmartTube.nextFocusDownId = close.id
+        close.nextFocusUpId = openSmartTube.id
+        close.nextFocusDownId = openYoutube.id
+        openYoutube.requestFocus()
     }
 
-    private fun blockExternalNavigation(uri: Uri): Boolean {
-        val scheme = uri.scheme?.lowercase().orEmpty()
-        val host = uri.host?.lowercase().orEmpty()
-
-        if (scheme != "http" && scheme != "https") {
+    private fun openFirstInstalled(packages: List<String>): Boolean {
+        for (packageName in packages) {
+            val launch = packageManager.getLaunchIntentForPackage(packageName) ?: continue
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launch)
             return true
         }
+        return false
+    }
 
-        if (host in allowedHosts || host.endsWith(".youtube.com")) {
-            return false
+    private fun confirmSmartTubeDownload() {
+        AlertDialog.Builder(this)
+            .setTitle("Instalar SmartTube")
+            .setMessage(
+                "SmartTube e um aplicativo independente, nao oficial do YouTube. " +
+                    "O APK sera baixado da publicacao oficial do projeto no GitHub. Deseja continuar?"
+            )
+            .setPositiveButton("BAIXAR E INSTALAR") { _, _ -> prepareSmartTubeDownload() }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+    }
+
+    private fun prepareSmartTubeDownload() {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            waitingForPermission = true
+            try {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+                Toast.makeText(
+                    this,
+                    "Permita que o LPSM instale o SmartTube.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (_: Throwable) {
+                waitingForPermission = false
+                showMessage("Nao foi possivel abrir a permissao de instalacao.")
+            }
+            return
         }
 
-        // Googlevideo/ytimg são recursos, não destinos de navegação.
-        // Se aparecerem como navegação principal, bloqueia em vez de abrir fora.
-        return true
+        downloadSmartTube()
     }
 
-    private fun performSearch() {
-        val q = search.text.toString().trim()
-        if (q.isNotEmpty()) {
-            hideKeyboard()
-            val encoded = java.net.URLEncoder.encode(q, "UTF-8")
-            web.loadUrl("https://www.youtube.com/results?search_query=$encoded")
-            web.requestFocus()
+    override fun onResume() {
+        super.onResume()
+
+        if (waitingForPermission) {
+            waitingForPermission = false
+            if (
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                packageManager.canRequestPackageInstalls()
+            ) {
+                downloadSmartTube()
+            } else {
+                showMessage("A permissao para instalar foi negada.")
+            }
+        }
+
+        if (waitingForInstallResult && isAnyInstalled(smartTubePackages)) {
+            waitingForInstallResult = false
+            smartTubeFile().delete()
+            status.text = "SmartTube instalado"
+            openSmartTube.text = "ABRIR SMARTTUBE"
         }
     }
 
-    private fun showKeyboard() {
-        search.showSoftInputOnFocus = true
-        search.requestFocus()
-        (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
-            ?.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
+    private fun downloadSmartTube() {
+        if (downloading) return
+        downloading = true
+        openSmartTube.isEnabled = false
+        progress.visibility = View.VISIBLE
+        progress.isIndeterminate = false
+        progress.progress = 0
+        status.text = "Baixando SmartTube..."
+
+        executor.execute {
+            var connection: HttpURLConnection? = null
+            try {
+                val apk = smartTubeFile()
+                if (apk.exists()) apk.delete()
+                connection = openConnection(SMARTTUBE_URL)
+                val total = connection.contentLengthLong
+
+                connection.inputStream.buffered().use { input ->
+                    FileOutputStream(apk).buffered().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var downloaded = 0L
+                        var lastPercent = -1
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read <= 0) break
+                            output.write(buffer, 0, read)
+                            downloaded += read
+                            if (total > 0L) {
+                                val percent = (downloaded * 100L / total).toInt().coerceIn(0, 100)
+                                if (percent != lastPercent) {
+                                    lastPercent = percent
+                                    runOnUiThread {
+                                        progress.progress = percent
+                                        status.text = "Baixando SmartTube... $percent%"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (sha256(apk) != SMARTTUBE_SHA256) {
+                    apk.delete()
+                    throw IllegalStateException("A verificacao de seguranca do APK falhou.")
+                }
+
+                runOnUiThread {
+                    downloading = false
+                    openSmartTube.isEnabled = true
+                    progress.progress = 100
+                    status.text = "Abrindo instalador..."
+                    installSmartTube(apk)
+                }
+            } catch (error: Throwable) {
+                runOnUiThread {
+                    downloading = false
+                    openSmartTube.isEnabled = true
+                    progress.visibility = View.GONE
+                    showMessage(error.message ?: "Falha ao baixar o SmartTube.")
+                }
+            } finally {
+                connection?.disconnect()
+            }
+        }
     }
 
-    private fun hideKeyboard() {
-        (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
-            ?.hideSoftInputFromWindow(search.windowToken, 0)
-        search.showSoftInputOnFocus = false
+    private fun smartTubeFile(): File {
+        val directory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+        if (!directory.exists()) directory.mkdirs()
+        return File(directory, SMARTTUBE_FILE)
     }
 
-    override fun onBackPressed() {
-        if (web.canGoBack()) web.goBack() else super.onBackPressed()
+    private fun installSmartTube(apk: File) {
+        val uri =
+            FileProvider.getUriForFile(
+                this,
+                "$packageName.fileprovider",
+                apk
+            )
+
+        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            clipData = ClipData.newRawUri("SmartTube", uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        try {
+            waitingForInstallResult = true
+            startActivity(intent)
+        } catch (_: Throwable) {
+            waitingForInstallResult = false
+            showMessage("O instalador deste aparelho nao conseguiu abrir o APK.")
+        }
+    }
+
+    private fun openConnection(address: String): HttpURLConnection {
+        var current = address
+        repeat(8) {
+            val connection = (URL(current).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 60_000
+                setRequestProperty("User-Agent", "LPSM-SmartTube-Installer/2.2.24")
+                setRequestProperty("Accept", "*/*")
+            }
+            val statusCode = connection.responseCode
+            if (statusCode in 300..399) {
+                val location = connection.getHeaderField("Location")
+                    ?: throw IllegalStateException("Redirecionamento invalido")
+                current = URL(URL(current), location).toString()
+                connection.disconnect()
+            } else {
+                if (statusCode !in 200..299) {
+                    connection.disconnect()
+                    throw IllegalStateException("Servidor respondeu HTTP $statusCode")
+                }
+                return connection
+            }
+        }
+        throw IllegalStateException("Muitos redirecionamentos")
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun isAnyInstalled(packages: List<String>): Boolean =
+        packages.any { packageManager.getLaunchIntentForPackage(it) != null }
+
+    private fun showNotInstalled(appName: String) {
+        showMessage("$appName nao esta instalado neste aparelho.")
+    }
+
+    private fun showMessage(message: String) {
+        status.text = message
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     override fun onDestroy() {
-        web.stopLoading()
-        web.loadUrl("about:blank")
-        web.removeAllViews()
-        web.destroy()
+        executor.shutdownNow()
         super.onDestroy()
     }
 }

@@ -1,5 +1,7 @@
 package com.lpsm.player
 
+import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -19,6 +21,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+
+import com.lpsm.player.data.AppUpdateChecker
 
 import org.json.JSONObject
 
@@ -56,6 +60,26 @@ class UpdateActivity : AppCompatActivity() {
          */
         private const val REQUEST_INSTALL_PERMISSION =
             7001
+
+        private const val EXTRA_VERSION_CODE = "lpsm_update_version_code"
+        private const val EXTRA_VERSION_NAME = "lpsm_update_version_name"
+        private const val EXTRA_APK_URL = "lpsm_update_apk_url"
+        private const val EXTRA_SHA256 = "lpsm_update_sha256"
+        private const val EXTRA_FORCE = "lpsm_update_force"
+        private const val EXTRA_MESSAGE = "lpsm_update_message"
+
+        fun promptIntent(
+            context: Context,
+            info: AppUpdateChecker.UpdateInfo
+        ): Intent =
+            Intent(context, UpdateActivity::class.java).apply {
+                putExtra(EXTRA_VERSION_CODE, info.versionCode)
+                putExtra(EXTRA_VERSION_NAME, info.versionName)
+                putExtra(EXTRA_APK_URL, info.apkUrl)
+                putExtra(EXTRA_SHA256, info.sha256)
+                putExtra(EXTRA_FORCE, info.force)
+                putExtra(EXTRA_MESSAGE, info.message)
+            }
     }
 
 
@@ -118,6 +142,9 @@ class UpdateActivity : AppCompatActivity() {
     private var downloading =
         false
 
+    private var waitingForInstallPermission =
+        false
+
 
 
     override fun onCreate(
@@ -137,6 +164,11 @@ class UpdateActivity : AppCompatActivity() {
          * só para o atualizador.
          */
         createLoadingScreen()
+
+        readPromptInfo()?.let { info ->
+            showUpdateDialog(info)
+            return
+        }
 
 
         /*
@@ -307,6 +339,23 @@ class UpdateActivity : AppCompatActivity() {
 
         setContentView(
             root
+        )
+    }
+
+    private fun readPromptInfo(): UpdateInfo? {
+        val versionCode = intent.getLongExtra(EXTRA_VERSION_CODE, 0L)
+        val apkUrl = intent.getStringExtra(EXTRA_APK_URL).orEmpty()
+        if (versionCode <= 0L || apkUrl.isBlank()) return null
+
+        return UpdateInfo(
+            versionCode = versionCode,
+            versionName = intent.getStringExtra(EXTRA_VERSION_NAME).orEmpty(),
+            apkUrl = apkUrl,
+            sha256 = intent.getStringExtra(EXTRA_SHA256).orEmpty(),
+            force = intent.getBooleanExtra(EXTRA_FORCE, false),
+            message =
+                intent.getStringExtra(EXTRA_MESSAGE)
+                    ?: "Uma nova versao do LPSM esta disponivel."
         )
     }
 
@@ -496,6 +545,8 @@ class UpdateActivity : AppCompatActivity() {
     private fun showUpdateDialog(
         info: UpdateInfo
     ) {
+
+        AppUpdateChecker.markDelivered(info.versionCode)
 
         mainHandler.removeCallbacks(
             startupFallback
@@ -714,6 +765,9 @@ class UpdateActivity : AppCompatActivity() {
 
         try {
 
+            waitingForInstallPermission =
+                true
+
             val intent =
                 Intent(
                     Settings
@@ -742,6 +796,9 @@ class UpdateActivity : AppCompatActivity() {
         } catch (
             error: Exception
         ) {
+
+            waitingForInstallPermission =
+                false
 
             showUpdateError(
                 pendingUpdate,
@@ -778,30 +835,36 @@ class UpdateActivity : AppCompatActivity() {
             requestCode ==
                 REQUEST_INSTALL_PERMISSION
         ) {
+            continueAfterInstallPermission()
+        }
+    }
 
-            val info =
-                pendingUpdate
-                    ?: return
+    override fun onResume() {
+        super.onResume()
 
+        /*
+         * Diversas ROMs de TV Box nao entregam onActivityResult ao voltar da
+         * tela "Instalar apps desconhecidos". A conferencia no onResume torna
+         * o fluxo independente desse comportamento do fabricante.
+         */
+        if (waitingForInstallPermission) {
+            mainHandler.post { continueAfterInstallPermission() }
+        }
+    }
 
-            if (
-                Build.VERSION.SDK_INT <
-                    Build.VERSION_CODES.O ||
+    private fun continueAfterInstallPermission() {
+        if (!waitingForInstallPermission) return
 
-                packageManager
-                    .canRequestPackageInstalls()
-            ) {
+        val info = pendingUpdate ?: return
+        waitingForInstallPermission = false
 
-                downloadUpdate(
-                    info
-                )
-
-            } else {
-
-                showPermissionDenied(
-                    info
-                )
-            }
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            packageManager.canRequestPackageInstalls()
+        ) {
+            downloadUpdate(info)
+        } else {
+            showPermissionDenied(info)
         }
     }
 
@@ -1174,13 +1237,19 @@ class UpdateActivity : AppCompatActivity() {
 
             val intent =
                 Intent(
-                    Intent.ACTION_VIEW
+                    Intent.ACTION_INSTALL_PACKAGE
                 ).apply {
 
                     setDataAndType(
                         apkUri,
                         "application/vnd.android.package-archive"
                     )
+
+                    clipData =
+                        ClipData.newRawUri(
+                            "Atualizacao LPSM",
+                            apkUri
+                        )
 
 
                     addFlags(
@@ -1191,12 +1260,29 @@ class UpdateActivity : AppCompatActivity() {
                     addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK
                     )
+
+                    putExtra(
+                        Intent.EXTRA_NOT_UNKNOWN_SOURCE,
+                        true
+                    )
                 }
 
-
-            startActivity(
-                intent
-            )
+            try {
+                startActivity(intent)
+            } catch (_: Exception) {
+                /* Alguns instaladores antigos de TV Box aceitam apenas VIEW. */
+                startActivity(
+                    Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(
+                            apkUri,
+                            "application/vnd.android.package-archive"
+                        )
+                        clipData = ClipData.newRawUri("Atualizacao LPSM", apkUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+            }
 
         } catch (
             error: Exception
