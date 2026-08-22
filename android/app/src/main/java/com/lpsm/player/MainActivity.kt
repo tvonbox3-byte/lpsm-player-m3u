@@ -463,11 +463,9 @@ class MainActivity : AppCompatActivity() {
 
         b.homeYoutube
             .setOnClickListener {
-                if (!YoutubeActivity.openInstalledPremium(this)) {
-                    startActivity(
-                        Intent(this, YoutubeActivity::class.java)
-                    )
-                }
+                startActivity(
+                    Intent(this, YoutubeActivity::class.java)
+                )
             }
 
         b.homeAccount

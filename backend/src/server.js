@@ -88,6 +88,66 @@ const devicePresence =
 const devicePlayback =
   new Map();
 
+/* Catalogo nacional compartilhado: boxes recebem a mesma lista e evitam
+ * depender diretamente de um espelho diferente do Radio Browser. */
+const RADIO_CACHE_TTL_MS =
+  6 * 60 * 60 * 1000;
+
+let radioCatalogCache = {
+  savedAt: 0,
+  stations: []
+};
+
+async function brazilianRadioCatalog() {
+  if (
+    radioCatalogCache.stations.length > 0 &&
+    Date.now() - radioCatalogCache.savedAt < RADIO_CACHE_TTL_MS
+  ) {
+    return radioCatalogCache.stations;
+  }
+
+  const mirrors = [
+    'https://all.api.radio-browser.info',
+    'https://de1.api.radio-browser.info',
+    'https://nl1.api.radio-browser.info'
+  ];
+  let lastError;
+
+  for (const mirror of mirrors) {
+    try {
+      const response = await fetch(
+        `${mirror}/json/stations/bycountrycodeexact/BR?hidebroken=true&order=clickcount&reverse=true&limit=1000`,
+        {
+          headers: {
+            accept: 'application/json',
+            'user-agent': 'LPSM-Control/2.2.26'
+          },
+          signal: AbortSignal.timeout(12000)
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`Radio Browser respondeu ${response.status}`);
+      }
+      const stations = await response.json();
+      if (!Array.isArray(stations) || stations.length === 0) {
+        throw new Error('Catalogo de radios vazio');
+      }
+      radioCatalogCache = {
+        savedAt: Date.now(),
+        stations
+      };
+      return stations;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (radioCatalogCache.stations.length > 0) {
+    return radioCatalogCache.stations;
+  }
+  throw lastError || new Error('Catalogo de radios indisponivel');
+}
+
 
 /*
  * ==========================================
@@ -1355,6 +1415,29 @@ async function api(
           'lpsm-control'
       }
     );
+  }
+
+
+  /* Catalogo publico de radios, com cache no servidor. */
+  if (
+    req.method === 'GET' &&
+    path === '/api/public/radios'
+  ) {
+    try {
+      return json(
+        res,
+        200,
+        await brazilianRadioCatalog()
+      );
+    } catch (_error) {
+      return json(
+        res,
+        503,
+        {
+          error: 'Catalogo de radios temporariamente indisponivel.'
+        }
+      );
+    }
   }
 
 
