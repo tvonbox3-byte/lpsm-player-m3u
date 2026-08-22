@@ -343,7 +343,7 @@
                     android:layout_height="54dp"
                     android:layout_marginTop="5dp"
                     android:layout_marginBottom="3dp"
-                    android:text="YOUTUBE"
+                    android:text="YOUTUBE PREMIUM"
                     android:textColor="@color/text"
                     android:textSize="16sp" />
 

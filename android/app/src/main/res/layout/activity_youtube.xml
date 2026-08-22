@@ -3,38 +3,71 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#08111E"
+    android:gravity="center"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="32dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/youtubeStatus"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:text="YOUTUBE PREMIUM"
+        android:textColor="#FFE000"
+        android:textSize="32sp"
+        android:textStyle="bold" />
 
-        <EditText
-            android:id="@+id/youtubeSearch"
-            android:layout_width="0dp"
-            android:layout_height="52dp"
-            android:layout_weight="1"
-            android:hint="Pesquisar no YouTube"
-            android:imeOptions="actionSearch"
-            android:inputType="text"
-            android:singleLine="true"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#AAB3C0" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="28dp"
+        android:gravity="center"
+        android:text="Escolha um aplicativo instalado. O acesso Premium depende da conta usada."
+        android:textColor="#DCE6F2"
+        android:textSize="17sp" />
 
-        <Button
-            android:id="@+id/youtubeGo"
-            android:layout_width="120dp"
-            android:layout_height="52dp"
-            android:text="BUSCAR" />
-    </LinearLayout>
-
-    <WebView
-        android:id="@+id/youtubeWeb"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+    <Button
+        android:id="@+id/youtubeOpen"
+        android:layout_width="320dp"
+        android:layout_height="64dp"
         android:focusable="true"
-        android:focusableInTouchMode="true" />
+        android:text="ABRIR YOUTUBE"
+        android:textSize="18sp" />
+
+    <Button
+        android:id="@+id/smartTubeOpen"
+        android:layout_width="320dp"
+        android:layout_height="64dp"
+        android:layout_marginTop="14dp"
+        android:focusable="true"
+        android:text="ABRIR SMARTTUBE"
+        android:textSize="18sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:text="SmartTube e opcional e sera baixado da publicacao oficial do projeto."
+        android:textColor="#93A4B8"
+        android:textSize="14sp" />
+
+    <ProgressBar
+        android:id="@+id/youtubeProgress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="320dp"
+        android:layout_height="12dp"
+        android:layout_marginTop="10dp"
+        android:max="100"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/youtubeClose"
+        android:layout_width="220dp"
+        android:layout_height="58dp"
+        android:layout_marginTop="24dp"
+        android:focusable="true"
+        android:text="VOLTAR"
+        android:textSize="17sp" />
+
 </LinearLayout>

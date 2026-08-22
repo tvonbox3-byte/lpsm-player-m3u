@@ -262,6 +262,19 @@ class MainActivity : AppCompatActivity() {
         )
 
         /*
+         * A verificacao continua depois que a HOME abre. Na versao anterior,
+         * TV Boxes que levavam mais de 850 ms para responder ao GitHub perdiam
+         * silenciosamente o aviso de atualizacao.
+         */
+        AppUpdateChecker.check(applicationContext) { info ->
+            if (!isFinishing && !isDestroyed) {
+                startActivity(
+                    UpdateActivity.promptIntent(this, info)
+                )
+            }
+        }
+
+        /*
          * Ajusta o layout para o tamanho real
          * do celular, tablet, TV Box ou TV.
          */
@@ -6447,10 +6460,16 @@ class MainActivity : AppCompatActivity() {
     private fun loadRadiosIfNeeded() {
 
         if (
-            radioEntries.isNotEmpty() ||
             radioLoading
         ) {
             return
+        }
+
+        /* Vacaria e regiao aparecem no mesmo instante, mesmo sem servidor. */
+        if (radioEntries.isEmpty()) {
+            radioEntries = RadioBrowserApi.featuredStations()
+            render()
+            focusFirstCategory()
         }
 
         radioLoading =
@@ -6466,17 +6485,12 @@ class MainActivity : AppCompatActivity() {
 
             try {
 
-                val loaded =
-                    RadioBrowserApi
-                        .brazilianStations(applicationContext)
+                val immediate =
+                    RadioBrowserApi.initialStations(applicationContext)
 
                 runOnUiThread {
 
-                    radioEntries =
-                        loaded
-
-                    radioLoading =
-                        false
+                    radioEntries = immediate
 
                     if (
                         radioMode &&
@@ -6485,6 +6499,25 @@ class MainActivity : AppCompatActivity() {
                     ) {
                         render()
                         focusFirstCategory()
+                    }
+                }
+
+                val loaded =
+                    if (RadioBrowserApi.needsRefresh(applicationContext)) {
+                        RadioBrowserApi.refreshBrazilianStations(applicationContext)
+                    } else {
+                        immediate
+                    }
+
+                runOnUiThread {
+                    radioEntries = loaded
+                    radioLoading = false
+
+                    if (
+                        radioMode &&
+                        b.content.visibility == View.VISIBLE
+                    ) {
+                        render()
                     }
                 }
 
@@ -6498,7 +6531,8 @@ class MainActivity : AppCompatActivity() {
                         false
 
                     if (
-                        radioMode
+                        radioMode &&
+                        radioEntries.isEmpty()
                     ) {
                         b.previewTitle.text =
                             "Rádios indisponíveis"
@@ -6510,6 +6544,9 @@ class MainActivity : AppCompatActivity() {
                             error.message
                                 ?: "Falha ao carregar rádios"
                         )
+                    } else if (radioMode) {
+                        b.previewGroup.text =
+                            "Catálogo salvo disponível"
                     }
                 }
             }
