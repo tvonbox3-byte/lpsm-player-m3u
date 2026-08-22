@@ -22,7 +22,7 @@
         android:layout_marginTop="12dp"
         android:layout_marginBottom="28dp"
         android:gravity="center"
-        android:text="Escolha um aplicativo instalado. O acesso Premium depende da conta usada."
+        android:text="Instale uma vez. Depois este botão abrirá diretamente o aplicativo."
         android:textColor="#DCE6F2"
         android:textSize="17sp" />
 
@@ -30,9 +30,10 @@
         android:id="@+id/youtubeOpen"
         android:layout_width="320dp"
         android:layout_height="64dp"
-        android:focusable="true"
+        android:focusable="false"
         android:text="ABRIR YOUTUBE"
-        android:textSize="18sp" />
+        android:textSize="18sp"
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/smartTubeOpen"
@@ -40,7 +41,7 @@
         android:layout_height="64dp"
         android:layout_marginTop="14dp"
         android:focusable="true"
-        android:text="ABRIR SMARTTUBE"
+        android:text="INSTALAR YOUTUBE PREMIUM"
         android:textSize="18sp" />
 
     <TextView
@@ -48,7 +49,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
         android:gravity="center"
-        android:text="SmartTube e opcional e sera baixado da publicacao oficial do projeto."
+        android:text="A instalação usa a publicação oficial do projeto independente SmartTube."
         android:textColor="#93A4B8"
         android:textSize="14sp" />
 

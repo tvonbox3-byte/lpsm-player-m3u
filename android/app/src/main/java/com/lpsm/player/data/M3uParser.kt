@@ -6,8 +6,13 @@ import java.io.Reader
 
 object M3uParser {
 
+    /*
+     * Alguns servidores usam aspas simples ou deixam o valor sem aspas.
+     * Aceitar os tres formatos evita perder principalmente tvg-logo e
+     * group-title em filmes e series.
+     */
     private val attributePattern =
-        Regex("""([\w-]+)="([^"]*)"""")
+        Regex("""([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""")
 
     /*
      * Exemplos reconhecidos:
@@ -163,9 +168,14 @@ object M3uParser {
                             val attributes =
                                 attributePattern
                                     .findAll(metadata)
-                                    .associate {
-                                        it.groupValues[1] to
-                                            it.groupValues[2]
+                                    .associate { match ->
+                                        val value =
+                                            match.groupValues
+                                                .drop(2)
+                                                .firstOrNull { it.isNotEmpty() }
+                                                .orEmpty()
+
+                                        match.groupValues[1].lowercase() to value
                                     }
 
                             val name =
@@ -187,11 +197,20 @@ object M3uParser {
                                     ?: "Outros"
 
                             val logo =
-                                attributes[
-                                    "tvg-logo"
-                                ]
-                                    ?.trim()
-                                    ?: ""
+                                listOf(
+                                    "tvg-logo",
+                                    "movie-logo",
+                                    "series-logo",
+                                    "cover",
+                                    "poster",
+                                    "logo"
+                                )
+                                    .firstNotNullOfOrNull { key ->
+                                        attributes[key]
+                                            ?.takeIf { it.isNotBlank() }
+                                    }
+                                    .orEmpty()
+                                    .normalizeArtworkUrl()
 
                             val tvgId =
                                 attributes[
@@ -382,6 +401,8 @@ object M3uParser {
 
         if (
             "/series/" in path ||
+            "/serie/" in path ||
+            "/tvseries/" in path ||
             "type=series" in lowerUrl ||
             "type=serie" in lowerUrl ||
             "content=series" in lowerUrl ||
@@ -418,6 +439,8 @@ object M3uParser {
                     "séries",
                     "serie ",
                     "série ",
+                    "tv show",
+                    "tv shows",
                     "seriado",
                     "seriados",
                     "temporada",
@@ -656,6 +679,19 @@ object M3uParser {
 
         return words.any {
             it in text
+        }
+    }
+
+    private fun String.normalizeArtworkUrl(): String {
+        val cleaned =
+            trim()
+                .replace("&amp;", "&")
+                .replace("\\/", "/")
+
+        return if (cleaned.startsWith("//")) {
+            "https:$cleaned"
+        } else {
+            cleaned
         }
     }
 }

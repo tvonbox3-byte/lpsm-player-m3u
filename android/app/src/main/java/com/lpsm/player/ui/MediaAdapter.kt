@@ -9,6 +9,9 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
 import coil3.load
+import coil3.request.error
+import coil3.request.fallback
+import coil3.request.placeholder
 
 import com.lpsm.player.R
 import com.lpsm.player.data.SecureStore
@@ -341,27 +344,26 @@ class MediaAdapter(
             )
 
 
-        if (
-            imageUrl.isNotBlank()
-        ) {
+        val rowFallback =
+            if (isRadioEntry(item)) {
+                R.drawable.ic_radio_station
+            } else {
+                android.R.drawable.ic_menu_gallery
+            }
 
-            holder.mediaImage
-                .load(
-                    imageUrl
-                )
-
-        } else {
-
-            /*
-             * Limpa imagem antiga de um
-             * RecyclerView reciclado.
-             */
-            holder.mediaImage
-                .setImageResource(
-                    android.R.drawable
-                        .ic_menu_gallery
-                )
-        }
+        /*
+         * Carregar inclusive null cancela a requisicao antiga do ViewHolder.
+         * Sem isso uma logo de canal podia terminar o download depois que o
+         * cartao ja havia sido reciclado para uma radio.
+         */
+        holder.mediaImage
+            .load(
+                imageUrl.takeIf { it.isNotBlank() }
+            ) {
+                placeholder(rowFallback)
+                fallback(rowFallback)
+                error(rowFallback)
+            }
 
 
         holder.mediaImage
@@ -508,23 +510,14 @@ class MediaAdapter(
             )
 
 
-        if (
-            imageUrl.isNotBlank()
-        ) {
-
-            holder.poster
-                .load(
-                    imageUrl
-                )
-
-        } else {
-
-            holder.poster
-                .setImageResource(
-                    android.R.drawable
-                        .ic_menu_gallery
-                )
-        }
+        holder.poster
+            .load(
+                imageUrl.takeIf { it.isNotBlank() }
+            ) {
+                placeholder(android.R.drawable.ic_menu_gallery)
+                fallback(android.R.drawable.ic_menu_gallery)
+                error(android.R.drawable.ic_menu_gallery)
+            }
 
 
 
@@ -1229,6 +1222,11 @@ class MediaAdapter(
 
         return ""
     }
+
+    private fun isRadioEntry(
+        item: MediaEntry
+    ): Boolean =
+        item.tvgId.startsWith("radio:")
 
 
 

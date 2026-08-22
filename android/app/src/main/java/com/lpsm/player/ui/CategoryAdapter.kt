@@ -40,6 +40,10 @@ class CategoryAdapter(
         notifyDataSetChanged()
     }
 
+    fun selectedPosition(): Int =
+        rows.indexOfFirst { it.name == selected }
+            .coerceAtLeast(0)
+
     override fun onCreateViewHolder(
         parent: ViewGroup,
         viewType: Int
@@ -160,6 +164,13 @@ class CategoryAdapter(
 
                         true
                     }
+
+                    /*
+                     * A coluna da esquerda e o limite da grade. Consumir a
+                     * seta evita que boxes com algoritmo de foco diferente
+                     * saltem para os filtros do topo.
+                     */
+                    KeyEvent.KEYCODE_DPAD_LEFT -> true
 
                     /*
                      * CIMA/BAIXO continuam
