@@ -50,6 +50,10 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
 
     private val adultPin = "0202"
+    private val playlistRefreshIntervalMillis =
+        30L * 60L * 1000L
+    private val playlistFallbackMaxAgeMillis =
+        7L * 24L * 60L * 60L * 1000L
     private var allowSearchFocus = false
 
     private lateinit var b: ActivityMainBinding
@@ -2680,6 +2684,17 @@ class MainActivity : AppCompatActivity() {
              */
             val cachedEntries =
                 playlistCache.read(
+                    cacheSignature,
+                    playlistFallbackMaxAgeMillis
+                )
+
+            val cachedIndexes =
+                cachedEntries
+                    .takeIf { it.isNotEmpty() }
+                    ?.let(::buildEntryIndexes)
+
+            val cachedAgeMillis =
+                playlistCache.ageMillis(
                     cacheSignature
                 )
 
@@ -2687,11 +2702,6 @@ class MainActivity : AppCompatActivity() {
                 cachedEntries
                     .isNotEmpty()
             ) {
-
-                val cachedIndexes =
-                    buildEntryIndexes(
-                        cachedEntries
-                    )
 
                 runOnUiThread {
 
@@ -2703,7 +2713,9 @@ class MainActivity : AppCompatActivity() {
                         cachedEntries
 
                     applyEntryIndexes(
-                        cachedIndexes
+                        requireNotNull(
+                            cachedIndexes
+                        )
                     )
 
                     epg =
@@ -2723,6 +2735,25 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                 }
+            }
+
+            /*
+             * Se a copia completa ainda e recente, nao ha motivo para baixar,
+             * descompactar e reagrupar dezenas de milhares de itens novamente.
+             * A configuracao do painel ja foi validada acima, portanto ativacao,
+             * vencimento e troca de URL continuam imediatos.
+             */
+            if (
+                cachedEntries.isNotEmpty() &&
+                cachedAgeMillis != null &&
+                cachedAgeMillis <= playlistRefreshIntervalMillis
+            ) {
+                runOnUiThread {
+                    b.message.text =
+                        "Lista pronta • ${cachedEntries.size} itens"
+                }
+
+                return@execute
             }
 
             runOnUiThread {
@@ -2771,11 +2802,13 @@ class MainActivity : AppCompatActivity() {
                         break
                     }
 
-                    val parsed =
-                        api.downloadPlaylist(
-                            playlist.url,
-                            remaining
-                        ) { partial ->
+                    val partialCallback:
+                        ((List<MediaEntry>) -> Unit)? =
+                        if (
+                            cachedEntries.isEmpty() &&
+                            all.isEmpty()
+                        ) {
+                            { partial ->
 
                             /*
                              * BUILD 41: libera conteúdo parcial enquanto a
@@ -2794,19 +2827,29 @@ class MainActivity : AppCompatActivity() {
                             val progressiveIndexes =
                                 buildEntryIndexes(progressive)
 
-                            runOnUiThread {
-                                entries = progressive
-                                applyEntryIndexes(progressiveIndexes)
-                                epg = emptyMap()
+                                runOnUiThread {
+                                    entries = progressive
+                                    applyEntryIndexes(progressiveIndexes)
+                                    epg = emptyMap()
 
-                                b.message.text =
-                                    "Lista carregando... ${progressive.size} itens disponíveis"
+                                    b.message.text =
+                                        "Lista carregando... ${progressive.size} itens disponíveis"
 
-                                if (b.content.visibility == View.VISIBLE) {
-                                    render()
+                                    if (b.content.visibility == View.VISIBLE) {
+                                        render()
+                                    }
                                 }
                             }
+                        } else {
+                            null
                         }
+
+                    val parsed =
+                        api.downloadPlaylist(
+                            playlist.url,
+                            remaining,
+                            partialCallback
+                        )
 
                     if (
                         parsed.isEmpty()
@@ -2842,13 +2885,29 @@ class MainActivity : AppCompatActivity() {
             val freshEntries =
                 all.toList()
 
-            val freshIndexes =
-                if (
+            /*
+             * Uma atualizacao incompleta nunca substitui a ultima lista boa.
+             * Isso evita sumir categorias quando um dos servidores oscila.
+             */
+            val keepCompleteCache =
+                errors.isNotEmpty() &&
+                    cachedEntries.isNotEmpty()
+
+            val displayEntries =
+                if (keepCompleteCache) {
+                    cachedEntries
+                } else {
                     freshEntries
-                        .isNotEmpty()
+                }
+
+            val displayIndexes =
+                if (keepCompleteCache) {
+                    cachedIndexes
+                } else if (
+                    displayEntries.isNotEmpty()
                 ) {
                     buildEntryIndexes(
-                        freshEntries
+                        displayEntries
                     )
                 } else {
                     null
@@ -2898,11 +2957,11 @@ class MainActivity : AppCompatActivity() {
                             View.VISIBLE
 
                     entries =
-                        freshEntries
+                        displayEntries
 
                     applyEntryIndexes(
                         requireNotNull(
-                            freshIndexes
+                            displayIndexes
                         )
                     )
 
@@ -2923,16 +2982,19 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
 
-                    if (errors.isEmpty()) {
+                    if (keepCompleteCache) {
                         b.message.text =
-                            "Lista pronta • ${freshEntries.size} itens"
+                            "Lista salva mantida • atualização do servidor incompleta"
+                    } else if (errors.isEmpty()) {
+                        b.message.text =
+                            "Lista pronta • ${displayEntries.size} itens"
                     }
                 }
             }
 
             if (
-                freshEntries
-                    .isNotEmpty()
+                freshEntries.isNotEmpty() &&
+                errors.isEmpty()
             ) {
 
                 playlistCache
@@ -4480,11 +4542,12 @@ class MainActivity : AppCompatActivity() {
 
             return indexedGroups
                 .entries
-                .sortedBy {
-
-                    it.key
-                        .lowercase()
-                }
+                .sortedWith(
+                    compareBy<Map.Entry<String, List<MediaEntry>>>(
+                        { isAdultCategory(it.key) },
+                        { it.key.lowercase() }
+                    )
+                )
         }
 
         return indexedGroups
