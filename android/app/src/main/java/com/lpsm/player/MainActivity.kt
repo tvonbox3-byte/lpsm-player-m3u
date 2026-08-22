@@ -135,6 +135,16 @@ class MainActivity : AppCompatActivity() {
                 >
             >()
 
+    /* Índices prontos evitam varrer milhares de episódios a cada toque. */
+    private var seriesEpisodesByName =
+        emptyMap<String, List<MediaEntry>>()
+
+    private var seriesCards =
+        emptyList<MediaEntry>()
+
+    private var seriesCardsByGroup =
+        emptyMap<String, List<MediaEntry>>()
+
     private var lastConfig:
         DeviceConfig? = null
 
@@ -218,7 +228,10 @@ class MainActivity : AppCompatActivity() {
         val byType: Map<ContentType, List<MediaEntry>>,
         val allGroups: Map<String, List<MediaEntry>>,
         val groupsByType:
-            Map<ContentType, Map<String, List<MediaEntry>>>
+            Map<ContentType, Map<String, List<MediaEntry>>>,
+        val seriesEpisodesByName: Map<String, List<MediaEntry>>,
+        val seriesCards: List<MediaEntry>,
+        val seriesCardsByGroup: Map<String, List<MediaEntry>>
     )
 
     private var homeVisualPrefs =
@@ -461,13 +474,6 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
-        b.homeYoutube
-            .setOnClickListener {
-                startActivity(
-                    Intent(this, YoutubeActivity::class.java)
-                )
-            }
-
         b.homeAccount
             .setOnClickListener {
 
@@ -517,7 +523,6 @@ class MainActivity : AppCompatActivity() {
             b.homeVod,
             b.homeSeries,
             b.homeRadio,
-            b.homeYoutube,
             b.homeAccount,
             b.all,
             b.live,
@@ -549,17 +554,14 @@ class MainActivity : AppCompatActivity() {
         b.homeAccount.nextFocusLeftId = b.homeRadio.id
         b.homeAccount.nextFocusRightId = b.homeLive.id
 
-        // YouTube fica embaixo para não alargar a Home.
+        // A HOME possui somente uma linha; baixo permanece no mesmo botão.
         listOf(
             b.homeLive,
             b.homeVod,
             b.homeSeries,
             b.homeRadio,
             b.homeAccount
-        ).forEach { it.nextFocusDownId = b.homeYoutube.id }
-        b.homeYoutube.nextFocusUpId = b.homeRadio.id
-        b.homeYoutube.nextFocusLeftId = b.homeYoutube.id
-        b.homeYoutube.nextFocusRightId = b.homeYoutube.id
+        ).forEach { it.nextFocusDownId = it.id }
 
         /*
          * FILTROS SUPERIORES - esquerda / direita
@@ -594,6 +596,7 @@ class MainActivity : AppCompatActivity() {
             b.favorites
         ).forEach { button ->
             button.nextFocusUpId = b.search.id
+            button.nextFocusDownId = b.list.id
 
             /*
              * Segurar UP serve para percorrer a lista rapidamente.
@@ -602,18 +605,28 @@ class MainActivity : AppCompatActivity() {
              * Um toque novo e curto em UP continua levando a busca.
              */
             button.setOnKeyListener { _, keyCode, event ->
-                if (
-                    keyCode == KeyEvent.KEYCODE_DPAD_UP &&
-                    event.action == KeyEvent.ACTION_DOWN
-                ) {
-                    if (event.repeatCount > 0) {
-                        true
-                    } else {
-                        allowSearchFocus = true
-                        false
+                if (event.action != KeyEvent.ACTION_DOWN) {
+                    return@setOnKeyListener false
+                }
+
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (event.repeatCount > 0) {
+                            true
+                        } else {
+                            allowSearchFocus = true
+                            false
+                        }
                     }
-                } else {
-                    false
+
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (event.repeatCount == 0) {
+                            enterContentFromTop(button)
+                        }
+                        true
+                    }
+
+                    else -> false
                 }
             }
         }
@@ -725,6 +738,17 @@ class MainActivity : AppCompatActivity() {
                     event.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
                     position in 0 until columns
                 ) {
+                    if (event.repeatCount == 0) {
+                        preferredTopFilter().requestFocus()
+                    }
+                    return true
+                }
+
+                if (
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                    position != RecyclerView.NO_POSITION &&
+                    position + columns >= (b.list.adapter?.itemCount ?: 0)
+                ) {
                     return true
                 }
             }
@@ -740,6 +764,17 @@ class MainActivity : AppCompatActivity() {
                 if (
                     event.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
                     position == 0
+                ) {
+                    if (event.repeatCount == 0) {
+                        preferredTopFilter().requestFocus()
+                    }
+                    return true
+                }
+
+                if (
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                    position != RecyclerView.NO_POSITION &&
+                    position == (b.categoryList.adapter?.itemCount ?: 0) - 1
                 ) {
                     return true
                 }
@@ -783,6 +818,52 @@ class MainActivity : AppCompatActivity() {
 
             else ->
                 b.all
+        }
+    }
+
+    /**
+     * Baixo na barra superior sempre entra no conteúdo correspondente.
+     * Não deixamos o Android escolher geometricamente, pois algumas boxes
+     * pulavam para a busca ou para outro botão do topo.
+     */
+    private fun enterContentFromTop(button: View) {
+        when (button.id) {
+            R.id.live -> enterBrowserContent(ContentType.LIVE)
+            R.id.vod -> enterBrowserContent(ContentType.VOD)
+            R.id.series -> enterBrowserContent(ContentType.SERIES)
+            R.id.radio -> enterBrowserContent(ContentType.LIVE, radios = true)
+            R.id.favorites -> {
+                if (!favoritesOnly) {
+                    selectedSeriesName = null
+                    selectedSeason = null
+                    favoritesOnly = true
+                    selectedGroup = null
+                    selectedEntry = null
+                    stopPreview()
+                    render()
+                }
+                focusFirstMedia()
+            }
+            else -> focusFirstMedia()
+        }
+    }
+
+    private fun enterBrowserContent(
+        type: ContentType,
+        radios: Boolean = false
+    ) {
+        if (
+            filter == type &&
+            radioMode == radios &&
+            !favoritesOnly
+        ) {
+            focusFirstMedia()
+        } else {
+            showBrowser(
+                type = type,
+                radios = radios,
+                focusContent = true
+            )
         }
     }
 
@@ -938,11 +1019,6 @@ class MainActivity : AppCompatActivity() {
                 showPreviewInfo(
                     item
                 )
-
-                schedulePreview(
-                    item,
-                    850L
-                )
             }
 
             ContentType.SERIES -> {
@@ -961,10 +1037,6 @@ class MainActivity : AppCompatActivity() {
                         seriesEpisodes(
                             name
                         )
-
-                    val firstEpisode =
-                        episodes
-                            .firstOrNull()
 
                     b.previewTitle.text =
                         displaySeriesTitle(
@@ -985,26 +1057,10 @@ class MainActivity : AppCompatActivity() {
                             "Série • ${episodes.size} episódios"
                         }
 
-                    if (
-                        firstEpisode !=
-                        null
-                    ) {
-
-                        schedulePreview(
-                            firstEpisode,
-                            900L
-                        )
-                    }
-
                 } else {
 
                     showPreviewInfo(
                         item
-                    )
-
-                    schedulePreview(
-                        item,
-                        750L
                     )
                 }
             }
@@ -4877,9 +4933,23 @@ class MainActivity : AppCompatActivity() {
             ContentType.SERIES -> {
 
                 val seriesCards =
-                    createSeriesCards(
-                        filtered
-                    )
+                    if (
+                        query.isBlank() &&
+                        !favoritesOnly
+                    ) {
+                        (
+                            selectedGroup
+                                ?.let { seriesCardsByGroup[it] }
+                                ?: this.seriesCards
+                        ).filter {
+                            !isAdultCategory(it.group) ||
+                                (selectedGroup != null && selectedGroup == unlockedAdultGroup)
+                        }
+                    } else {
+                        createSeriesCards(
+                            filtered
+                        )
+                    }
 
                 setGridColumns(
                     posterColumns()
@@ -5195,43 +5265,9 @@ class MainActivity : AppCompatActivity() {
     private fun seriesEpisodes(
         name: String
     ): List<MediaEntry> {
-
-        return entriesByType[
-            ContentType.SERIES
-        ]
-            .orEmpty()
-            .filter {
-
-                seriesKey(
-                    it
-                )
-                    .equals(
-                        name,
-                        true
-                    )
-            }
-            .sortedWith(
-
-                compareBy(
-                    {
-
-                        it.season
-                            ?: 0
-                    },
-
-                    {
-
-                        it.episode
-                            ?: 0
-                    },
-
-                    {
-
-                        it.name
-                            .lowercase()
-                    }
-                )
-            )
+        return seriesEpisodesByName[
+            name.lowercase()
+        ].orEmpty()
     }
 
     private fun seriesKey(
@@ -6375,10 +6411,43 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+        val episodeOrder =
+            compareBy<MediaEntry>(
+                { it.season ?: 0 },
+                { it.episode ?: 0 },
+                { it.name.lowercase() }
+            )
+
+        val indexedSeriesEpisodes =
+            byType[ContentType.SERIES]
+                .orEmpty()
+                .groupBy {
+                    seriesKey(it).lowercase()
+                }
+                .mapValues { (_, episodes) ->
+                    episodes.sortedWith(episodeOrder)
+                }
+
+        val indexedSeriesCards =
+            createSeriesCards(
+                byType[ContentType.SERIES]
+                    .orEmpty()
+            )
+
+        val indexedSeriesCardsByGroup =
+            indexedGroupsByType[ContentType.SERIES]
+                .orEmpty()
+                .mapValues { (_, episodes) ->
+                    createSeriesCards(episodes)
+                }
+
         return EntryIndexes(
             byType = byType,
             allGroups = allGroups,
-            groupsByType = indexedGroupsByType
+            groupsByType = indexedGroupsByType,
+            seriesEpisodesByName = indexedSeriesEpisodes,
+            seriesCards = indexedSeriesCards,
+            seriesCardsByGroup = indexedSeriesCardsByGroup
         )
     }
 
@@ -6394,6 +6463,15 @@ class MainActivity : AppCompatActivity() {
 
         groupsByType =
             indexes.groupsByType
+
+        seriesEpisodesByName =
+            indexes.seriesEpisodesByName
+
+        seriesCards =
+            indexes.seriesCards
+
+        seriesCardsByGroup =
+            indexes.seriesCardsByGroup
     }
 
     /*
@@ -6484,7 +6562,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showBrowser(
         type: ContentType,
-        radios: Boolean = false
+        radios: Boolean = false,
+        focusContent: Boolean = false
     ) {
 
         releasePreview()
@@ -6535,7 +6614,11 @@ class MainActivity : AppCompatActivity() {
             loadRadiosIfNeeded()
         }
 
-        focusFirstCategory()
+        if (focusContent) {
+            focusFirstMedia()
+        } else {
+            focusFirstCategory()
+        }
     }
 
     private fun loadRadiosIfNeeded() {
@@ -6550,7 +6633,6 @@ class MainActivity : AppCompatActivity() {
         if (radioEntries.isEmpty()) {
             radioEntries = RadioBrowserApi.featuredStations()
             render()
-            focusFirstCategory()
         }
 
         radioLoading =
@@ -6579,7 +6661,6 @@ class MainActivity : AppCompatActivity() {
                             View.VISIBLE
                     ) {
                         render()
-                        focusFirstCategory()
                     }
                 }
 
@@ -6698,13 +6779,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun focusFirstMedia() {
+        if ((b.list.adapter?.itemCount ?: 0) == 0) {
+            focusSelectedCategory()
+            return
+        }
+
         b.list.scrollToPosition(0)
         b.list.post {
             b.list.post {
-                b.list
+                val focused = b.list
                     .findViewHolderForAdapterPosition(0)
                     ?.itemView
                     ?.requestFocus()
+
+                if (focused != true) {
+                    b.list.getChildAt(0)?.requestFocus()
+                }
             }
         }
     }
