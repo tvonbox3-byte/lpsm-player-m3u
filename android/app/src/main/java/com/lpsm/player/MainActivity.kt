@@ -4725,50 +4725,59 @@ class MainActivity : AppCompatActivity() {
         val favoriteUrls =
             store.favoriteUrls()
 
+        /*
+         * Na raiz de SERIES a grade mostra uma capa por serie, nao um card
+         * para cada episodio. Usar os episodios aqui fazia "Tudo" e as
+         * categorias anunciarem milhares de itens que nao existiam na grade.
+         * A fonte da contagem agora e exatamente a mesma fonte da tela.
+         */
+        val rootSeries =
+            !radioMode &&
+                filter == ContentType.SERIES
+
         val section =
-            if (
-                radioMode
-            ) {
+            when {
 
-                radioEntries
+                radioMode ->
+                    radioEntries
 
-            } else {
+                rootSeries ->
+                    seriesCards
 
-                filter
-                    ?.let {
-
-                        entriesByType[
-                            it
-                        ]
-                            .orEmpty()
-                    }
-                    ?: entries
+                else ->
+                    filter
+                        ?.let {
+                            entriesByType[it]
+                                .orEmpty()
+                        }
+                        ?: entries
             }
 
         val indexedGroups =
-            if (
-                radioMode
-            ) {
+            when {
 
-                radioEntries.groupBy {
-
-                    it.group
-                        .ifBlank {
-                            "Brasil"
-                        }
-                }
-
-            } else {
-
-                filter
-                    ?.let {
-
-                        groupsByType[
-                            it
-                        ]
-                            .orEmpty()
+                radioMode ->
+                    radioEntries.groupBy {
+                        it.group.ifBlank { "Brasil" }
                     }
-                    ?: groupsAll
+
+                rootSeries ->
+                    seriesCardsByGroup
+
+                else ->
+                    filter
+                        ?.let {
+                            groupsByType[it]
+                                .orEmpty()
+                        }
+                        ?: groupsAll
+            }
+
+        /* O total deve refletir somente o que "Tudo" realmente exibe. */
+        val countableSection =
+            section.filter {
+                !isAdultCategory(it.group) ||
+                    it.group == unlockedAdultGroup
             }
 
         val categories =
@@ -4777,7 +4786,7 @@ class MainActivity : AppCompatActivity() {
                 add(
                     CategoryRow(
                         "Tudo",
-                        section.size
+                        countableSection.size
                     )
                 )
 
@@ -4785,7 +4794,7 @@ class MainActivity : AppCompatActivity() {
                     CategoryRow(
                         "Favoritos",
 
-                        section.count {
+                        countableSection.count {
 
                             it.url in
                                 favoriteUrls
@@ -4931,26 +4940,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             ContentType.SERIES -> {
-
-                val seriesCards =
-                    if (
-                        query.isBlank() &&
-                        !favoritesOnly
-                    ) {
-                        (
-                            selectedGroup
-                                ?.let { seriesCardsByGroup[it] }
-                                ?: this.seriesCards
-                        ).filter {
-                            !isAdultCategory(it.group) ||
-                                (selectedGroup != null && selectedGroup == unlockedAdultGroup)
-                        }
-                    } else {
-                        createSeriesCards(
-                            filtered
-                        )
-                    }
-
                 setGridColumns(
                     posterColumns()
                 )
@@ -4960,7 +4949,7 @@ class MainActivity : AppCompatActivity() {
                         as MediaAdapter
                     )
                     .submit(
-                        seriesCards,
+                        filtered,
                         epg,
                         true
                     )
