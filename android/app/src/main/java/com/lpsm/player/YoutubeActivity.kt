@@ -1,6 +1,7 @@
 package com.lpsm.player
 
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -31,18 +32,32 @@ class YoutubeActivity : AppCompatActivity() {
         private const val SMARTTUBE_SHA256 =
             "48044b306ded06cab939e81ad53be76a9c7b44c82a29c8bcaac8c2d8687b1579"
         private const val SMARTTUBE_FILE = "SmartTube-stable.apk"
+
+        private val SMARTTUBE_PACKAGES =
+            listOf(
+                "org.smarttube.stable",
+                "org.smarttube.beta",
+                "com.teamsmart.videomanager.tv",
+                "com.liskovsoft.smarttubetv.beta"
+            )
+
+        /** Abre direto, sem tela intermediaria ou escolha de aplicativo. */
+        fun openInstalledPremium(context: Context): Boolean {
+            for (packageName in SMARTTUBE_PACKAGES) {
+                val launch = context.packageManager
+                    .getLaunchIntentForPackage(packageName)
+                    ?: continue
+
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(launch)
+                return true
+            }
+            return false
+        }
     }
 
-    private val officialYoutubePackages =
-        listOf("com.google.android.youtube.tv", "com.google.android.youtube")
-
     private val smartTubePackages =
-        listOf(
-            "org.smarttube.stable",
-            "org.smarttube.beta",
-            "com.teamsmart.videomanager.tv",
-            "com.liskovsoft.smarttubetv.beta"
-        )
+        SMARTTUBE_PACKAGES
 
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var openSmartTube: Button
@@ -62,11 +77,13 @@ class YoutubeActivity : AppCompatActivity() {
         status = findViewById(R.id.youtubeStatus)
         progress = findViewById(R.id.youtubeProgress)
 
-        openYoutube.setOnClickListener {
-            if (!openFirstInstalled(officialYoutubePackages)) {
-                showNotInstalled("YouTube")
-            }
+        if (openInstalledPremium(this)) {
+            finish()
+            return
         }
+
+        openYoutube.visibility = View.GONE
+        openSmartTube.text = "INSTALAR YOUTUBE PREMIUM"
 
         openSmartTube.setOnClickListener {
             if (!openFirstInstalled(smartTubePackages)) {
@@ -76,13 +93,11 @@ class YoutubeActivity : AppCompatActivity() {
 
         close.setOnClickListener { finish() }
 
-        openYoutube.nextFocusDownId = openSmartTube.id
-        openYoutube.nextFocusUpId = close.id
-        openSmartTube.nextFocusUpId = openYoutube.id
+        openSmartTube.nextFocusUpId = close.id
         openSmartTube.nextFocusDownId = close.id
         close.nextFocusUpId = openSmartTube.id
-        close.nextFocusDownId = openYoutube.id
-        openYoutube.requestFocus()
+        close.nextFocusDownId = openSmartTube.id
+        openSmartTube.requestFocus()
     }
 
     private fun openFirstInstalled(packages: List<String>): Boolean {
@@ -153,8 +168,11 @@ class YoutubeActivity : AppCompatActivity() {
         if (waitingForInstallResult && isAnyInstalled(smartTubePackages)) {
             waitingForInstallResult = false
             smartTubeFile().delete()
-            status.text = "SmartTube instalado"
-            openSmartTube.text = "ABRIR SMARTTUBE"
+            status.text = "YOUTUBE PREMIUM PRONTO"
+            openSmartTube.text = "ABRIR YOUTUBE PREMIUM"
+            if (openInstalledPremium(this)) {
+                finish()
+            }
         }
     }
 
@@ -262,7 +280,7 @@ class YoutubeActivity : AppCompatActivity() {
                 requestMethod = "GET"
                 connectTimeout = 15_000
                 readTimeout = 60_000
-                setRequestProperty("User-Agent", "LPSM-SmartTube-Installer/2.2.24")
+                setRequestProperty("User-Agent", "LPSM-SmartTube-Installer/2.2.25")
                 setRequestProperty("Accept", "*/*")
             }
             val statusCode = connection.responseCode
@@ -297,10 +315,6 @@ class YoutubeActivity : AppCompatActivity() {
 
     private fun isAnyInstalled(packages: List<String>): Boolean =
         packages.any { packageManager.getLaunchIntentForPackage(it) != null }
-
-    private fun showNotInstalled(appName: String) {
-        showMessage("$appName nao esta instalado neste aparelho.")
-    }
 
     private fun showMessage(message: String) {
         status.text = message

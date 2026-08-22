@@ -463,9 +463,11 @@ class MainActivity : AppCompatActivity() {
 
         b.homeYoutube
             .setOnClickListener {
-                startActivity(
-                    Intent(this, YoutubeActivity::class.java)
-                )
+                if (!YoutubeActivity.openInstalledPremium(this)) {
+                    startActivity(
+                        Intent(this, YoutubeActivity::class.java)
+                    )
+                }
             }
 
         b.homeAccount
@@ -675,6 +677,87 @@ class MainActivity : AppCompatActivity() {
 
         b.previewWatch.isFocusableInTouchMode =
             false
+    }
+
+    /*
+     * Navegacao deterministica para controles remotos. Diversas TV Boxes
+     * calculam o proximo foco pela geometria e, ao apertar esquerda/cima,
+     * pulavam da grade diretamente para a barra superior.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (
+            ::b.isInitialized &&
+            event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount > 0 &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) &&
+            b.search.hasFocus()
+        ) {
+            b.search.clearFocus()
+            preferredTopFilter().requestFocus()
+            return true
+        }
+
+        if (
+            event.action == KeyEvent.ACTION_DOWN &&
+            ::b.isInitialized &&
+            b.content.visibility == View.VISIBLE
+        ) {
+            val focusedView = currentFocus
+
+            if (focusedView != null && focusedView.isInside(b.list)) {
+                val holder = b.list.findContainingViewHolder(focusedView)
+                val position = holder?.bindingAdapterPosition ?: RecyclerView.NO_POSITION
+                val columns =
+                    (b.list.layoutManager as? GridLayoutManager)
+                        ?.spanCount
+                        ?.coerceAtLeast(1)
+                        ?: 1
+
+                if (
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT &&
+                    position != RecyclerView.NO_POSITION &&
+                    position % columns == 0
+                ) {
+                    focusSelectedCategory()
+                    return true
+                }
+
+                if (
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
+                    position in 0 until columns
+                ) {
+                    return true
+                }
+            }
+
+            if (focusedView != null && focusedView.isInside(b.categoryList)) {
+                val holder = b.categoryList.findContainingViewHolder(focusedView)
+                val position = holder?.bindingAdapterPosition ?: RecyclerView.NO_POSITION
+
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                    return true
+                }
+
+                if (
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
+                    position == 0
+                ) {
+                    return true
+                }
+            }
+        }
+
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun View.isInside(container: View): Boolean {
+        var candidate: View? = this
+        while (candidate != null) {
+            if (candidate === container) return true
+            candidate = candidate.parent as? View
+        }
+        return false
     }
 
     private fun preferredTopFilter():
@@ -6588,51 +6671,42 @@ class MainActivity : AppCompatActivity() {
      */
 
     private fun focusFirstCategory() {
-
+        b.categoryList.scrollToPosition(0)
         b.categoryList.post {
-
-            val first =
+            b.categoryList.post {
                 b.categoryList
-                    .getChildAt(
-                        0
-                    )
+                    .findViewHolderForAdapterPosition(0)
+                    ?.itemView
+                    ?.requestFocus()
+            }
+        }
+    }
 
-            if (
-                first !=
-                null
-            ) {
+    private fun focusSelectedCategory() {
+        val position =
+            (b.categoryList.adapter as? CategoryAdapter)
+                ?.selectedPosition()
+                ?: 0
 
-                first.requestFocus()
-
-            } else {
-
+        b.categoryList.scrollToPosition(position)
+        b.categoryList.post {
+            b.categoryList.post {
                 b.categoryList
-                    .requestFocus()
+                    .findViewHolderForAdapterPosition(position)
+                    ?.itemView
+                    ?.requestFocus()
             }
         }
     }
 
     private fun focusFirstMedia() {
-
+        b.list.scrollToPosition(0)
         b.list.post {
-
-            val first =
+            b.list.post {
                 b.list
-                    .getChildAt(
-                        0
-                    )
-
-            if (
-                first !=
-                null
-            ) {
-
-                first.requestFocus()
-
-            } else {
-
-                b.list
-                    .requestFocus()
+                    .findViewHolderForAdapterPosition(0)
+                    ?.itemView
+                    ?.requestFocus()
             }
         }
     }
@@ -6804,22 +6878,6 @@ class MainActivity : AppCompatActivity() {
      * CICLO DE VIDA
      * =====================================================
      */
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (
-            event.action == KeyEvent.ACTION_DOWN &&
-            event.repeatCount > 0 &&
-            (event.keyCode == KeyEvent.KEYCODE_DPAD_UP ||
-                event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) &&
-            b.search.hasFocus()
-        ) {
-            b.search.clearFocus()
-            preferredTopFilter().requestFocus()
-            return true
-        }
-
-        return super.dispatchKeyEvent(event)
-    }
 
     override fun onConfigurationChanged(
         newConfig: Configuration

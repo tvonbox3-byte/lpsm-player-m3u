@@ -159,7 +159,7 @@ object RadioBrowserApi {
             url = url,
             logo = "",
             group = group,
-            tvgId = id,
+            tvgId = "radio:$id",
             type = ContentType.LIVE
         )
 
@@ -171,7 +171,13 @@ object RadioBrowserApi {
                 instanceFollowRedirects = true
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("Accept-Encoding", "gzip")
+                /*
+                 * Nao forcar gzip aqui. Em algumas TV Boxes o
+                 * HttpURLConnection entregava os bytes compactados sem
+                 * descompactar e o JSON falhava, deixando apenas as seis
+                 * radios fixas.
+                 */
+                setRequestProperty("Accept-Encoding", "identity")
                 setRequestProperty("User-Agent", "LPSM-Player/Android")
             }
 
@@ -242,7 +248,7 @@ object RadioBrowserApi {
                     url = streamUrl,
                     logo = station.optString("favicon").trim(),
                     group = group,
-                    tvgId = station.optString("stationuuid").trim(),
+                    tvgId = "radio:${station.optString("stationuuid").trim()}",
                     type = ContentType.LIVE
                 )
         }
@@ -299,7 +305,9 @@ object RadioBrowserApi {
                         url = url,
                         logo = item.optString("logo").trim(),
                         group = item.optString("group").trim().ifBlank { "Brasil" },
-                        tvgId = item.optString("tvgId").trim(),
+                        tvgId = item.optString("tvgId").trim()
+                            .removePrefix("radio:")
+                            .let { "radio:$it" },
                         type = ContentType.LIVE
                     )
             }
