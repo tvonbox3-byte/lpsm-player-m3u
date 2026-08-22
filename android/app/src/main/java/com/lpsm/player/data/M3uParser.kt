@@ -94,7 +94,12 @@ object M3uParser {
          * restante sem deixar TV/Filmes/Séries vazios durante todo o processo.
          */
         var partialStage = 0
-        val partialMarks = intArrayOf(800, 4_000, 12_000)
+        /*
+         * Uma unica entrega inicial basta para liberar a navegacao. Recriar
+         * todos os indices em 800, 4 mil e 12 mil itens disputava CPU com o
+         * parser e deixava TV Boxes mais lentas justamente ao abrir.
+         */
+        val partialMarks = intArrayOf(1_500)
 
         fun emitPartialIfNeeded() {
             val callback = onPartial ?: return

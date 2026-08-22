@@ -75,7 +75,7 @@ class PlaylistCache(
 
     fun read(
         expectedSignature: String,
-        maxAgeMillis: Long = 24L * 60L * 60L * 1000L
+        maxAgeMillis: Long = 7L * 24L * 60L * 60L * 1000L
     ): List<MediaEntry> {
 
         if (!file.isFile) {
@@ -142,6 +142,44 @@ class PlaylistCache(
 
             file.delete()
             emptyList()
+        }
+    }
+
+    /** Idade da copia salva sem precisar descompactar todos os itens. */
+    fun ageMillis(
+        expectedSignature: String
+    ): Long? {
+
+        if (!file.isFile) {
+            return null
+        }
+
+        return try {
+            DataInputStream(
+                BufferedInputStream(
+                    GZIPInputStream(file.inputStream()),
+                    16 * 1024
+                )
+            ).use { input ->
+                if (input.readInt() != FORMAT_VERSION) {
+                    return null
+                }
+
+                if (readString(input) != expectedSignature) {
+                    return null
+                }
+
+                val savedAt = input.readLong()
+
+                if (savedAt <= 0L) {
+                    null
+                } else {
+                    (System.currentTimeMillis() - savedAt)
+                        .coerceAtLeast(0L)
+                }
+            }
+        } catch (_: Throwable) {
+            null
         }
     }
 
