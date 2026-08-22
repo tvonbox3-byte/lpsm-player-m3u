@@ -26,6 +26,10 @@ class MediaAdapter(
     private val favoriteChanged: (MediaEntry, Boolean) -> Unit = { _, _ -> }
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
+    init {
+        setHasStableIds(true)
+    }
+
 
     companion object {
 
@@ -91,25 +95,15 @@ class MediaAdapter(
         /*
          * Memoriza todas as capas disponíveis.
          */
-        items
-            .filter {
-
-                it.type ==
-                    ContentType.SERIES &&
-
-                it.logo
-                    .isNotBlank()
+        if (items.firstOrNull()?.type == ContentType.SERIES) {
+            items.forEach { item ->
+                if (item.logo.isNotBlank()) {
+                    rememberedSeriesLogos[
+                        seriesIdentity(item)
+                    ] = item.logo
+                }
             }
-            .forEach {
-                item ->
-
-                rememberedSeriesLogos[
-                    seriesIdentity(
-                        item
-                    )
-                ] =
-                    item.logo
-            }
+        }
 
 
         notifyDataSetChanged()
@@ -122,6 +116,9 @@ class MediaAdapter(
 
         return data.size
     }
+
+    override fun getItemId(position: Int): Long =
+        data[position].url.hashCode().toLong()
 
 
 

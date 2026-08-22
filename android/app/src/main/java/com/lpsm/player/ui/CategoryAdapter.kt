@@ -17,6 +17,10 @@ class CategoryAdapter(
     private val select: (String) -> Unit
 ) : RecyclerView.Adapter<CategoryAdapter.Holder>() {
 
+    init {
+        setHasStableIds(true)
+    }
+
     private var rows =
         emptyList<CategoryRow>()
 
@@ -64,6 +68,9 @@ class CategoryAdapter(
     override fun getItemCount(): Int {
         return rows.size
     }
+
+    override fun getItemId(position: Int): Long =
+        rows[position].name.hashCode().toLong()
 
     override fun onBindViewHolder(
         holder: Holder,
