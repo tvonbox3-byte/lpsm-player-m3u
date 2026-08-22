@@ -1,12 +1,15 @@
 package com.lpsm.player.data
 
 import android.content.Context
+import com.lpsm.player.BuildConfig
 import com.lpsm.player.model.ContentType
 import com.lpsm.player.model.MediaEntry
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.GZIPInputStream
+import java.util.zip.InflaterInputStream
 
 /**
  * Catalogo independente de radios brasileiras.
@@ -25,13 +28,14 @@ object RadioBrowserApi {
     private const val KEY_TIME = "stations_time"
     private const val CACHE_TTL_MS = 24L * 60L * 60L * 1000L
 
-    // 350 emissoras preservam variedade sem sobrecarregar boxes com pouca memoria.
+    // O catalogo completo e carregado sob demanda; a tela renderiza apenas os itens visiveis.
     private const val BRAZIL_QUERY =
         "/json/stations/bycountrycodeexact/BR" +
-            "?hidebroken=true&order=clickcount&reverse=true&limit=350"
+            "?hidebroken=true&order=clickcount&reverse=true&limit=1000"
 
     private val servers =
         listOf(
+            BuildConfig.API_BASE_URL + "/api/public/radios",
             "https://all.api.radio-browser.info",
             "https://de1.api.radio-browser.info",
             "https://nl1.api.radio-browser.info"
@@ -74,7 +78,10 @@ object RadioBrowserApi {
 
         for (server in servers) {
             try {
-                val downloaded = download("$server$BRAZIL_QUERY")
+                val address =
+                    if (server.endsWith("/api/public/radios")) server
+                    else "$server$BRAZIL_QUERY"
+                val downloaded = download(address)
                 if (downloaded.isNotEmpty()) {
                     writeCache(context, downloaded)
                     return merge(fixed, downloaded)
@@ -171,13 +178,7 @@ object RadioBrowserApi {
                 instanceFollowRedirects = true
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/json")
-                /*
-                 * Nao forcar gzip aqui. Em algumas TV Boxes o
-                 * HttpURLConnection entregava os bytes compactados sem
-                 * descompactar e o JSON falhava, deixando apenas as seis
-                 * radios fixas.
-                 */
-                setRequestProperty("Accept-Encoding", "identity")
+                setRequestProperty("Accept-Encoding", "gzip, deflate")
                 setRequestProperty("User-Agent", "LPSM-Player/Android")
             }
 
@@ -187,8 +188,15 @@ object RadioBrowserApi {
                 throw IllegalStateException("Servidor de radios respondeu $status")
             }
 
+            val stream =
+                when (connection.contentEncoding?.lowercase()) {
+                    "gzip" -> GZIPInputStream(connection.inputStream)
+                    "deflate" -> InflaterInputStream(connection.inputStream)
+                    else -> connection.inputStream
+                }
+
             val body =
-                connection.inputStream
+                stream
                     .bufferedReader(Charsets.UTF_8)
                     .use { it.readText() }
 
