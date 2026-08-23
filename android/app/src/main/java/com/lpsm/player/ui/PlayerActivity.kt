@@ -23,12 +23,18 @@ import androidx.media3.ui.AspectRatioFrameLayout
 
 import com.lpsm.player.databinding.ActivityPlayerBinding
 import com.lpsm.player.LpsmApplication
+import com.lpsm.player.data.SecureStore
+import com.lpsm.player.model.ContentType
 
 class PlayerActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityPlayerBinding
 
     private var player: ExoPlayer? = null
+
+    private val secureStore by lazy {
+        SecureStore(this)
+    }
 
     private val uiHandler =
         Handler(
@@ -310,6 +316,15 @@ class PlayerActivity : AppCompatActivity() {
                 url
             )
         )
+
+        if (supportsResume()) {
+            secureStore
+                .playbackPosition(url)
+                .takeIf { it >= 30_000L }
+                ?.let { savedPosition ->
+                    newPlayer.seekTo(savedPosition)
+                }
+        }
 
         newPlayer.prepare()
 
@@ -722,6 +737,11 @@ class PlayerActivity : AppCompatActivity() {
             hideTitleRunnable
         )
 
+        savePlaybackProgress()
+
+        (application as? LpsmApplication)
+            ?.clearNowPlaying()
+
         b.playerView.player =
             null
 
@@ -731,6 +751,25 @@ class PlayerActivity : AppCompatActivity() {
             null
 
         super.onStop()
+    }
+
+    private fun supportsResume(): Boolean {
+        val type = intent.getStringExtra("type")
+        return type == ContentType.VOD.name ||
+            type == ContentType.SERIES.name
+    }
+
+    private fun savePlaybackProgress() {
+        if (!supportsResume()) return
+
+        val url = intent.getStringExtra("url").orEmpty()
+        val activePlayer = player ?: return
+
+        secureStore.savePlaybackProgress(
+            url = url,
+            positionMs = activePlayer.currentPosition.coerceAtLeast(0L),
+            durationMs = activePlayer.duration.coerceAtLeast(0L)
+        )
     }
 
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import com.lpsm.player.BuildConfig
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -19,8 +20,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object AppUpdateChecker {
 
-    private const val UPDATE_JSON_URL =
-        "https://github.com/tvonbox3-byte/lpsm-player-m3u/releases/latest/download/update.json"
+    private val updateJsonUrls =
+        listOf(
+            BuildConfig.API_BASE_URL.trimEnd('/') + "/api/app/update",
+            "https://github.com/tvonbox3-byte/lpsm-player-m3u/releases/latest/download/update.json"
+        )
 
     private val executor = Executors.newSingleThreadExecutor()
     private val checking = AtomicBoolean(false)
@@ -51,7 +55,7 @@ object AppUpdateChecker {
 
         executor.execute {
             try {
-                val json = JSONObject(downloadText(UPDATE_JSON_URL))
+                val json = downloadUpdateJson()
                 val info =
                     UpdateInfo(
                         versionCode = json.optLong("versionCode", 0L),
@@ -102,6 +106,20 @@ object AppUpdateChecker {
         }
     }
 
+    private fun downloadUpdateJson(): JSONObject {
+        var lastError: Throwable? = null
+
+        updateJsonUrls.forEach { address ->
+            try {
+                return JSONObject(downloadText(address))
+            } catch (error: Throwable) {
+                lastError = error
+            }
+        }
+
+        throw lastError ?: IllegalStateException("Atualização indisponível")
+    }
+
     private fun openConnection(address: String): HttpURLConnection {
         var current = address
 
@@ -112,7 +130,10 @@ object AppUpdateChecker {
                     requestMethod = "GET"
                     connectTimeout = 6_000
                     readTimeout = 10_000
-                    setRequestProperty("User-Agent", "LPSM-Android-Updater/2.2.24")
+                    setRequestProperty(
+                        "User-Agent",
+                        "LPSM-Android-Updater/${BuildConfig.VERSION_NAME}"
+                    )
                     setRequestProperty("Accept", "application/json,*/*")
                     setRequestProperty("Cache-Control", "no-cache")
                 }

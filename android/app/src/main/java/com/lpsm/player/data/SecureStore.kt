@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.os.Build
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONArray
+import org.json.JSONObject
 import java.security.SecureRandom
 
 class SecureStore(context: Context) {
@@ -123,7 +125,109 @@ class SecureStore(context: Context) {
         return added
     }
 
+    data class PlaybackProgress(
+        val url: String,
+        val positionMs: Long,
+        val durationMs: Long,
+        val updatedAt: Long
+    )
+
+    fun playbackPosition(url: String): Long =
+        playbackHistory()
+            .firstOrNull { it.url == url }
+            ?.positionMs
+            ?: 0L
+
+    fun continueWatchingUrls(): List<String> =
+        playbackHistory()
+            .sortedByDescending { it.updatedAt }
+            .map { it.url }
+
+    /**
+     * Salva somente filmes e episodios realmente iniciados. Ao chegar perto
+     * do fim, o item sai de "Continuar assistindo" automaticamente.
+     */
+    fun savePlaybackProgress(
+        url: String,
+        positionMs: Long,
+        durationMs: Long
+    ) {
+        if (url.isBlank()) return
+
+        val history =
+            playbackHistory()
+                .filterNot { it.url == url }
+                .toMutableList()
+
+        val completed =
+            durationMs > 0L &&
+                (
+                    durationMs - positionMs < 90_000L ||
+                        positionMs >= durationMs * 95L / 100L
+                )
+
+        if (positionMs >= 30_000L && !completed) {
+            history.add(
+                PlaybackProgress(
+                    url = url,
+                    positionMs = positionMs,
+                    durationMs = durationMs.coerceAtLeast(0L),
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+
+        val json = JSONArray()
+        history
+            .sortedByDescending { it.updatedAt }
+            .take(MAX_PLAYBACK_HISTORY)
+            .forEach { item ->
+                json.put(
+                    JSONObject()
+                        .put("url", item.url)
+                        .put("positionMs", item.positionMs)
+                        .put("durationMs", item.durationMs)
+                        .put("updatedAt", item.updatedAt)
+                )
+            }
+
+        prefs.edit()
+            .putString(PLAYBACK_HISTORY_KEY, json.toString())
+            .apply()
+    }
+
+    private fun playbackHistory(): List<PlaybackProgress> {
+        val raw = prefs.getString(PLAYBACK_HISTORY_KEY, null) ?: return emptyList()
+
+        return try {
+            val array = JSONArray(raw)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    val url = item.optString("url").trim()
+                    val positionMs = item.optLong("positionMs", 0L)
+                    if (url.isBlank() || positionMs < 30_000L) continue
+                    add(
+                        PlaybackProgress(
+                            url = url,
+                            positionMs = positionMs,
+                            durationMs = item.optLong("durationMs", 0L),
+                            updatedAt = item.optLong("updatedAt", 0L)
+                        )
+                    )
+                }
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
+    }
+
+    companion object {
+        private const val PLAYBACK_HISTORY_KEY = "playback_history_json"
+        private const val MAX_PLAYBACK_HISTORY = 50
     }
 }
