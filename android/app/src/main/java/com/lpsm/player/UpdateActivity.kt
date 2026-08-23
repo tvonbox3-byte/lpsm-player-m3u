@@ -42,8 +42,11 @@ class UpdateActivity : AppCompatActivity() {
          * Arquivo publicado automaticamente
          * pelo GitHub Actions.
          */
-        private const val UPDATE_JSON_URL =
-            "https://github.com/tvonbox3-byte/lpsm-player-m3u/releases/latest/download/update.json"
+        private val UPDATE_JSON_URLS =
+            listOf(
+                BuildConfig.API_BASE_URL.trimEnd('/') + "/api/app/update",
+                "https://github.com/tvonbox3-byte/lpsm-player-m3u/releases/latest/download/update.json"
+            )
 
 
         /*
@@ -381,16 +384,8 @@ class UpdateActivity : AppCompatActivity() {
 
             try {
 
-                val jsonText =
-                    downloadText(
-                        UPDATE_JSON_URL
-                    )
-
-
                 val json =
-                    JSONObject(
-                        jsonText
-                    )
+                    downloadUpdateJson()
 
 
                 val info =
@@ -1481,6 +1476,20 @@ class UpdateActivity : AppCompatActivity() {
         }
     }
 
+    private fun downloadUpdateJson(): JSONObject {
+        var lastError: Exception? = null
+
+        UPDATE_JSON_URLS.forEach { address ->
+            try {
+                return JSONObject(downloadText(address))
+            } catch (error: Exception) {
+                lastError = error
+            }
+        }
+
+        throw lastError ?: IllegalStateException("Atualização indisponível")
+    }
+
 
     /*
      * =====================================================
@@ -1587,7 +1596,7 @@ class UpdateActivity : AppCompatActivity() {
             connection
                 .setRequestProperty(
                     "User-Agent",
-                    "LPSM-Android-Updater/2.2"
+                    "LPSM-Android-Updater/${BuildConfig.VERSION_NAME}"
                 )
 
 

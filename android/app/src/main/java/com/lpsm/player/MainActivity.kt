@@ -98,6 +98,9 @@ class MainActivity : AppCompatActivity() {
     private var favoritesOnly =
         false
 
+    private var continueOnly =
+        false
+
     private var selectedGroup:
         String? = null
 
@@ -283,13 +286,7 @@ class MainActivity : AppCompatActivity() {
          * TV Boxes que levavam mais de 850 ms para responder ao GitHub perdiam
          * silenciosamente o aviso de atualizacao.
          */
-        AppUpdateChecker.check(applicationContext) { info ->
-            if (!isFinishing && !isDestroyed) {
-                startActivity(
-                    UpdateActivity.promptIntent(this, info)
-                )
-            }
-        }
+        checkForAppUpdate()
 
         /*
          * Ajusta o layout para o tamanho real
@@ -840,6 +837,7 @@ class MainActivity : AppCompatActivity() {
                 if (!favoritesOnly) {
                     selectedSeriesName = null
                     selectedSeason = null
+                    continueOnly = false
                     favoritesOnly = true
                     selectedGroup = null
                     selectedEntry = null
@@ -968,6 +966,14 @@ class MainActivity : AppCompatActivity() {
             ContentType.SERIES -> {
 
                 if (
+                    continueOnly
+                ) {
+
+                    openPlayer(
+                        item
+                    )
+
+                } else if (
                     selectedSeriesName ==
                     null
                 ) {
@@ -1126,6 +1132,10 @@ class MainActivity : AppCompatActivity() {
             category ==
                 "Favoritos"
 
+        continueOnly =
+            category ==
+                "Continuar assistindo"
+
         selectedGroup =
             category.takeUnless {
 
@@ -1133,7 +1143,10 @@ class MainActivity : AppCompatActivity() {
                     "Tudo" ||
 
                 it ==
-                    "Favoritos"
+                    "Favoritos" ||
+
+                it ==
+                    "Continuar assistindo"
             }
 
         selectedEntry =
@@ -4470,6 +4483,9 @@ class MainActivity : AppCompatActivity() {
                         null
                 }
 
+                continueOnly =
+                    false
+
                 favoritesOnly =
                     true
 
@@ -4611,6 +4627,7 @@ class MainActivity : AppCompatActivity() {
             ok.setOnClickListener {
                 if (input.text.toString() == adultPin) {
                     unlockedAdultGroup = category
+                    continueOnly = false
                     favoritesOnly = false
                     selectedGroup = category
                     selectedEntry = null
@@ -4788,6 +4805,36 @@ class MainActivity : AppCompatActivity() {
         val favoriteUrls =
             store.favoriteUrls()
 
+        val continueOrder =
+            store.continueWatchingUrls()
+
+        val continuePosition =
+            continueOrder
+                .withIndex()
+                .associate {
+                    it.value to it.index
+                }
+
+        val continueEntries =
+            if (
+                !radioMode &&
+                (filter == ContentType.VOD || filter == ContentType.SERIES)
+            ) {
+                filter
+                    ?.let { entriesByType[it] }
+                    .orEmpty()
+                    .asSequence()
+                    .filter { it.url in continuePosition }
+                    .filter {
+                        !isAdultCategory(it.group) ||
+                            it.group == unlockedAdultGroup
+                    }
+                    .sortedBy { continuePosition[it.url] ?: Int.MAX_VALUE }
+                    .toList()
+            } else {
+                emptyList()
+            }
+
         /*
          * Na raiz de SERIES a grade mostra uma capa por serie, nao um card
          * para cada episodio. Usar os episodios aqui fazia "Tudo" e as
@@ -4796,7 +4843,8 @@ class MainActivity : AppCompatActivity() {
          */
         val rootSeries =
             !radioMode &&
-                filter == ContentType.SERIES
+                filter == ContentType.SERIES &&
+                !continueOnly
 
         val section =
             when {
@@ -4853,6 +4901,18 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
 
+                if (
+                    !radioMode &&
+                    (filter == ContentType.VOD || filter == ContentType.SERIES)
+                ) {
+                    add(
+                        CategoryRow(
+                            "Continuar assistindo",
+                            continueEntries.size
+                        )
+                    )
+                }
+
                 add(
                     CategoryRow(
                         "Favoritos",
@@ -4887,6 +4947,12 @@ class MainActivity : AppCompatActivity() {
                 categories,
 
                 if (
+                    continueOnly
+                ) {
+
+                    "Continuar assistindo"
+
+                } else if (
                     favoritesOnly
                 ) {
 
@@ -4900,7 +4966,10 @@ class MainActivity : AppCompatActivity() {
             )
 
         val source =
-            selectedGroup
+            if (continueOnly) {
+                continueEntries
+            } else {
+                selectedGroup
                 ?.let {
 
                     indexedGroups[
@@ -4909,6 +4978,7 @@ class MainActivity : AppCompatActivity() {
                         .orEmpty()
                 }
                 ?: section
+            }
 
         val filtered =
             source.filter {
@@ -5018,10 +5088,18 @@ class MainActivity : AppCompatActivity() {
                     )
 
                 b.previewTitle.text =
-                    "Selecione uma série"
+                    if (continueOnly) {
+                        "Continuar assistindo"
+                    } else {
+                        "Selecione uma série"
+                    }
 
                 b.previewGroup.text =
-                    "OK para ver detalhes"
+                    if (continueOnly) {
+                        "OK para retomar o episódio"
+                    } else {
+                        "OK para ver detalhes"
+                    }
             }
 
             else -> {
@@ -6438,18 +6516,12 @@ class MainActivity : AppCompatActivity() {
                 it.type
             }
 
-        val allGroups =
-            source.groupBy {
-
-                it.group
-                    .ifBlank {
-
-                        "Outros"
-                    }
-            }
-
         val indexedGroupsByType =
             byType
+                .filterKeys {
+                    it == ContentType.LIVE ||
+                        it == ContentType.VOD
+                }
                 .mapValues {
                         (_, values) ->
 
@@ -6487,15 +6559,16 @@ class MainActivity : AppCompatActivity() {
             )
 
         val indexedSeriesCardsByGroup =
-            indexedGroupsByType[ContentType.SERIES]
-                .orEmpty()
-                .mapValues { (_, episodes) ->
-                    createSeriesCards(episodes)
+            indexedSeriesCards
+                .groupBy { card ->
+                    card.group.ifBlank {
+                        "Outros"
+                    }
                 }
 
         return EntryIndexes(
             byType = byType,
-            allGroups = allGroups,
+            allGroups = emptyMap(),
             groupsByType = indexedGroupsByType,
             seriesEpisodesByName = indexedSeriesEpisodes,
             seriesCards = indexedSeriesCards,
@@ -6575,6 +6648,9 @@ class MainActivity : AppCompatActivity() {
         filter =
             null
 
+        continueOnly =
+            false
+
         favoritesOnly =
             false
 
@@ -6625,6 +6701,9 @@ class MainActivity : AppCompatActivity() {
 
         radioMode =
             radios
+
+        continueOnly =
+            false
 
         favoritesOnly =
             false
@@ -7018,6 +7097,30 @@ class MainActivity : AppCompatActivity() {
      * CICLO DE VIDA
      * =====================================================
      */
+
+    override fun onResume() {
+        super.onResume()
+
+        checkForAppUpdate()
+
+        if (
+            ::b.isInitialized &&
+            b.content.visibility == View.VISIBLE &&
+            (filter == ContentType.VOD || filter == ContentType.SERIES)
+        ) {
+            render()
+        }
+    }
+
+    private fun checkForAppUpdate() {
+        AppUpdateChecker.check(applicationContext) { info ->
+            if (!isFinishing && !isDestroyed) {
+                startActivity(
+                    UpdateActivity.promptIntent(this, info)
+                )
+            }
+        }
+    }
 
     override fun onConfigurationChanged(
         newConfig: Configuration

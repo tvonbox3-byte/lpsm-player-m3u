@@ -9,6 +9,9 @@ import {
 import {
   fileURLToPath
 } from 'node:url';
+import {
+  Readable
+} from 'node:stream';
 
 import {
   Store,
@@ -57,7 +60,13 @@ const config = {
 
   secret:
     process.env.TOKEN_SECRET ||
-    'development-only-change-me'
+    'development-only-change-me',
+
+  publicBaseUrl:
+    (
+      process.env.PUBLIC_BASE_URL ||
+      'https://lpsm-player-backend.onrender.com'
+    ).replace(/\/$/, '')
 };
 
 
@@ -97,6 +106,66 @@ let radioCatalogCache = {
   savedAt: 0,
   stations: []
 };
+
+const APP_UPDATE_JSON_URL =
+  'https://github.com/tvonbox3-byte/lpsm-player-m3u/releases/latest/download/update.json';
+
+const APP_UPDATE_CACHE_TTL_MS =
+  60 * 1000;
+
+let appUpdateCache = {
+  savedAt: 0,
+  metadata: null,
+  upstreamApkUrl: ''
+};
+
+async function latestAppUpdate() {
+  if (
+    appUpdateCache.metadata &&
+    Date.now() - appUpdateCache.savedAt < APP_UPDATE_CACHE_TTL_MS
+  ) {
+    return appUpdateCache;
+  }
+
+  const response = await fetch(
+    APP_UPDATE_JSON_URL,
+    {
+      headers: {
+        accept: 'application/json',
+        'user-agent': 'LPSM-Control-Updater/1.0'
+      },
+      signal: AbortSignal.timeout(15000)
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub respondeu ${response.status}`);
+  }
+
+  const metadata = await response.json();
+  const upstreamApkUrl = String(metadata?.apkUrl || '').trim();
+
+  if (
+    Number(metadata?.versionCode || 0) <= 0 ||
+    !upstreamApkUrl.startsWith(
+      'https://github.com/tvonbox3-byte/lpsm-player-m3u/releases/'
+    )
+  ) {
+    throw new Error('Metadados de atualização inválidos');
+  }
+
+  appUpdateCache = {
+    savedAt: Date.now(),
+    metadata: {
+      ...metadata,
+      apkUrl:
+        `${config.publicBaseUrl}/api/app/apk`
+    },
+    upstreamApkUrl
+  };
+
+  return appUpdateCache;
+}
 
 async function brazilianRadioCatalog() {
   if (
@@ -1415,6 +1484,93 @@ async function api(
           'lpsm-control'
       }
     );
+  }
+
+
+  /*
+   * Atualização do Android por uma rota que as TV Boxes já conseguem
+   * acessar. O GitHub continua sendo a origem e fica como reserva no app.
+   */
+  if (
+    req.method === 'GET' &&
+    path === '/api/app/update'
+  ) {
+    try {
+      const update = await latestAppUpdate();
+      return json(
+        res,
+        200,
+        update.metadata
+      );
+    } catch (_error) {
+      return json(
+        res,
+        503,
+        {
+          error: 'Atualização temporariamente indisponível.'
+        }
+      );
+    }
+  }
+
+
+  if (
+    req.method === 'GET' &&
+    path === '/api/app/apk'
+  ) {
+    try {
+      const update = await latestAppUpdate();
+      const upstream = await fetch(
+        update.upstreamApkUrl,
+        {
+          headers: {
+            accept: 'application/vnd.android.package-archive,*/*',
+            'user-agent': 'LPSM-Control-Updater/1.0'
+          },
+          signal: AbortSignal.timeout(120000)
+        }
+      );
+
+      if (!upstream.ok || !upstream.body) {
+        throw new Error(`GitHub respondeu ${upstream.status}`);
+      }
+
+      const headers = {
+        'content-type':
+          'application/vnd.android.package-archive',
+        'content-disposition':
+          'attachment; filename="LPSM-Player.apk"',
+        'cache-control':
+          'public, max-age=300',
+        ...securityHeaders
+      };
+
+      const contentLength =
+        upstream.headers.get('content-length');
+
+      if (contentLength) {
+        headers['content-length'] = contentLength;
+      }
+
+      res.writeHead(200, headers);
+
+      const stream = Readable.fromWeb(upstream.body);
+      stream.on('error', () => res.destroy());
+      stream.pipe(res);
+      return;
+    } catch (_error) {
+      if (!res.headersSent) {
+        return json(
+          res,
+          503,
+          {
+            error: 'APK temporariamente indisponível.'
+          }
+        );
+      }
+      res.destroy();
+      return;
+    }
   }
 
 
