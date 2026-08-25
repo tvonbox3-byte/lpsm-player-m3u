@@ -673,19 +673,17 @@ await store.mutate(
         : [];
 
 
-    data.appearance =
-      data.appearance ||
-      {
+    data.appearance = {
+      bannerUrl: '',
+      wallpaperUrl: '',
+      supportMessage: 'Use apenas conteúdo autorizado.',
+      adultPin: '0202',
+      ...(data.appearance || {})
+    };
 
-        bannerUrl:
-          '',
-
-        wallpaperUrl:
-          '',
-
-        supportMessage:
-          'Use apenas conteúdo autorizado.'
-      };
+    if (!/^\d{4,8}$/.test(String(data.appearance.adultPin || ''))) {
+      data.appearance.adultPin = '0202';
+    }
 
 
     /*
@@ -1630,7 +1628,6 @@ async function api(
         req
       );
 
-
     const suppliedUser =
       String(data.user || '')
         .slice(0, 128);
@@ -2299,6 +2296,23 @@ async function api(
         req
       );
 
+    const adultPin =
+      String(
+        data.adultPin ??
+        store.data.appearance?.adultPin ??
+        '0202'
+      ).trim();
+
+    if (!/^\d{4,8}$/.test(adultPin)) {
+      return json(
+        res,
+        400,
+        {
+          error: 'A senha adulta deve ter de 4 a 8 números.'
+        }
+      );
+    }
+
 
     await store.mutate(
       state => {
@@ -2329,7 +2343,9 @@ async function api(
               data.supportMessage ||
 
               ''
-            )
+            ),
+
+          adultPin
         };
 
 
