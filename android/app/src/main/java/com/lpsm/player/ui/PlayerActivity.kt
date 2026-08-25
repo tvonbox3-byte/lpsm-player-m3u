@@ -13,11 +13,13 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 
@@ -32,6 +34,17 @@ class PlayerActivity : AppCompatActivity() {
 
     private var player: ExoPlayer? = null
 
+    private val playbackListener =
+        object : Player.Listener {
+            override fun onPlaybackStateChanged(
+                playbackState: Int
+            ) {
+                if (playbackState == Player.STATE_ENDED) {
+                    playNextEpisode()
+                }
+            }
+        }
+
     private val secureStore by lazy {
         SecureStore(this)
     }
@@ -40,6 +53,20 @@ class PlayerActivity : AppCompatActivity() {
         Handler(
             Looper.getMainLooper()
         )
+
+    private val progressCheckpoint =
+        object : Runnable {
+            override fun run() {
+                if (player?.isPlaying == true) {
+                    savePlaybackProgress()
+                }
+
+                uiHandler.postDelayed(
+                    this,
+                    20_000L
+                )
+            }
+        }
 
     private enum class ScreenMode {
         FIT,
@@ -227,6 +254,9 @@ class PlayerActivity : AppCompatActivity() {
 
         b.playerView.requestFocus()
 
+        uiHandler.removeCallbacks(progressCheckpoint)
+        uiHandler.postDelayed(progressCheckpoint, 20_000L)
+
         uiHandler.postDelayed(
             hideTitleRunnable,
             3500
@@ -308,6 +338,10 @@ class PlayerActivity : AppCompatActivity() {
         player =
             newPlayer
 
+        newPlayer.addListener(
+            playbackListener
+        )
+
         b.playerView.player =
             newPlayer
 
@@ -317,19 +351,130 @@ class PlayerActivity : AppCompatActivity() {
             )
         )
 
-        if (supportsResume()) {
-            secureStore
-                .playbackPosition(url)
-                .takeIf { it >= 30_000L }
-                ?.let { savedPosition ->
-                    newPlayer.seekTo(savedPosition)
-                }
-        }
-
         newPlayer.prepare()
 
-        newPlayer.playWhenReady =
-            true
+        val savedPosition =
+            if (supportsResume()) {
+                secureStore
+                    .playbackPosition(url)
+                    .takeIf { it >= 30_000L }
+            } else {
+                null
+            }
+
+        if (savedPosition == null) {
+            newPlayer.playWhenReady = true
+            return
+        }
+
+        showResumeChoice(
+            newPlayer,
+            savedPosition
+        )
+    }
+
+    private fun playNextEpisode() {
+        if (
+            intent.getStringExtra("type") !=
+            ContentType.SERIES.name
+        ) {
+            return
+        }
+
+        val names =
+            intent.getStringArrayListExtra(
+                "episode_names"
+            ).orEmpty()
+        val urls =
+            intent.getStringArrayListExtra(
+                "episode_urls"
+            ).orEmpty()
+        val groups =
+            intent.getStringArrayListExtra(
+                "episode_groups"
+            ).orEmpty()
+        val currentIndex =
+            intent.getIntExtra(
+                "episode_index",
+                -1
+            )
+        val nextIndex = currentIndex + 1
+
+        if (
+            nextIndex !in urls.indices ||
+            nextIndex !in names.indices
+        ) {
+            return
+        }
+
+        savePlaybackProgress()
+
+        val nextUrl = urls[nextIndex]
+        val nextName = names[nextIndex]
+        val nextGroup = groups.getOrNull(nextIndex).orEmpty()
+
+        intent
+            .putExtra("url", nextUrl)
+            .putExtra("name", nextName)
+            .putExtra("group", nextGroup)
+            .putExtra("episode_index", nextIndex)
+
+        b.title.text = nextName
+        showTitleAgain()
+
+        (application as? LpsmApplication)
+            ?.setNowPlaying(
+                nextName,
+                nextUrl,
+                nextGroup,
+                ContentType.SERIES.name
+            )
+
+        player?.apply {
+            setMediaItem(
+                MediaItem.fromUri(nextUrl)
+            )
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    private fun showResumeChoice(
+        activePlayer: ExoPlayer,
+        savedPosition: Long
+    ) {
+        val totalMinutes = savedPosition / 60_000L
+        val positionLabel =
+            if (totalMinutes >= 60L) {
+                "%dh %02dmin".format(
+                    totalMinutes / 60L,
+                    totalMinutes % 60L
+                )
+            } else {
+                "${totalMinutes.coerceAtLeast(1L)} min"
+            }
+
+        val dialog =
+            AlertDialog.Builder(this)
+                .setTitle("Voltar a assistir")
+                .setMessage("Você parou em $positionLabel.")
+                .setPositiveButton("Continuar de onde parou") { _, _ ->
+                    activePlayer.seekTo(savedPosition)
+                    activePlayer.playWhenReady = true
+                }
+                .setNegativeButton("Começar do início") { _, _ ->
+                    activePlayer.seekTo(0L)
+                    activePlayer.playWhenReady = true
+                }
+                .setCancelable(false)
+                .create()
+
+        dialog.setOnShowListener {
+            dialog
+                .getButton(AlertDialog.BUTTON_POSITIVE)
+                ?.requestFocus()
+        }
+        dialog.show()
     }
 
 
@@ -652,6 +797,8 @@ class PlayerActivity : AppCompatActivity() {
         uiHandler.removeCallbacks(
             hideTitleRunnable
         )
+
+        uiHandler.removeCallbacks(progressCheckpoint)
 
         b.title.animate()
             .cancel()

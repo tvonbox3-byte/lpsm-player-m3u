@@ -3,6 +3,7 @@ package com.lpsm.player.data
 import com.lpsm.player.model.ContentType
 import com.lpsm.player.model.MediaEntry
 import java.io.Reader
+import java.net.URL
 
 object M3uParser {
 
@@ -40,6 +41,14 @@ object M3uParser {
 
             Regex(
                 """(?i)\b(?:temporada|season)\s*(\d{1,2}).*?\b(?:epis[oó]dio|episode|ep)\s*\.?\s*(\d{1,3})\b"""
+            ),
+
+            Regex(
+                """(?i)\b[ST](\d{1,2})\s*[-._ ]+\s*(\d{1,3})\b"""
+            ),
+
+            Regex(
+                """(?i)\b(\d{1,2})\s*[ªº]\s*(?:temporada|season).*?\b(?:epis[oó]dio|episode|ep)?\s*\.?\s*(\d{1,3})\b"""
             )
         )
 
@@ -93,18 +102,25 @@ object M3uParser {
          * Liberamos uma primeira amostra rapidamente e continuamos lendo o
          * restante sem deixar TV/Filmes/Séries vazios durante todo o processo.
          */
-        var partialStage = 0
+        var firstPartialEmitted = false
+        val readyTypePartials = mutableSetOf<ContentType>()
         /*
          * Uma unica entrega inicial basta para liberar a navegacao. Recriar
          * todos os indices em 800, 4 mil e 12 mil itens disputava CPU com o
          * parser e deixava TV Boxes mais lentas justamente ao abrir.
          */
-        val partialMarks = intArrayOf(1_500)
-
-        fun emitPartialIfNeeded() {
+        fun emitPartialIfNeeded(changedType: ContentType) {
             val callback = onPartial ?: return
-            if (partialStage >= partialMarks.size) return
-            if (kept < partialMarks[partialStage]) return
+
+            val firstReady =
+                !firstPartialEmitted && kept >= 1_500
+
+            val sectionReady =
+                changedType != ContentType.LIVE &&
+                    changedType !in readyTypePartials &&
+                    buckets.getValue(changedType).size >= 200
+
+            if (!firstReady && !sectionReady) return
 
             val snapshot = buildList {
                 addAll(buckets.getValue(ContentType.LIVE))
@@ -112,7 +128,9 @@ object M3uParser {
                 addAll(buckets.getValue(ContentType.SERIES))
             }
             callback(snapshot)
-            partialStage += 1
+
+            if (firstReady) firstPartialEmitted = true
+            if (sectionReady) readyTypePartials += changedType
         }
 
         fun keep(entry: MediaEntry) {
@@ -123,7 +141,7 @@ object M3uParser {
             if (kept < limit) {
                 target += entry
                 kept += 1
-                emitPartialIfNeeded()
+                emitPartialIfNeeded(entry.type)
                 return
             }
 
@@ -143,7 +161,7 @@ object M3uParser {
 
             victim.value.removeAt(victim.value.lastIndex)
             target += entry
-            emitPartialIfNeeded()
+            emitPartialIfNeeded(entry.type)
         }
 
         var metadata = ""
@@ -215,7 +233,7 @@ object M3uParser {
                                             ?.takeIf { it.isNotBlank() }
                                     }
                                     .orEmpty()
-                                    .normalizeArtworkUrl()
+                                    .normalizeArtworkUrl(line)
 
                             val tvgId =
                                 attributes[
@@ -238,18 +256,32 @@ object M3uParser {
                                         episodeInfo
                                 )
 
+                            val declaredSeriesName =
+                                listOf(
+                                    "series-name",
+                                    "series-title",
+                                    "show-title"
+                                )
+                                    .firstNotNullOfOrNull { key ->
+                                        attributes[key]
+                                            ?.trim()
+                                            ?.takeIf { it.isNotBlank() }
+                                    }
+                                    .orEmpty()
+
                             val finalSeriesName =
                                 if (
                                     type ==
                                     ContentType.SERIES
                                 ) {
 
-                                    episodeInfo
-                                        .seriesName
+                                    declaredSeriesName
                                         .ifBlank {
-                                            cleanSeriesName(
-                                                name
-                                            )
+                                            episodeInfo
+                                                .seriesName
+                                                .ifBlank {
+                                                    cleanSeriesName(name)
+                                                }
                                         }
 
                                 } else {
@@ -333,7 +365,13 @@ object M3uParser {
                             "/live/" in path || path.endsWith(".ts")
                         }
 
+                    val clearlyLiveGroup =
+                        items.any {
+                            isClearlyLiveGroup(it.group.lowercase())
+                        }
+
                     !hasLiveStream &&
+                        !clearlyLiveGroup &&
                         seriesCount > 0 &&
                         (
                             items.size <= 4 ||
@@ -381,14 +419,8 @@ object M3uParser {
                 .substringBefore('?')
                 .substringBefore('#')
 
-        val lowerName =
-            name.lowercase()
-
         val lowerGroup =
             group.lowercase()
-
-        val text =
-            "$lowerGroup $lowerName"
 
         /*
          * PRIMEIRO usamos características
@@ -432,13 +464,17 @@ object M3uParser {
             return ContentType.SERIES
         }
 
+        if (isClearlyLiveGroup(lowerGroup)) {
+            return ContentType.LIVE
+        }
+
         /*
          * Categorias explicitamente
          * de séries.
          */
         if (
             containsAny(
-                text,
+                lowerGroup,
                 listOf(
                     "series",
                     "séries",
@@ -489,28 +525,12 @@ object M3uParser {
          * Categorias claramente de
          * televisão ao vivo.
          */
-        if (
-            containsAny(
-                lowerGroup,
-                listOf(
-                    "canais",
-                    "ao vivo",
-                    "tv ao vivo",
-                    "live tv",
-                    "canais abertos",
-                    "canais fechados"
-                )
-            )
-        ) {
-            return ContentType.LIVE
-        }
-
         /*
          * Categorias claramente de filmes.
          */
         if (
             containsAny(
-                text,
+                lowerGroup,
                 listOf(
                     "filmes",
                     "filme ",
@@ -531,6 +551,20 @@ object M3uParser {
          */
         return ContentType.LIVE
     }
+
+    private fun isClearlyLiveGroup(lowerGroup: String): Boolean =
+        containsAny(
+            lowerGroup,
+            listOf(
+                "canais",
+                "ao vivo",
+                "tv ao vivo",
+                "live tv",
+                "tv aberta",
+                "canais abertos",
+                "canais fechados"
+            )
+        )
 
     private fun parseEpisodeInfo(
         name: String
@@ -687,16 +721,25 @@ object M3uParser {
         }
     }
 
-    private fun String.normalizeArtworkUrl(): String {
+    private fun String.normalizeArtworkUrl(streamUrl: String): String {
         val cleaned =
             trim()
                 .replace("&amp;", "&")
                 .replace("\\/", "/")
 
-        return if (cleaned.startsWith("//")) {
-            "https:$cleaned"
-        } else {
-            cleaned
+        if (cleaned.isBlank()) return ""
+
+        if (
+            cleaned.startsWith("http://", true) ||
+            cleaned.startsWith("https://", true) ||
+            cleaned.startsWith("data:", true) ||
+            cleaned.startsWith("content:", true)
+        ) {
+            return cleaned
         }
+
+        return runCatching {
+            URL(URL(streamUrl), cleaned).toString()
+        }.getOrDefault(cleaned)
     }
 }

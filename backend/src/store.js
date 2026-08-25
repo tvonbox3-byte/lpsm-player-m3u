@@ -8,7 +8,8 @@ const seed = {
   appearance: {
     bannerUrl: '',
     wallpaperUrl: '',
-    supportMessage: 'Use apenas conteúdo autorizado.'
+    supportMessage: 'Use apenas conteúdo autorizado.',
+    adultPin: '0202'
   },
   audit: []
 };

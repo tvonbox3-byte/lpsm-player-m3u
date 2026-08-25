@@ -423,6 +423,23 @@
               placeholder="Escolha o que deseja assistir"
             >
           </label>
+
+          <label>
+            Senha das categorias adultas
+            <input
+              id="adultPinInput"
+              name="adultPin"
+              type="password"
+              inputmode="numeric"
+              pattern="[0-9]{4,8}"
+              minlength="4"
+              maxlength="8"
+              autocomplete="new-password"
+              placeholder="0202"
+              required
+            >
+            <span class="appearance-tip">Use de 4 a 8 números. O aplicativo recebe a nova senha ao atualizar a configuração.</span>
+          </label>
         </div>
 
         <div class="appearance-actions">
@@ -645,7 +662,7 @@
   </form>
 </dialog>
 
-<script src="/app.js?v=20260825-client-view-2" type="module"></script>
+<script src="/app.js?v=20260825-adult-pin-pending-3" type="module"></script>
 
 <script>
 (function () {
@@ -1146,7 +1163,14 @@ ${marker}`
           ).trim(),
 
         supportMessage:
-          storedMessage
+          storedMessage,
+
+        adultPin:
+          String(
+            get('adultPinInput')
+              ?.value ||
+            '0202'
+          ).trim()
       };
 
       const response =

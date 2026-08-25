@@ -49,7 +49,7 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
-    private val adultPin = "0202"
+    private val defaultAdultPin = "0202"
     private val playlistRefreshIntervalMillis =
         30L * 60L * 1000L
     private val playlistFallbackMaxAgeMillis =
@@ -4625,7 +4625,7 @@ class MainActivity : AppCompatActivity() {
         dialog.setOnShowListener {
             val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             ok.setOnClickListener {
-                if (input.text.toString() == adultPin) {
+                if (input.text.toString() == currentAdultPin()) {
                     unlockedAdultGroup = category
                     continueOnly = false
                     favoritesOnly = false
@@ -4666,13 +4666,6 @@ class MainActivity : AppCompatActivity() {
                 1000
 
             listOf(
-                "jogos de hoje",
-                "jogos hoje",
-                "jogo de hoje"
-            ).any { it in value } ->
-                -20
-
-            listOf(
                 "rio grande do sul",
                 "rio grande",
                 "rbs",
@@ -4686,7 +4679,7 @@ class MainActivity : AppCompatActivity() {
                 it in
                     value
             } ->
-                0
+                -30
 
             listOf(
                 "canais abertos",
@@ -4697,7 +4690,14 @@ class MainActivity : AppCompatActivity() {
                 it in
                     value
             } ->
-                10
+                -20
+
+            listOf(
+                "jogos de hoje",
+                "jogos hoje",
+                "jogo de hoje"
+            ).any { it in value } ->
+                -10
 
             "globo" in
                 value ->
@@ -4774,6 +4774,15 @@ class MainActivity : AppCompatActivity() {
                 value
         }
     }
+
+    private fun currentAdultPin(): String =
+        lastConfig
+            ?.appearance
+            ?.adultPin
+            ?.takeIf {
+                it.matches(Regex("""\d{4,8}"""))
+            }
+            ?: defaultAdultPin
 
     /*
      * =====================================================
@@ -5137,10 +5146,9 @@ class MainActivity : AppCompatActivity() {
 
         return source
             .groupBy {
-
-                seriesKey(
-                    it
-                )
+                seriesKey(it)
+                    .trim()
+                    .lowercase()
             }
             .entries
             .sortedBy {
@@ -5149,7 +5157,7 @@ class MainActivity : AppCompatActivity() {
                     .lowercase()
             }
             .map {
-                    (seriesName, episodes) ->
+                    (_, episodes) ->
 
                 val representative =
                     episodes
@@ -5159,6 +5167,9 @@ class MainActivity : AppCompatActivity() {
                                 .isNotBlank()
                         }
                         ?: episodes.first()
+
+                val seriesName =
+                    seriesKey(representative)
 
                 representative.copy(
 
@@ -5419,7 +5430,13 @@ class MainActivity : AppCompatActivity() {
             entry.name
                 .replace(
                     Regex(
-                        """(?i)\b[ST]\d{1,2}\s*E\d{1,3}\b.*$"""
+                        """(?i)\b[ST]\d{1,2}\s*[-._ ]*EP?\s*\.?\s*\d{1,3}\b.*$"""
+                    ),
+                    ""
+                )
+                .replace(
+                    Regex(
+                        """(?i)\b[ST]\d{1,2}\s*[-._ ]+\s*\d{1,3}\b.*$"""
                     ),
                     ""
                 )
@@ -6611,7 +6628,21 @@ class MainActivity : AppCompatActivity() {
 
         releasePreview()
 
-        startActivity(
+        val seriesEpisodes =
+            if (entry.type == ContentType.SERIES) {
+                seriesEpisodesByName[
+                    seriesKey(entry).lowercase()
+                ].orEmpty()
+            } else {
+                emptyList()
+            }
+
+        val episodeIndex =
+            seriesEpisodes.indexOfFirst {
+                it.url == entry.url
+            }
+
+        val playerIntent =
             Intent(
                 this,
                 PlayerActivity::class.java
@@ -6632,7 +6663,28 @@ class MainActivity : AppCompatActivity() {
                     "type",
                     entry.type.name
                 )
-        )
+
+        if (episodeIndex >= 0) {
+            playerIntent
+                .putStringArrayListExtra(
+                    "episode_names",
+                    ArrayList(seriesEpisodes.map { it.name })
+                )
+                .putStringArrayListExtra(
+                    "episode_urls",
+                    ArrayList(seriesEpisodes.map { it.url })
+                )
+                .putStringArrayListExtra(
+                    "episode_groups",
+                    ArrayList(seriesEpisodes.map { it.group })
+                )
+                .putExtra(
+                    "episode_index",
+                    episodeIndex
+                )
+        }
+
+        startActivity(playerIntent)
     }
 
     /*

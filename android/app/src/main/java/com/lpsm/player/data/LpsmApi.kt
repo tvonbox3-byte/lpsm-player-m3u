@@ -535,7 +535,18 @@ class LpsmApi(
                             .optString(
                                 "supportMessage",
                                 ""
+                            ),
+
+                    adultPin =
+                        appearanceJson
+                            .optString(
+                                "adultPin",
+                                "0202"
                             )
+                            .takeIf {
+                                it.matches(Regex("""\d{4,8}"""))
+                            }
+                            ?: "0202"
                 )
         )
     }

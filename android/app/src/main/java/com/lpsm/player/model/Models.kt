@@ -11,7 +11,8 @@ data class Playlist(
 data class Appearance(
     val bannerUrl: String = "",
     val wallpaperUrl: String = "",
-    val supportMessage: String = ""
+    val supportMessage: String = "",
+    val adultPin: String = "0202"
 )
 
 data class DeviceConfig(
