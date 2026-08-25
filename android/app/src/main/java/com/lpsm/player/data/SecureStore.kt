@@ -161,10 +161,7 @@ class SecureStore(context: Context) {
 
         val completed =
             durationMs > 0L &&
-                (
-                    durationMs - positionMs < 90_000L ||
-                        positionMs >= durationMs * 95L / 100L
-                )
+                positionMs >= durationMs * 95L / 100L
 
         if (positionMs >= 30_000L && !completed) {
             history.add(
@@ -193,7 +190,7 @@ class SecureStore(context: Context) {
 
         prefs.edit()
             .putString(PLAYBACK_HISTORY_KEY, json.toString())
-            .apply()
+            .commit()
     }
 
     private fun playbackHistory(): List<PlaybackProgress> {

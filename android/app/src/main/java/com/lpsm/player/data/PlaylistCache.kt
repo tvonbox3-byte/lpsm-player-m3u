@@ -279,7 +279,7 @@ class PlaylistCache(
     }
 
     private companion object {
-        const val FORMAT_VERSION = 1
+        const val FORMAT_VERSION = 2
         const val MAX_ENTRIES = 60_000
         const val MAX_STRING_BYTES = 256 * 1024
     }
