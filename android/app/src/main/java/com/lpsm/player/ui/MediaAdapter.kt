@@ -844,7 +844,7 @@ class MediaAdapter(
             cleaned.replace(
 
                 Regex(
-                    """(?i)\b[ST]\d{1,2}\s*E\d{1,3}\b.*$"""
+                    """(?i)\b[ST]\d{1,2}\s*[-._ ]*EP?\s*\.?\s*\d{1,3}\b.*$"""
                 ),
 
                 ""
