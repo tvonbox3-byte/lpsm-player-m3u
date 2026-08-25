@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>LPSM Control</title>
-  <link rel="stylesheet" href="/styles.css?v=20260814-presence-1">
+  <link rel="stylesheet" href="/styles.css?v=20260825-client-view-2">
 
   <style>
     .appearance-help {
@@ -285,7 +285,28 @@
         <button data-open="clientDialog">Novo cliente</button>
       </div>
 
-      <div id="clientList" class="grid"></div>
+      <div class="client-toolbar card">
+        <label class="client-search-label">
+          <span>Pesquisar clientes</span>
+          <input
+            id="clientSearch"
+            type="search"
+            placeholder="Nome, MAC ou fonte..."
+            autocomplete="off"
+          >
+        </label>
+
+        <button
+          id="clientViewToggle"
+          type="button"
+          class="ghost"
+          aria-pressed="false"
+        >
+          Cards
+        </button>
+      </div>
+
+      <div id="clientList" class="client-list table-view"></div>
     </div>
 
     <div id="playlists" class="tab hidden">
@@ -482,6 +503,11 @@
     <fieldset>
       <legend>Fonte de conteúdo</legend>
 
+      <div
+        id="currentClientSource"
+        class="current-source-preview hidden"
+      ></div>
+
       <label>
         Tipo de conexão
         <select name="sourceType" id="clientSourceType">
@@ -619,7 +645,7 @@
   </form>
 </dialog>
 
-<script src="/app.js?v=20260814-presence-1" type="module"></script>
+<script src="/app.js?v=20260825-client-view-2" type="module"></script>
 
 <script>
 (function () {

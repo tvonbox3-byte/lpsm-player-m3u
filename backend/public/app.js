@@ -12,6 +12,15 @@ let state = {
 let presenceRefreshInFlight =
   false;
 
+let clientView =
+  localStorage.getItem(
+    'lpsmClientView'
+  ) === 'cards'
+    ? 'cards'
+    : 'table';
+
+let clientSearch = '';
+
 const request = async (path, options = {}) => {
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -853,6 +862,32 @@ function ensureExtraStyles() {
             #332701;
         }
 
+        .current-source-preview {
+          margin: 0 0 14px;
+          padding: 13px 14px;
+          border: 1px solid #2f8066;
+          border-radius: 10px;
+          background: #0d2a24;
+          color: #dfffee;
+          line-height: 1.45;
+        }
+
+        .current-source-preview strong,
+        .current-source-preview span {
+          display: block;
+        }
+
+        .current-source-preview strong {
+          margin-bottom: 3px;
+          color: #47e6a5;
+        }
+
+        .current-source-preview span {
+          color: #a9c7bc;
+          font-size: 12px;
+          word-break: break-word;
+        }
+
         .mac-help {
           margin-top:
             6px;
@@ -900,6 +935,171 @@ function ensureExtraStyles() {
             0 0 0 1px #ff7189aa;
         }
 
+        main {
+          max-width: 1500px;
+        }
+
+        .client-toolbar {
+          display: flex;
+          align-items: end;
+          gap: 12px;
+          margin-bottom: 16px;
+          padding: 14px;
+        }
+
+        .client-search-label {
+          flex: 1;
+          margin: 0;
+        }
+
+        .client-search-label span {
+          display: block;
+          margin-bottom: 7px;
+          color: #aab7c7;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+        }
+
+        #clientSearch {
+          min-height: 45px;
+        }
+
+        #clientViewToggle {
+          min-width: 112px;
+          min-height: 45px;
+          white-space: nowrap;
+        }
+
+        .client-list.cards-view {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: 15px;
+        }
+
+        .client-list.table-view {
+          display: block;
+        }
+
+        .client-table-wrap {
+          overflow: auto;
+          border: 1px solid #26394f;
+          border-radius: 16px;
+          background: #0e1928;
+          box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
+        }
+
+        .client-table {
+          width: 100%;
+          min-width: 1220px;
+          border-collapse: collapse;
+        }
+
+        .client-table th,
+        .client-table td {
+          padding: 15px 14px;
+          border-bottom: 1px solid #26394f;
+          text-align: left;
+          vertical-align: middle;
+        }
+
+        .client-table th {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          background: #111d2e;
+          color: #9dadc0;
+          font-size: 11px;
+          letter-spacing: .09em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        .client-table tbody tr {
+          transition: background .15s ease;
+        }
+
+        .client-table tbody tr:hover {
+          background: #14243a;
+        }
+
+        .client-table tbody tr:last-child td {
+          border-bottom: 0;
+        }
+
+        .client-table .client-name {
+          display: block;
+          min-width: 150px;
+          color: #f4f7fb;
+          font-weight: 800;
+        }
+
+        .client-table .client-mac,
+        .client-table .client-date {
+          white-space: nowrap;
+        }
+
+        .client-table .client-source-name {
+          display: block;
+          max-width: 250px;
+          color: #e7edf5;
+          font-weight: 700;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .client-table .client-source-summary,
+        .client-table .client-secondary {
+          display: block;
+          max-width: 250px;
+          margin-top: 4px;
+          color: #91a1b4;
+          font-size: 12px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .client-table-actions {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          min-width: max-content;
+        }
+
+        .client-table-actions button {
+          min-height: 36px;
+          padding: 8px 11px;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        .client-empty {
+          margin: 0;
+          padding: 26px;
+          border: 1px dashed #30445b;
+          border-radius: 14px;
+          color: #9aa8b9;
+          text-align: center;
+        }
+
+        @media (max-width: 760px) {
+          .client-toolbar {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          #clientViewToggle {
+            width: 100%;
+          }
+
+          .client-list.cards-view {
+            grid-template-columns: 1fr;
+          }
+        }
+
         .hidden {
           display:
             none !important;
@@ -932,12 +1132,12 @@ function ensurePendingArea() {
           <div>
 
             <h2>
-              MACs aguardando autorização
+              MACs disponíveis para cadastro
             </h2>
 
             <p class="meta">
-              Quando o APK abrir em um aparelho novo,
-              o MAC aparece aqui como atalho.
+              Quando o aplicativo abrir em um aparelho novo,
+              o MAC disponível aparece aqui como atalho.
               Você também pode cadastrar um MAC
               manualmente em Novo cliente.
             </p>
@@ -1089,6 +1289,427 @@ setInterval(
   2_000
 );
 
+function clientAuthorizationMarkup(
+  client
+) {
+  return `
+    <span
+      class="pill ${
+        client.enabled === false
+          ? 'off'
+          : ''
+      }"
+      title="Autorização definida por você"
+    >
+      ${
+        client.enabled === false
+          ? 'DESATIVADO'
+          : 'ATIVO'
+      }
+    </span>
+  `;
+}
+
+function clientPresenceMarkup(
+  client
+) {
+  return `
+    <span
+      class="pill presence ${
+        client.online === true
+          ? 'online'
+          : 'offline'
+      }"
+      title="Presença enviada pelo aplicativo"
+    >
+      ${
+        client.online === true
+          ? 'ONLINE'
+          : 'OFFLINE'
+      }
+    </span>
+  `;
+}
+
+function clientActionsMarkup(
+  client,
+  compact = false
+) {
+  const id =
+    esc(
+      client.id
+    );
+
+  return `
+    <div class="${
+      compact
+        ? 'client-table-actions'
+        : 'actions'
+    }">
+      ${
+        client.online === true &&
+        client.nowPlaying?.name
+          ? `
+            <button
+              class="ghost monitor-client"
+              data-id="${id}"
+            >
+              Ver agora
+            </button>
+          `
+          : ''
+      }
+
+      <button
+        class="ghost edit-client"
+        data-id="${id}"
+      >
+        Editar
+      </button>
+
+      <button
+        class="ghost toggle"
+        data-kind="clients"
+        data-id="${id}"
+        data-enabled="${
+          client.enabled === false
+        }"
+      >
+        ${
+          client.enabled === false
+            ? 'Ativar'
+            : 'Desativar'
+        }
+      </button>
+
+      <button
+        class="danger delete"
+        data-kind="clients"
+        data-id="${id}"
+      >
+        Excluir
+      </button>
+    </div>
+  `;
+}
+
+function clientMatchesSearch(
+  client,
+  source
+) {
+  const query =
+    normalizeText(
+      clientSearch
+    );
+
+  if (!query) {
+    return true;
+  }
+
+  const searchable = [
+    client.name,
+    formatMac(
+      client.macAddress ||
+      client.deviceId
+    ),
+    source
+      ? sourceDisplayName(
+          source
+        )
+      : '',
+    source
+      ? sourceSummary(
+          source
+        )
+      : '',
+    source
+      ? sourceTypeOf(
+          source
+        )
+      : '',
+    client.nowPlaying?.name
+  ]
+    .map(normalizeText)
+    .join(' ');
+
+  return searchable.includes(
+    query
+  );
+}
+
+function clientCardMarkup(
+  client
+) {
+  const source =
+    primarySource(
+      client
+    );
+
+  return `
+    <article class="card item">
+      <div class="row">
+        <h3>
+          ${esc(client.name)}
+        </h3>
+
+        <div class="client-statuses">
+          ${clientAuthorizationMarkup(client)}
+          ${clientPresenceMarkup(client)}
+        </div>
+      </div>
+
+      <div class="meta">
+        MAC:
+        ${esc(
+          formatMac(
+            client.macAddress ||
+            client.deviceId
+          )
+        )}
+
+        <br>
+
+        Expira:
+        ${esc(fmtDate(client.expiresAt))}
+
+        <br>
+
+        Último contato:
+        ${
+          client.lastSeenAt
+            ? esc(
+                fmtDateTime(
+                  client.lastSeenAt
+                )
+              )
+            : 'Ainda não informado'
+        }
+
+        <br>
+
+        Assistindo agora:
+        ${
+          client.nowPlaying?.name
+            ? `<strong>${esc(client.nowPlaying.name)}</strong>`
+            : 'Nada informado'
+        }
+
+        <br>
+
+        ${
+          source
+            ? `
+              <span class="source-type">
+                ${esc(sourceTypeOf(source))}
+              </span>
+
+              <strong>
+                ${esc(sourceDisplayName(source))}
+              </strong>
+
+              ${esc(sourceSummary(source))}
+            `
+            : `
+              <span class="source-type">
+                SEM FONTE VINCULADA
+              </span>
+            `
+        }
+      </div>
+
+      ${clientActionsMarkup(client)}
+    </article>
+  `;
+}
+
+function clientTableRowMarkup(
+  client
+) {
+  const source =
+    primarySource(
+      client
+    );
+
+  return `
+    <tr>
+      <td>
+        <span class="client-name">
+          ${esc(client.name)}
+        </span>
+      </td>
+
+      <td class="client-mac">
+        ${esc(
+          formatMac(
+            client.macAddress ||
+            client.deviceId
+          )
+        )}
+      </td>
+
+      <td>
+        ${
+          source
+            ? `
+              <span class="client-source-name">
+                ${esc(sourceDisplayName(source))}
+              </span>
+              <span class="client-source-summary">
+                ${esc(sourceTypeOf(source))} ·
+                ${esc(sourceSummary(source))}
+              </span>
+            `
+            : `
+              <span class="client-secondary">
+                Sem fonte vinculada
+              </span>
+            `
+        }
+      </td>
+
+      <td>
+        ${clientAuthorizationMarkup(client)}
+      </td>
+
+      <td>
+        ${clientPresenceMarkup(client)}
+      </td>
+
+      <td class="client-date">
+        ${esc(fmtDate(client.expiresAt))}
+      </td>
+
+      <td>
+        ${
+          client.lastSeenAt
+            ? esc(
+                fmtDateTime(
+                  client.lastSeenAt
+                )
+              )
+            : 'Ainda não informado'
+        }
+      </td>
+
+      <td>
+        ${
+          client.nowPlaying?.name
+            ? esc(client.nowPlaying.name)
+            : '—'
+        }
+      </td>
+
+      <td>
+        ${clientActionsMarkup(client, true)}
+      </td>
+    </tr>
+  `;
+}
+
+function renderClientList() {
+  const list =
+    $('#clientList');
+
+  const toggle =
+    $('#clientViewToggle');
+
+  const searchInput =
+    $('#clientSearch');
+
+  if (
+    !list ||
+    !toggle
+  ) {
+    return;
+  }
+
+  if (
+    searchInput &&
+    searchInput.value !==
+      clientSearch
+  ) {
+    searchInput.value =
+      clientSearch;
+  }
+
+  toggle.textContent =
+    clientView === 'cards'
+      ? 'Lista'
+      : 'Cards';
+
+  toggle.title =
+    clientView === 'cards'
+      ? 'Mudar para lista'
+      : 'Mudar para cards';
+
+  toggle.setAttribute(
+    'aria-pressed',
+    String(
+      clientView === 'cards'
+    )
+  );
+
+  list.className =
+    `client-list ${clientView}-view`;
+
+  const clients =
+    state.clients.filter(
+      client =>
+        clientMatchesSearch(
+          client,
+          primarySource(
+            client
+          )
+        )
+    );
+
+  if (!clients.length) {
+    list.innerHTML = `
+      <p class="client-empty">
+        ${
+          normalizeText(clientSearch)
+            ? 'Nenhum cliente encontrado.'
+            : 'Nenhum cliente cadastrado.'
+        }
+      </p>
+    `;
+    return;
+  }
+
+  if (clientView === 'cards') {
+    list.innerHTML =
+      clients
+        .map(clientCardMarkup)
+        .join('');
+    return;
+  }
+
+  list.innerHTML = `
+    <div class="client-table-wrap">
+      <table class="client-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>MAC</th>
+            <th>Fonte</th>
+            <th>Autorização</th>
+            <th>Presença</th>
+            <th>Expiração</th>
+            <th>Último contato</th>
+            <th>Assistindo</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${clients
+            .map(clientTableRowMarkup)
+            .join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 
 /* ==============================
    RENDER
@@ -1206,201 +1827,7 @@ function render() {
         </p>
       `;
 
-  $('#clientList')
-    .innerHTML =
-      state.clients
-        .map(
-          client => {
-
-            const source =
-              primarySource(
-                client
-              );
-
-            return `
-              <article
-                class="card item"
-              >
-
-                <div class="row">
-
-                  <h3>
-                    ${esc(
-                      client.name
-                    )}
-                  </h3>
-
-                  <div class="client-statuses">
-
-                    <span
-                      class="pill ${
-                        client.enabled ===
-                        false
-                          ? 'off'
-                          : ''
-                      }"
-                      title="Autorização definida por você"
-                    >
-                      ${
-                        client.enabled ===
-                        false
-                          ? 'DESATIVADO'
-                          : 'ATIVO'
-                      }
-                    </span>
-
-                    <span
-                      class="pill presence ${
-                        client.online ===
-                        true
-                          ? 'online'
-                          : 'offline'
-                      }"
-                      title="Presença enviada pelo aplicativo"
-                    >
-                      ${
-                        client.online ===
-                        true
-                          ? 'ONLINE'
-                          : 'OFFLINE'
-                      }
-                    </span>
-
-                  </div>
-
-                </div>
-
-                <div class="meta">
-
-                  MAC:
-                  ${esc(
-                    formatMac(
-                      client.macAddress ||
-                      client.deviceId
-                    )
-                  )}
-
-                  <br>
-
-                  Expira:
-                  ${fmtDate(
-                    client.expiresAt
-                  )}
-
-                  <br>
-
-                  Último contato:
-                  ${
-                    client.lastSeenAt
-                      ? esc(
-                          fmtDateTime(
-                            client.lastSeenAt
-                          )
-                        )
-                      : 'Ainda não informado'
-                  }
-
-                  <br>
-
-                  Assistindo agora:
-                  ${
-                    client.nowPlaying?.name
-                      ? `<strong>${esc(client.nowPlaying.name)}</strong>`
-                      : 'Nada informado'
-                  }
-
-                  <br>
-
-                  ${
-                    source
-                      ? `
-                        <span
-                          class="source-type"
-                        >
-                          ${esc(
-                            sourceTypeOf(
-                              source
-                            )
-                          )}
-                        </span>
-
-                        ${esc(
-                          sourceSummary(
-                            source
-                          )
-                        )}
-                      `
-                      : `
-                        <span
-                          class="source-type"
-                        >
-                          SEM FONTE VINCULADA
-                        </span>
-                      `
-                  }
-
-                </div>
-
-                <div class="actions">
-
-                  ${
-                    client.online === true && client.nowPlaying?.name
-                      ? `
-                        <button
-                          class="ghost monitor-client"
-                          data-id="${client.id}"
-                        >
-                          Ver agora
-                        </button>
-                      `
-                      : ''
-                  }
-
-                  <button
-                    class="ghost edit-client"
-                    data-id="${client.id}"
-                  >
-                    Editar
-                  </button>
-
-                  <button
-                    class="ghost toggle"
-                    data-kind="clients"
-                    data-id="${client.id}"
-                    data-enabled="${
-                      client.enabled ===
-                      false
-                    }"
-                  >
-                    ${
-                      client.enabled ===
-                      false
-                        ? 'Ativar'
-                        : 'Desativar'
-                    }
-                  </button>
-
-                  <button
-                    class="danger delete"
-                    data-kind="clients"
-                    data-id="${client.id}"
-                  >
-                    Excluir
-                  </button>
-
-                </div>
-
-              </article>
-            `;
-          }
-        )
-        .join('') ||
-
-      `
-        <p>
-          Nenhum cliente cadastrado.
-        </p>
-      `;
+  renderClientList();
 
   $('#playlistList')
     .innerHTML =
@@ -1911,6 +2338,39 @@ function showSourceWarning(
     );
 }
 
+function showCurrentClientSource(
+  source
+) {
+  const preview =
+    $('#currentClientSource');
+
+  if (!preview) {
+    return;
+  }
+
+  if (!source) {
+    preview.innerHTML = '';
+    preview.classList.add(
+      'hidden'
+    );
+    return;
+  }
+
+  preview.innerHTML = `
+    <strong>
+      Lista atual: ${esc(sourceDisplayName(source))}
+    </strong>
+    <span>
+      ${esc(sourceTypeOf(source))} ·
+      ${esc(sourceSummary(source))}
+    </span>
+  `;
+
+  preview.classList.remove(
+    'hidden'
+  );
+}
+
 
 /* ==============================
    ABRIR CLIENTE
@@ -1997,6 +2457,10 @@ function openClientDialog(
           client
         )
       : null;
+
+  showCurrentClientSource(
+    source
+  );
 
   if (
     form.elements
@@ -2334,6 +2798,33 @@ $('#logout')
 $('#refresh')
   .onclick =
   load;
+
+$('#clientViewToggle')
+  .onclick =
+  () => {
+    clientView =
+      clientView === 'table'
+        ? 'cards'
+        : 'table';
+
+    localStorage.setItem(
+      'lpsmClientView',
+      clientView
+    );
+
+    renderClientList();
+  };
+
+$('#clientSearch')
+  .addEventListener(
+    'input',
+    event => {
+      clientSearch =
+        event.target.value;
+
+      renderClientList();
+    }
+  );
 
 
 /* ==============================
