@@ -1144,6 +1144,14 @@ function ensurePendingArea() {
 
           </div>
 
+          <button
+            id="pendingVisibility"
+            type="button"
+            class="ghost"
+          >
+            Ocultar MACs
+          </button>
+
         </div>
 
         <div
@@ -1154,6 +1162,42 @@ function ensurePendingArea() {
       </section>
       `
     );
+
+  const button =
+    $('#pendingVisibility');
+
+  const list =
+    $('#pendingList');
+
+  const applyPendingVisibility = () => {
+    const hidden =
+      localStorage.getItem('lpsmPendingHidden') === '1';
+
+    list?.classList.toggle('hidden', hidden);
+
+    if (button) {
+      button.textContent =
+        hidden
+          ? 'Mostrar MACs aguardando'
+          : 'Ocultar MACs aguardando';
+    }
+  };
+
+  if (button) {
+    button.onclick = () => {
+      const hidden =
+        localStorage.getItem('lpsmPendingHidden') === '1';
+
+      localStorage.setItem(
+        'lpsmPendingHidden',
+        hidden ? '0' : '1'
+      );
+
+      applyPendingVisibility();
+    };
+  }
+
+  applyPendingVisibility();
 }
 
 function ensureClientSourceWarning() {
