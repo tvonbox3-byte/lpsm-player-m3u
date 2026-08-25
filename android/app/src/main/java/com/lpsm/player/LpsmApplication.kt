@@ -63,7 +63,7 @@ class LpsmApplication :
                         )
                         .header(
                             "Accept",
-                            "image/avif,image/webp,image/*,*/*;q=0.8"
+                            "image/jpeg,image/png,image/webp,image/*,*/*;q=0.5"
                         )
                         .build()
 
