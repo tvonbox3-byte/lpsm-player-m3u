@@ -40,7 +40,7 @@ object M3uParser {
             ),
 
             Regex(
-                """(?i)\b(?:temporada|season)\s*(\d{1,2}).*?\b(?:epis[oó]dio|episode|ep)\s*\.?\s*(\d{1,3})\b"""
+                """(?i)\b(?:temporada|season)\s*(\d{1,2}).*?\b(?:epis[oó]dio|episode|ep|cap(?:[ií]tulo)?)\s*[.\-:# ]*\s*(\d{1,3})\b"""
             ),
 
             Regex(
@@ -49,6 +49,10 @@ object M3uParser {
 
             Regex(
                 """(?i)\b(\d{1,2})\s*[ªº]\s*(?:temporada|season).*?\b(?:epis[oó]dio|episode|ep)?\s*\.?\s*(\d{1,3})\b"""
+            ),
+
+            Regex(
+                """(?i)\b[ST](\d{1,2})\s*[.:#\-]\s*(\d{1,3})\b"""
             )
         )
 
@@ -202,8 +206,9 @@ object M3uParser {
                                     }
 
                             val name =
-                                metadata
-                                    .substringAfterLast(',')
+                                extractDisplayName(
+                                    metadata
+                                )
                                     .trim()
                                     .ifBlank {
                                         "Sem nome"
@@ -241,6 +246,24 @@ object M3uParser {
                                 ]
                                     ?.trim()
                                     ?: ""
+
+                            val description =
+                                listOf(
+                                    "description",
+                                    "tvg-description",
+                                    "plot",
+                                    "overview",
+                                    "synopsis",
+                                    "desc"
+                                )
+                                    .firstNotNullOfOrNull { key ->
+                                        attributes[key]
+                                            ?.trim()
+                                            ?.takeIf { it.isNotBlank() }
+                                    }
+                                    .orEmpty()
+                                    .replace("&quot;", "\"")
+                                    .replace("&amp;", "&")
 
                             val episodeInfo =
                                 parseEpisodeInfo(
@@ -295,6 +318,7 @@ object M3uParser {
                                     logo = logo,
                                     group = group,
                                     tvgId = tvgId,
+                                    description = description,
                                     type = type,
 
                                     seriesName =
@@ -719,6 +743,33 @@ object M3uParser {
         return words.any {
             it in text
         }
+    }
+
+    /*
+     * A virgula que separa os atributos do titulo e a primeira que aparece
+     * fora de aspas. Usar a ultima quebrava nomes como "Serie, O Retorno" e
+     * acabava agrupando episodios/capas na serie errada.
+     */
+    private fun extractDisplayName(
+        metadata: String
+    ): String {
+
+        var quote: Char? = null
+
+        metadata.forEachIndexed { index, char ->
+            when {
+                quote == null && (char == '\"' || char == '\'') ->
+                    quote = char
+
+                quote == char ->
+                    quote = null
+
+                quote == null && char == ',' ->
+                    return metadata.substring(index + 1)
+            }
+        }
+
+        return metadata.substringAfter(':', "")
     }
 
     private fun String.normalizeArtworkUrl(streamUrl: String): String {

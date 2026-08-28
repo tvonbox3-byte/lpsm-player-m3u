@@ -131,7 +131,8 @@ class PlaylistCache(
                                     ),
                                 seriesName = readString(input),
                                 season = input.readInt().takeIf { it >= 0 },
-                                episode = input.readInt().takeIf { it >= 0 }
+                                episode = input.readInt().takeIf { it >= 0 },
+                                description = readString(input)
                             )
                         )
                     }
@@ -226,6 +227,7 @@ class PlaylistCache(
                         writeString(output, entry.seriesName)
                         output.writeInt(entry.season ?: -1)
                         output.writeInt(entry.episode ?: -1)
+                        writeString(output, entry.description)
                     }
             }
 
@@ -279,7 +281,7 @@ class PlaylistCache(
     }
 
     private companion object {
-        const val FORMAT_VERSION = 2
+        const val FORMAT_VERSION = 3
         const val MAX_ENTRIES = 60_000
         const val MAX_STRING_BYTES = 256 * 1024
     }
