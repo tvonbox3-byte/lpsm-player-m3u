@@ -33,6 +33,7 @@ data class MediaEntry(
     val logo: String = "",
     val group: String = "Outros",
     val tvgId: String = "",
+    val description: String = "",
     val type: ContentType = ContentType.LIVE,
 
     // Usados somente para séries.

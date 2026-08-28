@@ -50,6 +50,7 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
 
     private val defaultAdultPin = "0202"
+    private val unknownSeriesSeason = -1
     private val playlistRefreshIntervalMillis =
         30L * 60L * 1000L
     private val playlistFallbackMaxAgeMillis =
@@ -1103,20 +1104,15 @@ class MainActivity : AppCompatActivity() {
         ) {
 
             selectedSeason =
-                if (
-                    category ==
-                    "Episódios"
-                ) {
-
-                    null
-
-                } else {
-
-                    category
-                        .removePrefix(
-                            "Temporada "
-                        )
-                        .toIntOrNull()
+                when (category) {
+                    "Episódios" -> null
+                    "Outros episódios" -> unknownSeriesSeason
+                    else ->
+                        category
+                            .removePrefix(
+                                "Temporada "
+                            )
+                            .toIntOrNull()
                 }
 
             stopPreview()
@@ -5171,20 +5167,35 @@ class MainActivity : AppCompatActivity() {
                 val seriesName =
                     seriesKey(representative)
 
+                val bestLogo =
+                    episodes
+                        .map { it.logo.trim() }
+                        .filter { it.isNotBlank() }
+                        .groupingBy { it }
+                        .eachCount()
+                        .maxByOrNull { it.value }
+                        ?.key
+                        .orEmpty()
+
+                val description =
+                    episodes
+                        .firstOrNull {
+                            it.description.isNotBlank()
+                        }
+                        ?.description
+                        .orEmpty()
+
                 representative.copy(
 
                     name =
                         seriesName,
 
                     logo =
-                        episodes
-                            .firstOrNull {
+                        bestLogo.ifBlank {
+                            representative.logo
+                        },
 
-                                it.logo
-                                    .isNotBlank()
-                            }
-                            ?.logo
-                            ?: representative.logo,
+                    description = description,
 
                     seriesName =
                         seriesName,
@@ -5252,6 +5263,18 @@ class MainActivity : AppCompatActivity() {
                 .distinct()
                 .sorted()
 
+        val hasUnknownSeason =
+            allEpisodes.any {
+                it.season == null
+            }
+
+        if (
+            selectedSeason == unknownSeriesSeason &&
+            !hasUnknownSeason
+        ) {
+            selectedSeason = seasons.firstOrNull()
+        }
+
         if (
             selectedSeason ==
                 null &&
@@ -5276,7 +5299,9 @@ class MainActivity : AppCompatActivity() {
 
             } else {
 
-                seasons.map {
+                buildList {
+                    addAll(
+                        seasons.map {
                         season ->
 
                     CategoryRow(
@@ -5287,7 +5312,18 @@ class MainActivity : AppCompatActivity() {
                             it.season ==
                                 season
                         }
+                            )
+                        }
                     )
+
+                    if (hasUnknownSeason) {
+                        add(
+                            CategoryRow(
+                                "Outros episódios",
+                                allEpisodes.count { it.season == null }
+                            )
+                        )
+                    }
                 }
             }
 
@@ -5298,21 +5334,21 @@ class MainActivity : AppCompatActivity() {
             .submit(
                 categories,
 
-                selectedSeason
-                    ?.let {
-
-                        "Temporada $it"
-                    }
-                    ?: "Episódios"
+                when (selectedSeason) {
+                    unknownSeriesSeason -> "Outros episódios"
+                    null -> "Episódios"
+                    else -> "Temporada $selectedSeason"
+                }
             )
 
         var episodes =
-            if (
-                selectedSeason ==
-                null
-            ) {
+            if (selectedSeason == null) {
 
                 allEpisodes
+
+            } else if (selectedSeason == unknownSeriesSeason) {
+
+                allEpisodes.filter { it.season == null }
 
             } else {
 
@@ -5392,12 +5428,14 @@ class MainActivity : AppCompatActivity() {
             )
 
         b.previewGroup.text =
-            selectedSeason
-                ?.let {
-
-                    "Temporada $it • ${episodes.size} episódio(s)"
-                }
-                ?: "${allEpisodes.size} episódio(s)"
+            when (selectedSeason) {
+                unknownSeriesSeason ->
+                    "Outros episódios • ${episodes.size} episódio(s)"
+                null ->
+                    "${allEpisodes.size} episódio(s)"
+                else ->
+                    "Temporada $selectedSeason • ${episodes.size} episódio(s)"
+            }
 
         b.previewWatch.text =
             "ASSISTIR EPISÓDIO"
@@ -5576,6 +5614,8 @@ class MainActivity : AppCompatActivity() {
                 android.R.style
                     .Theme_Black_NoTitleBar_Fullscreen
             )
+
+        var openingContent = false
 
         val root =
             FrameLayout(
@@ -6119,6 +6159,64 @@ class MainActivity : AppCompatActivity() {
             info
         )
 
+        val descriptionText =
+            if (series) {
+                item.description.ifBlank {
+                    seriesEpisodes(
+                        seriesKey(item)
+                    )
+                        .firstOrNull {
+                            it.description.isNotBlank()
+                        }
+                        ?.description
+                        .orEmpty()
+                }
+            } else {
+                item.description
+            }
+
+        val description =
+            TextView(
+                this
+            ).apply {
+                text =
+                    descriptionText.ifBlank {
+                        "Descrição não fornecida pela lista."
+                    }
+
+                setTextColor(
+                    Color.WHITE
+                )
+
+                textSize =
+                    when {
+                        veryCompact -> 10f
+                        compact -> 13f
+                        else -> 17f
+                    }
+
+                maxLines =
+                    when {
+                        veryCompact -> 2
+                        compact -> 3
+                        else -> 5
+                    }
+
+                ellipsize =
+                    android.text.TextUtils.TruncateAt.END
+
+                setPadding(
+                    0,
+                    0,
+                    0,
+                    dp(if (compact) 10 else 22)
+                )
+            }
+
+        information.addView(
+            description
+        )
+
         val action =
             Button(
                 this
@@ -6174,6 +6272,8 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 setOnClickListener {
+
+                    openingContent = true
 
                     dialog.dismiss()
 
@@ -6280,6 +6380,7 @@ class MainActivity : AppCompatActivity() {
         dialog.setOnDismissListener {
 
             if (
+                !openingContent &&
                 b.content.visibility ==
                     View.VISIBLE &&
                 selectedSeriesName ==
