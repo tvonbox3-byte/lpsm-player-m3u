@@ -960,19 +960,7 @@ class UpdateActivity : AppCompatActivity() {
             try {
 
                 val directory =
-                    getExternalFilesDir(
-                        Environment
-                            .DIRECTORY_DOWNLOADS
-                    )
-                        ?: filesDir
-
-
-                if (
-                    !directory.exists()
-                ) {
-
-                    directory.mkdirs()
-                }
+                    resolveUpdateDirectory()
 
 
                 val apkFile =
@@ -997,8 +985,9 @@ class UpdateActivity : AppCompatActivity() {
 
 
                 val totalBytes =
-                    connection
-                        .contentLengthLong
+                    contentLengthCompat(
+                        connection
+                    )
 
 
                 connection
@@ -1201,6 +1190,161 @@ class UpdateActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+
+    /*
+     * Android 5.1 nao possui HttpURLConnection.getContentLengthLong().
+     * A chamada nova so pode ser executada a partir da API 24.
+     */
+    @Suppress("DEPRECATION")
+    private fun contentLengthCompat(
+        connection: HttpURLConnection
+    ): Long {
+
+        return if (
+            Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.N
+        ) {
+
+            connection.contentLengthLong
+
+        } else {
+
+            connection.contentLength
+                .toLong()
+        }
+    }
+
+
+    /*
+     * Prefere o diretorio externo privado do aplicativo, mas valida se o
+     * volume realmente esta montado e gravavel. ROMs antigas de TV Box podem
+     * devolver um caminho de sdcard removivel que nao existe mais. Nesses
+     * casos o APK fica no armazenamento interno privado, tambem publicado
+     * pelo FileProvider configurado no manifesto.
+     */
+    private fun resolveUpdateDirectory(): File {
+
+        val candidates =
+            mutableListOf<File>()
+
+
+        try {
+
+            getExternalFilesDir(
+                Environment.DIRECTORY_DOWNLOADS
+            )?.let {
+                externalDirectory ->
+
+                val storageState =
+                    Environment
+                        .getExternalStorageState(
+                            externalDirectory
+                        )
+
+
+                if (
+                    storageState ==
+                    Environment.MEDIA_MOUNTED
+                ) {
+
+                    candidates.add(
+                        externalDirectory
+                    )
+                }
+            }
+
+        } catch (
+            _: Exception
+        ) {
+            /* Usa o armazenamento interno abaixo. */
+        }
+
+
+        candidates.add(
+            File(
+                filesDir,
+                "updates"
+            )
+        )
+
+
+        var lastError:
+            Exception? = null
+
+
+        candidates
+            .distinctBy {
+                it.absolutePath
+            }
+            .forEach {
+                directory ->
+
+                var writeTest:
+                    File? = null
+
+
+                try {
+
+                    if (
+                        !directory.exists() &&
+                        !directory.mkdirs()
+                    ) {
+
+                        throw IllegalStateException(
+                            "Nao foi possivel criar a pasta de atualizacao."
+                        )
+                    }
+
+
+                    if (
+                        !directory.isDirectory
+                    ) {
+
+                        throw IllegalStateException(
+                            "O local de atualizacao nao e uma pasta."
+                        )
+                    }
+
+
+                    writeTest =
+                        File(
+                            directory,
+                            ".lpsm-write-test"
+                        )
+
+
+                    FileOutputStream(
+                        writeTest
+                    ).use {
+                        output ->
+
+                        output.write(
+                            0
+                        )
+                    }
+
+
+                    writeTest.delete()
+
+
+                    return directory
+
+                } catch (
+                    error: Exception
+                ) {
+
+                    writeTest?.delete()
+                    lastError = error
+                }
+            }
+
+
+        throw IllegalStateException(
+            "Nenhum local seguro esta disponivel para baixar a atualizacao.",
+            lastError
+        )
     }
 
 
