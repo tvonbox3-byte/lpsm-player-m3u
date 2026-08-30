@@ -105,23 +105,26 @@ class SecureStore(context: Context) {
             return value
         }
 
-    fun isFavorite(url: String) = prefs.getStringSet("favorites", emptySet())!!.contains(url)
+    fun isFavorite(url: String): Boolean = runCatching {
+        prefs.getStringSet("favorites", emptySet()).orEmpty().contains(url)
+    }.getOrDefault(false)
 
-    fun favoriteUrls(): Set<String> = prefs.getStringSet("favorites", emptySet())!!.toSet()
+    fun favoriteUrls(): Set<String> = runCatching {
+        prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
+    }.getOrDefault(emptySet())
 
+    @Synchronized
     fun toggleFavorite(url: String): Boolean {
-        val favorites = prefs.getStringSet("favorites", emptySet())!!.toMutableSet()
-        val added = if (favorites.contains(url)) {
-            favorites.remove(url)
-            false
-        } else {
-            favorites.add(url)
-            true
-        }
+        val favorites = prefs.getStringSet("favorites", emptySet()).orEmpty().toMutableSet()
+        val added = favorites.add(url)
+        if (!added) favorites.remove(url)
+
         // commit() garante que o favorito esteja persistido antes de a TV Box
         // processar o proximo evento do controle remoto. E uma escrita pequena
         // e evita estados intermediarios em firmwares Android TV mais antigos.
-        prefs.edit().putStringSet("favorites", favorites).commit()
+        check(prefs.edit().putStringSet("favorites", favorites).commit()) {
+            "Nao foi possivel salvar os favoritos"
+        }
         return added
     }
 
