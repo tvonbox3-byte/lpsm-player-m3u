@@ -242,25 +242,15 @@ class CategoryAdapter(
                     R.id.list
                 )
 
+        list.scrollToPosition(0)
         list.post {
-
-            /*
-             * Preferimos o primeiro
-             * item visível.
-             */
-            val child =
-                list.getChildAt(0)
-
-            if (
-                child != null &&
-                child.isFocusable
-            ) {
-
-                child.requestFocus()
-
-            } else {
-
-                list.requestFocus()
+            list.post {
+                list
+                    .findViewHolderForAdapterPosition(0)
+                    ?.itemView
+                    ?.requestFocus()
+                    ?: list.getChildAt(0)
+                        ?.requestFocus()
             }
         }
     }

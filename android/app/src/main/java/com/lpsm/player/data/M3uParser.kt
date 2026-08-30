@@ -53,7 +53,16 @@ object M3uParser {
 
             Regex(
                 """(?i)\b[ST](\d{1,2})\s*[.:#\-]\s*(\d{1,3})\b"""
+            ),
+
+            Regex(
+                """(?i)\b(?:temporada|season)\s*(\d{1,2})\s*[-._:# ]+\s*(\d{1,3})\b"""
             )
+        )
+
+    private val reversedSeasonEpisodePattern =
+        Regex(
+            """(?i)\b(?:E|EP|epis[oó]dio|episode)\s*\.?\s*(\d{1,3})\s*[-._ ]*\s*(?:S|T|temporada|season)\s*\.?\s*(\d{1,2})\b"""
         )
 
     /*
@@ -218,7 +227,7 @@ object M3uParser {
                                 attributes[
                                     "group-title"
                                 ]
-                                    ?.trim()
+                                    ?.normalizeGroupName()
                                     ?.ifBlank {
                                         "Outros"
                                     }
@@ -230,7 +239,18 @@ object M3uParser {
                                     "movie-logo",
                                     "series-logo",
                                     "cover",
+                                    "cover-big",
+                                    "cover_big",
                                     "poster",
+                                    "poster-path",
+                                    "poster_path",
+                                    "movie-image",
+                                    "movie_image",
+                                    "stream-icon",
+                                    "stream_icon",
+                                    "backdrop-path",
+                                    "backdrop_path",
+                                    "icon",
                                     "logo"
                                 )
                                     .firstNotNullOfOrNull { key ->
@@ -254,6 +274,9 @@ object M3uParser {
                                     "plot",
                                     "overview",
                                     "synopsis",
+                                    "storyline",
+                                    "short-description",
+                                    "short_description",
                                     "desc"
                                 )
                                     .firstNotNullOfOrNull { key ->
@@ -265,25 +288,13 @@ object M3uParser {
                                     .replace("&quot;", "\"")
                                     .replace("&amp;", "&")
 
-                            val episodeInfo =
-                                parseEpisodeInfo(
-                                    name
-                                )
-
-                            val type =
-                                detectType(
-                                    name = name,
-                                    group = group,
-                                    url = line,
-                                    episodeInfo =
-                                        episodeInfo
-                                )
-
                             val declaredSeriesName =
                                 listOf(
                                     "series-name",
                                     "series-title",
-                                    "show-title"
+                                    "show-title",
+                                    "show_name",
+                                    "show-name"
                                 )
                                     .firstNotNullOfOrNull { key ->
                                         attributes[key]
@@ -291,6 +302,60 @@ object M3uParser {
                                             ?.takeIf { it.isNotBlank() }
                                     }
                                     .orEmpty()
+
+                            val parsedEpisodeInfo =
+                                parseEpisodeInfo(name)
+
+                            val episodeInfo =
+                                parsedEpisodeInfo.copy(
+                                    seriesName =
+                                        declaredSeriesName.ifBlank {
+                                            parsedEpisodeInfo.seriesName
+                                        },
+                                    season =
+                                        firstNumberAttribute(
+                                            attributes,
+                                            "season",
+                                            "season-number",
+                                            "season_number",
+                                            "season-num",
+                                            "season_num"
+                                        ) ?: parsedEpisodeInfo.season,
+                                    episode =
+                                        firstNumberAttribute(
+                                            attributes,
+                                            "episode",
+                                            "episode-number",
+                                            "episode_number",
+                                            "episode-num",
+                                            "episode_num"
+                                        ) ?: parsedEpisodeInfo.episode
+                                )
+
+                            val type =
+                                detectType(
+                                    name = name,
+                                    group = group,
+                                    url = line,
+                                    episodeInfo = episodeInfo
+                                )
+
+                            val trailerUrl =
+                                listOf(
+                                    "trailer",
+                                    "trailer-url",
+                                    "trailer_url",
+                                    "tvg-trailer",
+                                    "youtube-trailer",
+                                    "youtube_trailer"
+                                )
+                                    .firstNotNullOfOrNull { key ->
+                                        attributes[key]
+                                            ?.trim()
+                                            ?.takeIf { it.isNotBlank() }
+                                    }
+                                    .orEmpty()
+                                    .normalizeTrailerUrl(line)
 
                             val finalSeriesName =
                                 if (
@@ -319,6 +384,7 @@ object M3uParser {
                                     group = group,
                                     tvgId = tvgId,
                                     description = description,
+                                    trailerUrl = trailerUrl,
                                     type = type,
 
                                     seriesName =
@@ -472,18 +538,15 @@ object M3uParser {
             return ContentType.SERIES
         }
 
-        if (
-            "/movie/" in path
-        ) {
-            return ContentType.VOD
-        }
-
         /*
          * Nome com S01E01, T01E01,
-         * 1x01 etc. é episódio.
+         * 1x01 etc. é episódio. Alguns servidores colocam esses episódios
+         * em /movie/, portanto esta evidência precisa vir antes do caminho.
          */
         if (
-            episodeInfo.episode != null
+            episodeInfo.episode != null ||
+            episodeInfo.season != null ||
+            episodeInfo.seriesName.isNotBlank()
         ) {
             return ContentType.SERIES
         }
@@ -529,6 +592,12 @@ object M3uParser {
             )
         ) {
             return ContentType.SERIES
+        }
+
+        if (
+            "/movie/" in path
+        ) {
+            return ContentType.VOD
         }
 
         /*
@@ -593,6 +662,33 @@ object M3uParser {
     private fun parseEpisodeInfo(
         name: String
     ): EpisodeInfo {
+
+        reversedSeasonEpisodePattern
+            .find(name)
+            ?.let { match ->
+                val episode =
+                    match.groupValues
+                        .getOrNull(1)
+                        ?.toIntOrNull()
+
+                val season =
+                    match.groupValues
+                        .getOrNull(2)
+                        ?.toIntOrNull()
+
+                val title =
+                    name.substring(0, match.range.first)
+                        .cleanTitle()
+
+                return EpisodeInfo(
+                    seriesName =
+                        title.ifBlank {
+                            cleanSeriesName(name)
+                        },
+                    season = season,
+                    episode = episode
+                )
+            }
 
         for (
             regex in
@@ -691,6 +787,12 @@ object M3uParser {
 
         text =
             text.replace(
+                reversedSeasonEpisodePattern,
+                " "
+            )
+
+        text =
+            text.replace(
                 episodeOnlyPattern,
                 " "
             )
@@ -745,6 +847,31 @@ object M3uParser {
         }
     }
 
+    private fun firstNumberAttribute(
+        attributes: Map<String, String>,
+        vararg keys: String
+    ): Int? =
+        keys
+            .asSequence()
+            .mapNotNull { key ->
+                attributes[key]
+                    ?.let {
+                        Regex("""\d{1,4}""")
+                            .find(it)
+                            ?.value
+                            ?.toIntOrNull()
+                    }
+            }
+            .firstOrNull()
+
+    private fun String.normalizeGroupName(): String =
+        trim()
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace(Regex("""\s*[|/\\]\s*"""), " | ")
+            .replace(Regex("""\s{2,}"""), " ")
+            .trim(' ', '|', '-', ':')
+
     /*
      * A virgula que separa os atributos do titulo e a primeira que aparece
      * fora de aspas. Usar a ultima quebrava nomes como "Serie, O Retorno" e
@@ -792,5 +919,29 @@ object M3uParser {
         return runCatching {
             URL(URL(streamUrl), cleaned).toString()
         }.getOrDefault(cleaned)
+    }
+
+    private fun String.normalizeTrailerUrl(streamUrl: String): String {
+        val cleaned =
+            trim()
+                .replace("&amp;", "&")
+                .replace("\\/", "/")
+
+        if (cleaned.isBlank()) return ""
+
+        if (Regex("""^[A-Za-z0-9_-]{11}$""").matches(cleaned)) {
+            return "https://www.youtube.com/watch?v=$cleaned"
+        }
+
+        if (
+            cleaned.startsWith("http://", true) ||
+            cleaned.startsWith("https://", true)
+        ) {
+            return cleaned
+        }
+
+        return runCatching {
+            URL(URL(streamUrl), cleaned).toString()
+        }.getOrDefault("")
     }
 }

@@ -444,7 +444,12 @@ class MediaAdapter(
 
         holder.star
             .apply {
-                isFocusable = true
+                /*
+                 * A estrela continua clicável pelo mouse/touch, mas não entra
+                 * na rota do DPAD. Ter dois focos dentro do mesmo card fazia
+                 * algumas boxes perderem o item ao rolar rapidamente.
+                 */
+                isFocusable = false
                 isFocusableInTouchMode = false
                 contentDescription = "Favoritar ${item.name}"
             }
@@ -543,7 +548,7 @@ class MediaAdapter(
 
         holder.star
             .apply {
-                isFocusable = true
+                isFocusable = false
                 isFocusableInTouchMode = false
                 contentDescription = "Favoritar ${item.name}"
             }
@@ -581,24 +586,29 @@ class MediaAdapter(
                 return
             }
 
-        holder.itemView.post {
-            val position =
-                holder.bindingAdapterPosition
+        /*
+         * Não reconstruímos o ViewHolder enquanto o clique do air mouse ou
+         * o OK longo ainda está sendo processado. Atualizar somente a estrela
+         * elimina o fechamento observado em firmwares antigos.
+         */
+        when (holder) {
+            is RowHolder ->
+                holder.star.text =
+                    if (added) "★ Favorito" else "☆ Favoritar"
 
-            if (
-                position !=
-                RecyclerView.NO_POSITION
-            ) {
-                notifyItemChanged(
-                    position
-                )
-            }
+            is PosterHolder ->
+                holder.star.text =
+                    if (added) "★" else "☆"
         }
 
-        favoriteChanged(
-            item,
-            added
-        )
+        try {
+            favoriteChanged(
+                item,
+                added
+            )
+        } catch (_: Throwable) {
+            // O favorito já foi persistido; feedback visual não pode fechar o app.
+        }
     }
 
 
@@ -632,10 +642,11 @@ class MediaAdapter(
          * OK / ENTER
          */
         view.setOnClickListener {
-
-            open(
-                item
-            )
+            try {
+                open(item)
+            } catch (_: Throwable) {
+                // Um clique de mouse nunca deve derrubar a Activity.
+            }
         }
 
 
@@ -664,9 +675,11 @@ class MediaAdapter(
                     12f
 
 
-                focused(
-                    item
-                )
+                try {
+                    focused(item)
+                } catch (_: Throwable) {
+                    // Prévia/metadata são complementares à navegação.
+                }
 
             } else {
 
@@ -682,9 +695,10 @@ class MediaAdapter(
                     0f
 
 
-                focused(
-                    null
-                )
+                try {
+                    focused(null)
+                } catch (_: Throwable) {
+                }
             }
         }
     }

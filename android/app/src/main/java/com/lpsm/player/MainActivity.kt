@@ -9,6 +9,7 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -45,6 +46,8 @@ import com.lpsm.player.ui.MediaAdapter
 import com.lpsm.player.ui.PlayerActivity
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.Normalizer
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
@@ -679,11 +682,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        b.categoryList.isFocusable =
-            true
+        /*
+         * Somente os cards recebem foco. Se o próprio RecyclerView recebe
+         * foco durante uma rolagem rápida, alguns firmwares procuram o campo
+         * "Buscar" como próximo destino e saltam para o topo.
+         */
+        b.categoryList.isFocusable = false
+        b.categoryList.descendantFocusability =
+            ViewGroup.FOCUS_AFTER_DESCENDANTS
 
-        b.list.isFocusable =
-            true
+        b.list.isFocusable = false
+        b.list.descendantFocusability =
+            ViewGroup.FOCUS_AFTER_DESCENDANTS
 
         b.previewWatch.isFocusable =
             true
@@ -718,6 +728,18 @@ class MainActivity : AppCompatActivity() {
         ) {
             val focusedView = currentFocus
 
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                allowSearchFocus = false
+            }
+
+            if (
+                focusedView == null &&
+                event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+            ) {
+                focusFirstMedia()
+                return true
+            }
+
             if (focusedView != null && focusedView.isInside(b.list)) {
                 val holder = b.list.findContainingViewHolder(focusedView)
                 val position = holder?.bindingAdapterPosition ?: RecyclerView.NO_POSITION
@@ -726,6 +748,15 @@ class MainActivity : AppCompatActivity() {
                         ?.spanCount
                         ?.coerceAtLeast(1)
                         ?: 1
+
+                if (
+                    position == RecyclerView.NO_POSITION &&
+                    (event.keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                        event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)
+                ) {
+                    restoreVisibleMediaFocus()
+                    return true
+                }
 
                 if (
                     event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT &&
@@ -747,10 +778,27 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (
-                    event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                    position != RecyclerView.NO_POSITION &&
-                    position + columns >= (b.list.adapter?.itemCount ?: 0)
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
+                    position != RecyclerView.NO_POSITION
                 ) {
+                    focusAdapterPosition(
+                        b.list,
+                        position - columns
+                    )
+                    return true
+                }
+
+                if (
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                    position != RecyclerView.NO_POSITION
+                ) {
+                    val target = position + columns
+                    val count = b.list.adapter?.itemCount ?: 0
+
+                    if (target < count) {
+                        focusAdapterPosition(b.list, target)
+                    }
+
                     return true
                 }
             }
@@ -758,6 +806,15 @@ class MainActivity : AppCompatActivity() {
             if (focusedView != null && focusedView.isInside(b.categoryList)) {
                 val holder = b.categoryList.findContainingViewHolder(focusedView)
                 val position = holder?.bindingAdapterPosition ?: RecyclerView.NO_POSITION
+
+                if (
+                    position == RecyclerView.NO_POSITION &&
+                    (event.keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                        event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)
+                ) {
+                    focusSelectedCategory()
+                    return true
+                }
 
                 if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                     return true
@@ -774,10 +831,27 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (
-                    event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                    position != RecyclerView.NO_POSITION &&
-                    position == (b.categoryList.adapter?.itemCount ?: 0) - 1
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
+                    position > 0
                 ) {
+                    focusAdapterPosition(
+                        b.categoryList,
+                        position - 1
+                    )
+                    return true
+                }
+
+                if (
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                    position != RecyclerView.NO_POSITION
+                ) {
+                    val target = position + 1
+                    val count = b.categoryList.adapter?.itemCount ?: 0
+
+                    if (target < count) {
+                        focusAdapterPosition(b.categoryList, target)
+                    }
+
                     return true
                 }
             }
@@ -5142,9 +5216,7 @@ class MainActivity : AppCompatActivity() {
 
         return source
             .groupBy {
-                seriesKey(it)
-                    .trim()
-                    .lowercase()
+                seriesLookupKey(it)
             }
             .entries
             .sortedBy {
@@ -5155,34 +5227,40 @@ class MainActivity : AppCompatActivity() {
             .map {
                     (_, episodes) ->
 
+                val seriesName =
+                    preferredSeriesName(episodes)
+
                 val representative =
                     episodes
-                        .firstOrNull {
-
-                            it.logo
-                                .isNotBlank()
-                        }
-                        ?: episodes.first()
-
-                val seriesName =
-                    seriesKey(representative)
+                        .sortedWith(seriesEpisodeOrder)
+                        .first()
 
                 val bestLogo =
+                    preferredSeriesArtwork(episodes)
+
+                val bestGroup =
                     episodes
-                        .map { it.logo.trim() }
-                        .filter { it.isNotBlank() }
+                        .map { it.group.ifBlank { "Outros" } }
                         .groupingBy { it }
                         .eachCount()
                         .maxByOrNull { it.value }
                         ?.key
-                        .orEmpty()
+                        ?: representative.group
 
                 val description =
                     episodes
-                        .firstOrNull {
-                            it.description.isNotBlank()
+                        .map { it.description.trim() }
+                        .filter { it.isNotBlank() }
+                        .maxByOrNull { it.length }
+                        .orEmpty()
+
+                val trailerUrl =
+                    episodes
+                        .firstNotNullOfOrNull {
+                            it.trailerUrl
+                                .trim()
+                                .takeIf(String::isNotBlank)
                         }
-                        ?.description
                         .orEmpty()
 
                 representative.copy(
@@ -5195,7 +5273,11 @@ class MainActivity : AppCompatActivity() {
                             representative.logo
                         },
 
+                    group = bestGroup,
+
                     description = description,
+
+                    trailerUrl = trailerUrl,
 
                     seriesName =
                         seriesName,
@@ -5208,6 +5290,154 @@ class MainActivity : AppCompatActivity() {
                 )
             }
     }
+
+    private val seriesEpisodeOrder =
+        compareBy<MediaEntry>(
+            { it.season ?: Int.MAX_VALUE },
+            { it.episode ?: Int.MAX_VALUE },
+            { it.name.lowercase(Locale.ROOT) }
+        )
+
+    private fun seriesLookupKey(
+        entry: MediaEntry
+    ): String =
+        seriesLookupKey(seriesKey(entry))
+
+    private fun seriesLookupKey(
+        value: String
+    ): String {
+        val withoutAccents =
+            Normalizer.normalize(
+                value,
+                Normalizer.Form.NFD
+            )
+                .replace(Regex("""\p{M}+"""), "")
+
+        return withoutAccents
+            .lowercase(Locale.ROOT)
+            .replace(
+                Regex(
+                    """(?i)\b(?:4k|uhd|fhd|full\s*hd|hd|sd|h\.?26[45]|x26[45])\b"""
+                ),
+                " "
+            )
+            .replace(Regex("""(?i)\[\s*[LD]\s*]|\(\s*[LD]\s*\)"""), " ")
+            .replace(Regex("""[^a-z0-9]+"""), " ")
+            .replace(Regex("""\s{2,}"""), " ")
+            .trim()
+    }
+
+    private fun preferredSeriesName(
+        episodes: List<MediaEntry>
+    ): String =
+        episodes
+            .map { seriesKey(it).trim() }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .maxWithOrNull(
+                compareBy<Map.Entry<String, Int>>(
+                    { it.value },
+                    { -it.key.length }
+                )
+            )
+            ?.key
+            ?: episodes.first().name
+
+    private fun preferredSeriesArtwork(
+        episodes: List<MediaEntry>
+    ): String =
+        episodes
+            .map { it.logo.trim() }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .maxWithOrNull(
+                compareBy<Map.Entry<String, Int>>(
+                    { artworkPreference(it.key) },
+                    { it.value }
+                )
+            )
+            ?.key
+            .orEmpty()
+
+    private fun artworkPreference(
+        value: String
+    ): Int {
+        val lower = value.lowercase(Locale.ROOT)
+        var score = 0
+
+        if (
+            listOf(
+                "poster",
+                "cover",
+                "series",
+                "movie",
+                "vod",
+                "tmdb",
+                "image"
+            ).any { it in lower }
+        ) {
+            score += 20
+        }
+
+        if (
+            listOf(
+                "/live/",
+                "channel",
+                "canal-",
+                "canal_"
+            ).any { it in lower }
+        ) {
+            score -= 30
+        }
+
+        return score
+    }
+
+    private fun enrichSeriesEntries(
+        source: List<MediaEntry>
+    ): List<MediaEntry> =
+        source
+            .groupBy(::seriesLookupKey)
+            .values
+            .flatMap { rawEpisodes ->
+                val episodes =
+                    rawEpisodes.distinctBy {
+                        it.url.trim().lowercase(Locale.ROOT)
+                    }
+
+                val seriesName = preferredSeriesName(episodes)
+                val logo = preferredSeriesArtwork(episodes)
+                val description =
+                    episodes
+                        .map { it.description.trim() }
+                        .filter { it.isNotBlank() }
+                        .maxByOrNull { it.length }
+                        .orEmpty()
+                val trailerUrl =
+                    episodes
+                        .firstNotNullOfOrNull {
+                            it.trailerUrl
+                                .trim()
+                                .takeIf(String::isNotBlank)
+                        }
+                        .orEmpty()
+
+                episodes.map { episode ->
+                    episode.copy(
+                        seriesName = seriesName,
+                        logo = logo.ifBlank { episode.logo },
+                        description =
+                            episode.description.ifBlank { description },
+                        trailerUrl =
+                            episode.trailerUrl.ifBlank { trailerUrl }
+                    )
+                }
+            }
+            .sortedWith(seriesEpisodeOrder)
 
     private fun openSeries(
         name: String
@@ -5380,26 +5610,7 @@ class MainActivity : AppCompatActivity() {
 
         episodes =
             episodes.sortedWith(
-
-                compareBy<MediaEntry>(
-                    {
-
-                        it.season
-                            ?: 0
-                    },
-
-                    {
-
-                        it.episode
-                            ?: 0
-                    },
-
-                    {
-
-                        it.name
-                            .lowercase()
-                    }
-                )
+                seriesEpisodeOrder
             )
 
         setGridColumns(
@@ -5445,7 +5656,7 @@ class MainActivity : AppCompatActivity() {
         name: String
     ): List<MediaEntry> {
         return seriesEpisodesByName[
-            name.lowercase()
+            seriesLookupKey(name)
         ].orEmpty()
     }
 
@@ -6354,11 +6565,64 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
+        val trailerUrl =
+            resolveTrailerUrl(
+                item = item,
+                series = series
+            )
+
+        val trailer =
+            trailerUrl
+                .takeIf { it.isNotBlank() }
+                ?.let { resolvedUrl ->
+                    Button(this).apply {
+                        id = View.generateViewId()
+                        text = "▷  TRAILER"
+                        textSize =
+                            when {
+                                veryCompact -> 11f
+                                compact -> 15f
+                                else -> 19f
+                            }
+                        isAllCaps = false
+                        isFocusable = true
+                        setTextColor(Color.WHITE)
+                        setBackgroundResource(
+                            R.drawable.tv_button_background
+                        )
+                        setOnClickListener {
+                            openingContent = true
+                            dialog.dismiss()
+                            openTrailer(
+                                item = item,
+                                trailerUrl = resolvedUrl
+                            )
+                        }
+                    }.also { button ->
+                        val params =
+                            LinearLayout.LayoutParams(
+                                dp(actionWidth),
+                                dp(actionHeight)
+                            ).apply {
+                                topMargin =
+                                    dp(
+                                        if (compact) 6 else 12
+                                    )
+                            }
+                        information.addView(button, params)
+                    }
+                }
+
         back.nextFocusDownId =
             action.id
 
         action.nextFocusUpId =
             back.id
+
+        trailer?.let { trailerButton ->
+            action.nextFocusDownId = trailerButton.id
+            trailerButton.nextFocusUpId = action.id
+        }
 
         dialog.setContentView(
             root
@@ -6405,6 +6669,84 @@ class MainActivity : AppCompatActivity() {
         }
 
         dialog.show()
+    }
+
+    private fun resolveTrailerUrl(
+        item: MediaEntry,
+        series: Boolean
+    ): String {
+        if (item.trailerUrl.isNotBlank()) {
+            return item.trailerUrl.trim()
+        }
+
+        if (!series) return ""
+
+        return seriesEpisodes(
+            seriesKey(item)
+        )
+            .firstNotNullOfOrNull { episode ->
+                episode.trailerUrl
+                    .trim()
+                    .takeIf(String::isNotBlank)
+            }
+            .orEmpty()
+    }
+
+    private fun openTrailer(
+        item: MediaEntry,
+        trailerUrl: String
+    ) {
+        val uri =
+            runCatching {
+                Uri.parse(trailerUrl)
+            }.getOrNull()
+
+        if (uri == null || uri.scheme !in listOf("http", "https")) {
+            toast("Trailer indisponível")
+            return
+        }
+
+        val path =
+            uri.path
+                .orEmpty()
+                .lowercase(Locale.ROOT)
+
+        val directMedia =
+            listOf(
+                ".mp4",
+                ".m3u8",
+                ".webm",
+                ".mov",
+                ".mkv"
+            ).any { extension ->
+                path.endsWith(extension)
+            }
+
+        if (directMedia) {
+            openPlayer(
+                item.copy(
+                    name = "Trailer • ${displayTitle(item)}",
+                    url = trailerUrl,
+                    group = "Trailer",
+                    type = ContentType.VOD,
+                    seriesName = "",
+                    season = null,
+                    episode = null
+                )
+            )
+            return
+        }
+
+        try {
+            startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    uri
+                )
+            )
+        } catch (_: Throwable) {
+            toast("Não há aplicativo disponível para abrir o trailer")
+        }
     }
 
     /*
@@ -6628,11 +6970,27 @@ class MainActivity : AppCompatActivity() {
         source: List<MediaEntry>
     ): EntryIndexes {
 
-        val byType =
+        val rawByType =
             source.groupBy {
 
                 it.type
             }
+
+        val normalizedSeries =
+            enrichSeriesEntries(
+                rawByType[ContentType.SERIES]
+                    .orEmpty()
+            )
+
+        val byType =
+            rawByType
+                .toMutableMap()
+                .apply {
+                    put(
+                        ContentType.SERIES,
+                        normalizedSeries
+                    )
+                }
 
         val indexedGroupsByType =
             byType
@@ -6653,21 +7011,14 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-        val episodeOrder =
-            compareBy<MediaEntry>(
-                { it.season ?: 0 },
-                { it.episode ?: 0 },
-                { it.name.lowercase() }
-            )
-
         val indexedSeriesEpisodes =
             byType[ContentType.SERIES]
                 .orEmpty()
                 .groupBy {
-                    seriesKey(it).lowercase()
+                    seriesLookupKey(it)
                 }
                 .mapValues { (_, episodes) ->
-                    episodes.sortedWith(episodeOrder)
+                    episodes.sortedWith(seriesEpisodeOrder)
                 }
 
         val indexedSeriesCards =
@@ -6732,7 +7083,7 @@ class MainActivity : AppCompatActivity() {
         val seriesEpisodes =
             if (entry.type == ContentType.SERIES) {
                 seriesEpisodesByName[
-                    seriesKey(entry).lowercase()
+                    seriesLookupKey(entry)
                 ].orEmpty()
             } else {
                 emptyList()
@@ -7080,6 +7431,59 @@ class MainActivity : AppCompatActivity() {
                     b.list.getChildAt(0)?.requestFocus()
                 }
             }
+        }
+    }
+
+    private fun restoreVisibleMediaFocus() {
+        b.list.post {
+            val layout =
+                b.list.layoutManager as? GridLayoutManager
+
+            val position =
+                layout
+                    ?.findFirstCompletelyVisibleItemPosition()
+                    ?.takeIf { it != RecyclerView.NO_POSITION }
+                    ?: layout
+                        ?.findFirstVisibleItemPosition()
+                        ?.takeIf { it != RecyclerView.NO_POSITION }
+                    ?: 0
+
+            b.list
+                .findViewHolderForAdapterPosition(position)
+                ?.itemView
+                ?.requestFocus()
+                ?: b.list.getChildAt(0)
+                    ?.requestFocus()
+        }
+    }
+
+    /**
+     * Move o foco pelo índice em vez de confiar no cálculo geométrico do
+     * firmware. Em boxes antigas, repetir DPAD para baixo podia escolher o
+     * campo de busca quando a próxima linha ainda não estava desenhada.
+     */
+    private fun focusAdapterPosition(
+        recyclerView: RecyclerView,
+        position: Int
+    ) {
+        val count = recyclerView.adapter?.itemCount ?: 0
+        if (position !in 0 until count) return
+
+        recyclerView
+            .findViewHolderForAdapterPosition(position)
+            ?.itemView
+            ?.requestFocus()
+            ?.takeIf { it }
+            ?.let { return }
+
+        recyclerView.scrollToPosition(position)
+        recyclerView.post {
+            recyclerView
+                .findViewHolderForAdapterPosition(position)
+                ?.itemView
+                ?.requestFocus()
+                ?: recyclerView.getChildAt(0)
+                    ?.requestFocus()
         }
     }
 
