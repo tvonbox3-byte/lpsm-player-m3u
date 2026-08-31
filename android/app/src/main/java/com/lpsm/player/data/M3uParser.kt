@@ -4,6 +4,9 @@ import com.lpsm.player.model.ContentType
 import com.lpsm.player.model.MediaEntry
 import java.io.Reader
 import java.net.URL
+import java.text.Normalizer
+import java.util.Locale
+import java.util.TreeMap
 
 object M3uParser {
 
@@ -110,6 +113,136 @@ object M3uParser {
         var kept = 0
 
         /*
+         * As listas M3U normalmente chegam agrupadas: todos os episódios de
+         * uma série, depois os da próxima. Quando o teto de memória era
+         * alcançado, os episódios restantes do arquivo eram descartados e as
+         * categorias finais nunca apareciam.
+         *
+         * Mantemos o mesmo limite total, mas equilibramos somente o espaço de
+         * SÉRIES. Assim, uma série muito longa deixa de ocupar todo o catálogo
+         * e séries/categorias encontradas mais tarde também ganham espaço. Os
+         * canais e filmes permanecem com o comportamento já aprovado.
+         */
+        val seriesBucket =
+            buckets.getValue(ContentType.SERIES)
+
+        val seriesPositions =
+            linkedMapOf<String, LinkedHashSet<Int>>()
+
+        val seriesCounts =
+            TreeMap<Int, LinkedHashSet<String>>()
+
+        val seriesKeyAtPosition =
+            ArrayList<String>()
+
+        fun updateSeriesCount(
+            key: String,
+            oldCount: Int,
+            newCount: Int
+        ) {
+            if (oldCount > 0) {
+                seriesCounts[oldCount]
+                    ?.let { keys ->
+                        keys.remove(key)
+                        if (keys.isEmpty()) {
+                            seriesCounts.remove(oldCount)
+                        }
+                    }
+            }
+
+            if (newCount > 0) {
+                seriesCounts
+                    .getOrPut(newCount) { LinkedHashSet() }
+                    .add(key)
+            }
+        }
+
+        fun trackSeriesAt(
+            entry: MediaEntry,
+            position: Int
+        ) {
+            val key = seriesRetentionKey(entry)
+            val positions =
+                seriesPositions.getOrPut(key) { LinkedHashSet() }
+            val oldCount = positions.size
+
+            positions.add(position)
+            updateSeriesCount(key, oldCount, positions.size)
+
+            if (position == seriesKeyAtPosition.size) {
+                seriesKeyAtPosition.add(key)
+            } else {
+                seriesKeyAtPosition[position] = key
+            }
+        }
+
+        fun untrackLastSeries() {
+            if (seriesKeyAtPosition.isEmpty()) return
+
+            val position = seriesKeyAtPosition.lastIndex
+            val key = seriesKeyAtPosition.removeAt(position)
+            val positions = seriesPositions[key] ?: return
+            val oldCount = positions.size
+
+            positions.remove(position)
+            updateSeriesCount(key, oldCount, positions.size)
+
+            if (positions.isEmpty()) {
+                seriesPositions.remove(key)
+            }
+        }
+
+        fun replaceOverrepresentedSeries(
+            entry: MediaEntry
+        ): Boolean {
+            if (seriesBucket.isEmpty()) return false
+
+            val incomingKey = seriesRetentionKey(entry)
+            val incomingCount =
+                seriesPositions[incomingKey]?.size ?: 0
+
+            val victim =
+                seriesCounts
+                    .descendingMap()
+                    .entries
+                    .asSequence()
+                    .flatMap { countEntry ->
+                        countEntry.value
+                            .asSequence()
+                            .filter { it != incomingKey }
+                            .map { key -> countEntry.key to key }
+                    }
+                    .firstOrNull()
+                    ?: return false
+
+            val victimCount = victim.first
+            val victimKey = victim.second
+
+            /* Mantém as quantidades equilibradas e evita troca sem ganho. */
+            if (victimCount <= incomingCount + 1) return false
+
+            val victimPositions =
+                seriesPositions[victimKey] ?: return false
+            val position =
+                victimPositions.firstOrNull() ?: return false
+
+            val oldVictimCount = victimPositions.size
+            victimPositions.remove(position)
+            updateSeriesCount(
+                victimKey,
+                oldVictimCount,
+                victimPositions.size
+            )
+            if (victimPositions.isEmpty()) {
+                seriesPositions.remove(victimKey)
+            }
+
+            seriesBucket[position] = entry
+            trackSeriesAt(entry, position)
+            return true
+        }
+
+        /*
          * BUILD 41 - carregamento progressivo.
          * Algumas TV Boxes levam muito tempo para percorrer listas enormes.
          * Liberamos uma primeira amostra rapidamente e continuamos lendo o
@@ -152,14 +285,26 @@ object M3uParser {
             val target = buckets.getValue(entry.type)
 
             if (kept < limit) {
+                val position = target.size
                 target += entry
+                if (entry.type == ContentType.SERIES) {
+                    trackSeriesAt(entry, position)
+                }
                 kept += 1
                 emitPartialIfNeeded(entry.type)
                 return
             }
 
             val targetReserve = reserved.getValue(entry.type)
-            if (target.size >= targetReserve) return
+            if (target.size >= targetReserve) {
+                if (
+                    entry.type == ContentType.SERIES &&
+                    replaceOverrepresentedSeries(entry)
+                ) {
+                    emitPartialIfNeeded(entry.type)
+                }
+                return
+            }
 
             val victim =
                 buckets.entries
@@ -172,8 +317,16 @@ object M3uParser {
                     }
                     ?: return
 
+            if (victim.key == ContentType.SERIES) {
+                untrackLastSeries()
+            }
             victim.value.removeAt(victim.value.lastIndex)
+
+            val position = target.size
             target += entry
+            if (entry.type == ContentType.SERIES) {
+                trackSeriesAt(entry, position)
+            }
             emitPartialIfNeeded(entry.type)
         }
 
@@ -519,10 +672,7 @@ object M3uParser {
          * Isso evita um canal chamado
          * "Canal Filmes" ir para Filmes.
          */
-        if (
-            "/live/" in path ||
-            path.endsWith(".ts")
-        ) {
+        if ("/live/" in path) {
             return ContentType.LIVE
         }
 
@@ -565,10 +715,16 @@ object M3uParser {
                 listOf(
                     "series",
                     "séries",
+                    "serie",
+                    "série",
                     "serie ",
                     "série ",
                     "tv show",
                     "tv shows",
+                    "show de tv",
+                    "shows de tv",
+                    "boxset",
+                    "box set",
                     "seriado",
                     "seriados",
                     "temporada",
@@ -592,6 +748,15 @@ object M3uParser {
             )
         ) {
             return ContentType.SERIES
+        }
+
+        /*
+         * Alguns fornecedores entregam episódios em MPEG-TS. O sufixo .ts
+         * só identifica TV ao vivo depois de excluir URL, nome e categoria
+         * com sinais claros de série.
+         */
+        if (path.endsWith(".ts")) {
+            return ContentType.LIVE
         }
 
         if (
@@ -845,6 +1010,32 @@ object M3uParser {
         return words.any {
             it in text
         }
+    }
+
+    private fun seriesRetentionKey(
+        entry: MediaEntry
+    ): String {
+        val source =
+            entry.seriesName
+                .ifBlank { cleanSeriesName(entry.name) }
+                .ifBlank { entry.name }
+
+        return Normalizer
+            .normalize(source, Normalizer.Form.NFD)
+            .replace(Regex("""\p{M}+"""), "")
+            .lowercase(Locale.ROOT)
+            .replace(
+                Regex(
+                    """\b(?:4k|uhd|fhd|full\s*hd|hd|sd|h\.?26[45]|x26[45])\b"""
+                ),
+                " "
+            )
+            .replace(Regex("""[^a-z0-9]+"""), " ")
+            .replace(Regex("""\s{2,}"""), " ")
+            .trim()
+            .ifBlank {
+                entry.url.trim().lowercase(Locale.ROOT)
+            }
     }
 
     private fun firstNumberAttribute(
