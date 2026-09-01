@@ -283,8 +283,8 @@ class PlaylistCache(
     }
 
     private companion object {
-        // v5 refaz uma vez o catálogo com a retenção equilibrada de séries.
-        const val FORMAT_VERSION = 5
+        // v6 descarta o catálogo da 2.2.34 que podia ficar incompleto.
+        const val FORMAT_VERSION = 6
         const val MAX_ENTRIES = 60_000
         const val MAX_STRING_BYTES = 256 * 1024
     }

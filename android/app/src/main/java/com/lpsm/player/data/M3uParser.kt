@@ -6,7 +6,6 @@ import java.io.Reader
 import java.net.URL
 import java.text.Normalizer
 import java.util.Locale
-import java.util.TreeMap
 
 object M3uParser {
 
@@ -78,6 +77,22 @@ object M3uParser {
             """(?i)\b(?:ep|epis[oó]dio|episode|cap(?:[ií]tulo)?)\s*\.?\s*(\d{1,3})\b"""
         )
 
+    private const val SERIES_DIVERSITY_EPISODES = 4
+
+    private val seriesDiacriticsPattern =
+        Regex("""\p{M}+""")
+
+    private val seriesQualityPattern =
+        Regex(
+            """\b(?:4k|uhd|fhd|full\s*hd|hd|sd|h\.?26[45]|x26[45])\b"""
+        )
+
+    private val seriesNonAlphaNumericPattern =
+        Regex("""[^a-z0-9]+""")
+
+    private val seriesRepeatedSpacePattern =
+        Regex("""\s{2,}""")
+
     private data class EpisodeInfo(
         val seriesName: String,
         val season: Int?,
@@ -129,33 +144,8 @@ object M3uParser {
         val seriesPositions =
             linkedMapOf<String, LinkedHashSet<Int>>()
 
-        val seriesCounts =
-            TreeMap<Int, LinkedHashSet<String>>()
-
         val seriesKeyAtPosition =
             ArrayList<String>()
-
-        fun updateSeriesCount(
-            key: String,
-            oldCount: Int,
-            newCount: Int
-        ) {
-            if (oldCount > 0) {
-                seriesCounts[oldCount]
-                    ?.let { keys ->
-                        keys.remove(key)
-                        if (keys.isEmpty()) {
-                            seriesCounts.remove(oldCount)
-                        }
-                    }
-            }
-
-            if (newCount > 0) {
-                seriesCounts
-                    .getOrPut(newCount) { LinkedHashSet() }
-                    .add(key)
-            }
-        }
 
         fun trackSeriesAt(
             entry: MediaEntry,
@@ -164,10 +154,8 @@ object M3uParser {
             val key = seriesRetentionKey(entry)
             val positions =
                 seriesPositions.getOrPut(key) { LinkedHashSet() }
-            val oldCount = positions.size
 
             positions.add(position)
-            updateSeriesCount(key, oldCount, positions.size)
 
             if (position == seriesKeyAtPosition.size) {
                 seriesKeyAtPosition.add(key)
@@ -182,17 +170,15 @@ object M3uParser {
             val position = seriesKeyAtPosition.lastIndex
             val key = seriesKeyAtPosition.removeAt(position)
             val positions = seriesPositions[key] ?: return
-            val oldCount = positions.size
 
             positions.remove(position)
-            updateSeriesCount(key, oldCount, positions.size)
 
             if (positions.isEmpty()) {
                 seriesPositions.remove(key)
             }
         }
 
-        fun replaceOverrepresentedSeries(
+        fun replaceForSeriesDiversity(
             entry: MediaEntry
         ): Boolean {
             if (seriesBucket.isEmpty()) return false
@@ -201,38 +187,37 @@ object M3uParser {
             val incomingCount =
                 seriesPositions[incomingKey]?.size ?: 0
 
+            /*
+             * Depois que a cota de séries está cheia, só equilibramos os
+             * primeiros episódios de cada título. A versão anterior procurava
+             * e trocava uma posição para praticamente todo episódio restante
+             * da lista. Em TV Boxes fracas isso prendia o parser por minutos e
+             * Filmes/Séries pareciam vazios.
+             */
+            if (incomingCount >= SERIES_DIVERSITY_EPISODES) return false
+
             val victim =
-                seriesCounts
-                    .descendingMap()
+                seriesPositions
                     .entries
                     .asSequence()
-                    .flatMap { countEntry ->
-                        countEntry.value
-                            .asSequence()
-                            .filter { it != incomingKey }
-                            .map { key -> countEntry.key to key }
+                    .filter { candidate ->
+                        candidate.key != incomingKey &&
+                            candidate.value.size > SERIES_DIVERSITY_EPISODES
                     }
-                    .firstOrNull()
+                    .maxByOrNull { candidate ->
+                        candidate.value.size
+                    }
                     ?: return false
 
-            val victimCount = victim.first
-            val victimKey = victim.second
+            val victimKey = victim.key
+            val victimPositions = victim.value
 
             /* Mantém as quantidades equilibradas e evita troca sem ganho. */
-            if (victimCount <= incomingCount + 1) return false
-
-            val victimPositions =
-                seriesPositions[victimKey] ?: return false
+            if (victimPositions.size <= incomingCount + 1) return false
             val position =
                 victimPositions.firstOrNull() ?: return false
 
-            val oldVictimCount = victimPositions.size
             victimPositions.remove(position)
-            updateSeriesCount(
-                victimKey,
-                oldVictimCount,
-                victimPositions.size
-            )
             if (victimPositions.isEmpty()) {
                 seriesPositions.remove(victimKey)
             }
@@ -299,7 +284,7 @@ object M3uParser {
             if (target.size >= targetReserve) {
                 if (
                     entry.type == ContentType.SERIES &&
-                    replaceOverrepresentedSeries(entry)
+                    replaceForSeriesDiversity(entry)
                 ) {
                     emitPartialIfNeeded(entry.type)
                 }
@@ -1022,16 +1007,14 @@ object M3uParser {
 
         return Normalizer
             .normalize(source, Normalizer.Form.NFD)
-            .replace(Regex("""\p{M}+"""), "")
+            .replace(seriesDiacriticsPattern, "")
             .lowercase(Locale.ROOT)
             .replace(
-                Regex(
-                    """\b(?:4k|uhd|fhd|full\s*hd|hd|sd|h\.?26[45]|x26[45])\b"""
-                ),
+                seriesQualityPattern,
                 " "
             )
-            .replace(Regex("""[^a-z0-9]+"""), " ")
-            .replace(Regex("""\s{2,}"""), " ")
+            .replace(seriesNonAlphaNumericPattern, " ")
+            .replace(seriesRepeatedSpacePattern, " ")
             .trim()
             .ifBlank {
                 entry.url.trim().lowercase(Locale.ROOT)
