@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
     private val defaultAdultPin = "0202"
     private val unknownSeriesSeason = -1
     private val playlistRefreshIntervalMillis =
-        30L * 60L * 1000L
+        24L * 60L * 60L * 1000L
     private val playlistFallbackMaxAgeMillis =
         7L * 24L * 60L * 60L * 1000L
     private var allowSearchFocus = false
@@ -2597,21 +2597,89 @@ class MainActivity : AppCompatActivity() {
              * imediatamente com a ultima configuracao autorizada e fazemos
              * cache, indices, M3U e EPG somente em segundo plano.
              */
+            var preloadedCacheSignature:
+                String? = null
+
+            var preloadedCachedEntries =
+                emptyList<MediaEntry>()
+
+            var preloadedCachedIndexes:
+                EntryIndexes? = null
+
+            var preloadedCachedAgeMillis:
+                Long? = null
+
             api.cachedConfig()
                 ?.let { cachedConfig ->
 
                     openedFromCache = true
                     lastConfig = cachedConfig
 
+                    /*
+                     * O servidor gratuito pode estar dormindo. Antes, mesmo
+                     * tendo lista salva, o app esperava a resposta online para
+                     * só depois descompactar o cache. Isso dava a impressão de
+                     * que o painel precisava estar aberto. Agora a lista local
+                     * autorizada é restaurada ANTES de acordar o backend.
+                     */
+                    val cachedPlaylists =
+                        cachedConfig.playlists
+                            .distinctBy {
+                                it.url
+                                    .trim()
+                                    .lowercase()
+                            }
+
+                    if (cachedPlaylists.isNotEmpty()) {
+
+                        val signature =
+                            playlistCache.signature(
+                                cachedPlaylists
+                            )
+
+                        val localEntries =
+                            playlistCache.read(
+                                signature,
+                                playlistFallbackMaxAgeMillis
+                            )
+
+                        if (localEntries.isNotEmpty()) {
+                            preloadedCacheSignature =
+                                signature
+                            preloadedCachedEntries =
+                                localEntries
+                            preloadedCachedIndexes =
+                                buildEntryIndexes(
+                                    localEntries
+                                )
+                            preloadedCachedAgeMillis =
+                                playlistCache.ageMillis(
+                                    signature
+                                )
+
+                            entries =
+                                localEntries
+
+                            applyEntryIndexes(
+                                requireNotNull(
+                                    preloadedCachedIndexes
+                                )
+                            )
+                        }
+                    }
+
                     runOnUiThread {
                         showContent(
                             cachedConfig,
                             0
                         )
-                        if (entries.isEmpty()) {
-                            b.message.text =
-                                "Carregando sua lista em segundo plano..."
-                        }
+
+                        b.message.text =
+                            if (preloadedCachedEntries.isNotEmpty()) {
+                                "Lista salva pronta • ${preloadedCachedEntries.size} itens • sincronizando servidor..."
+                            } else {
+                                "Conectando ao servidor em segundo plano..."
+                            }
                     }
                 }
 
@@ -2659,7 +2727,7 @@ class MainActivity : AppCompatActivity() {
                             showFailure(
                                 lastConfig,
 
-                                "Não foi possível conectar ao painel. Verifique a rede e tente novamente."
+                                "Não foi possível conectar ao servidor. Se ele estava em repouso, aguarde alguns segundos e tente novamente."
                             )
                         }
 
@@ -2765,21 +2833,38 @@ class MainActivity : AppCompatActivity() {
              * indexa o arquivo inteiro uma segunda vez. Isso fazia diferença
              * grande em boxes com armazenamento e CPU lentos.
              */
+            val canReusePreloadedCache =
+                preloadedCacheSignature ==
+                    cacheSignature &&
+                    preloadedCachedEntries.isNotEmpty()
+
             val cachedEntries =
-                playlistCache.read(
-                    cacheSignature,
-                    playlistFallbackMaxAgeMillis
-                )
+                if (canReusePreloadedCache) {
+                    preloadedCachedEntries
+                } else {
+                    playlistCache.read(
+                        cacheSignature,
+                        playlistFallbackMaxAgeMillis
+                    )
+                }
 
             val cachedIndexes =
-                cachedEntries
-                    .takeIf { it.isNotEmpty() }
-                    ?.let(::buildEntryIndexes)
+                if (canReusePreloadedCache) {
+                    preloadedCachedIndexes
+                } else {
+                    cachedEntries
+                        .takeIf { it.isNotEmpty() }
+                        ?.let(::buildEntryIndexes)
+                }
 
             val cachedAgeMillis =
-                playlistCache.ageMillis(
-                    cacheSignature
-                )
+                if (canReusePreloadedCache) {
+                    preloadedCachedAgeMillis
+                } else {
+                    playlistCache.ageMillis(
+                        cacheSignature
+                    )
+                }
 
             if (
                 cachedEntries

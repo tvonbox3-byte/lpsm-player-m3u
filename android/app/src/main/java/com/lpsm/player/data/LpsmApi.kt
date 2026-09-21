@@ -15,6 +15,8 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
+import java.util.concurrent.atomic.AtomicLong
+
 import java.nio.charset.Charset
 
 import java.util.zip.GZIPInputStream
@@ -35,6 +37,24 @@ class LpsmApi(
         private const val API_READ_TIMEOUT =
             18_000
 
+        /*
+         * Render Free coloca o backend em repouso depois de alguns minutos
+         * sem tráfego. O primeiro acesso pode levar perto de um minuto para
+         * acordar. Estes limites são usados SOMENTE no /api/health para o
+         * próprio APK acordar o servidor sem depender do painel aberto.
+         */
+        private const val API_WAKE_CONNECT_TIMEOUT =
+            12_000
+
+        private const val API_WAKE_READ_TIMEOUT =
+            25_000
+
+        private const val API_WAKE_TOTAL_MILLIS =
+            75_000L
+
+        private const val API_READY_CACHE_MILLIS =
+            90_000L
+
         private const val PLAYLIST_CONNECT_TIMEOUT =
             12_000
 
@@ -51,6 +71,9 @@ class LpsmApi(
                 "Chrome/120.0 Mobile Safari/537.36 " +
                 "LPSM/2.1"
     }
+
+    private val lastServerReadyAt =
+        AtomicLong(0L)
 
 
     /*
@@ -113,17 +136,127 @@ class LpsmApi(
         )
 
         connection.setRequestProperty(
-            "Connection",
-            "close"
-        )
-
-        connection.setRequestProperty(
             "Cache-Control",
             "no-cache"
         )
 
         connection.useCaches =
             false
+    }
+
+
+    /*
+     * =====================================================
+     * ACORDAR BACKEND
+     * =====================================================
+     *
+     * O painel web fazia o servidor parecer "necessário" porque as
+     * consultas do navegador mantinham o serviço gratuito do Render ativo.
+     * Agora o próprio APK chama /api/health e aguarda o cold start quando
+     * necessário. Depois que um aparelho está aberto, o heartbeat mantém o
+     * backend recebendo tráfego normalmente.
+     */
+
+    private fun ensureServerReady() {
+
+        val now =
+            System.currentTimeMillis()
+
+        if (
+            now - lastServerReadyAt.get() <=
+            API_READY_CACHE_MILLIS
+        ) {
+            return
+        }
+
+        val deadline =
+            now + API_WAKE_TOTAL_MILLIS
+
+        while (System.currentTimeMillis() < deadline) {
+
+            if (healthCheck()) {
+                lastServerReadyAt.set(
+                    System.currentTimeMillis()
+                )
+                return
+            }
+
+            val remaining =
+                deadline - System.currentTimeMillis()
+
+            if (remaining <= 0L) {
+                return
+            }
+
+            try {
+                Thread.sleep(
+                    minOf(2_000L, remaining)
+                )
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
+    }
+
+    private fun healthCheck(): Boolean {
+
+        val connection =
+            try {
+                URL(
+                    apiUrl("/api/health")
+                )
+                    .openConnection()
+                    as HttpURLConnection
+            } catch (_: Throwable) {
+                return false
+            }
+
+        return try {
+
+            connection.requestMethod =
+                "GET"
+
+            connection.connectTimeout =
+                API_WAKE_CONNECT_TIMEOUT
+
+            connection.readTimeout =
+                API_WAKE_READ_TIMEOUT
+
+            connection.instanceFollowRedirects =
+                true
+
+            applyCommonHeaders(
+                connection,
+                "application/json"
+            )
+
+            val code =
+                connection.responseCode
+
+            val raw =
+                readResponseText(
+                    connection,
+                    code in 200..299
+                )
+
+            code in 200..299 &&
+                runCatching {
+                    JSONObject(raw)
+                        .optBoolean(
+                            "ok",
+                            false
+                        )
+                }.getOrDefault(false)
+
+        } catch (_: Throwable) {
+
+            false
+
+        } finally {
+
+            connection.disconnect()
+        }
     }
 
 
@@ -288,6 +421,8 @@ class LpsmApi(
         code: String
     ): String {
 
+        ensureServerReady()
+
         val payload =
             JSONObject()
                 .put(
@@ -348,6 +483,8 @@ class LpsmApi(
 
     fun config():
         DeviceConfig {
+
+        ensureServerReady()
 
         val json =
             call(

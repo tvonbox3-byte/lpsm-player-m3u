@@ -1,0 +1,14 @@
+LPSM PLAYER 2.2.35 - BUILD 59
+
+CORRECAO PRINCIPAL
+- O aplicativo nao depende mais do painel aberto para acordar o backend.
+- O proprio APK acorda o servidor pelo /api/health.
+- Se houver cache autorizado, a lista abre antes enquanto o servidor sincroniza.
+- Cache completo da M3U: atualizacao pesada a cada 24 horas.
+
+PARA PUBLICAR
+1. Extraia este ZIP e envie o conteudo no repositorio lpsm-player-m3u (Add file > Upload files).
+2. Commit direto na main com o nome:
+   LPSM 2.2.35 Build 59 - app independente do painel
+
+Depois a aba Actions gera o APK automaticamente.
