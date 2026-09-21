@@ -283,8 +283,8 @@ class PlaylistCache(
     }
 
     private companion object {
-        // v6 descarta o catálogo da 2.2.34 que podia ficar incompleto.
-        const val FORMAT_VERSION = 6
+        // v7 força uma nova leitura após as correções de Filmes/Séries da Build 60.
+        const val FORMAT_VERSION = 7
         const val MAX_ENTRIES = 60_000
         const val MAX_STRING_BYTES = 256 * 1024
     }

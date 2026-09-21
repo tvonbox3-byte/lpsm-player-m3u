@@ -30,9 +30,12 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -187,6 +190,15 @@ class MainActivity : AppCompatActivity() {
 
     private var previewPlayingUrl:
         String? = null
+
+    private var previewPlayerRadioProfile =
+        false
+
+    private var previewRadioRetryCount =
+        0
+
+    private var previewRadioRetryRunnable:
+        Runnable? = null
 
     /*
      * BUILD 44 - FULLSCREEN SEM REINICIAR O STREAM
@@ -1095,7 +1107,7 @@ class MainActivity : AppCompatActivity() {
 
                 schedulePreview(
                     item,
-                    450L
+                    300L
                 )
             }
 
@@ -2315,6 +2327,94 @@ class MainActivity : AppCompatActivity() {
             )
     }
 
+    private fun createPreviewPlayer(
+        forRadio: Boolean
+    ): ExoPlayer {
+
+        val loadControl =
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    if (forRadio) 18_000 else 4_000,
+                    if (forRadio) 90_000 else 30_000,
+                    if (forRadio) 1_000 else 350,
+                    if (forRadio) 7_000 else 1_200
+                )
+                .build()
+
+        return ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
+            .build()
+            .also { player ->
+                player.addListener(
+                    object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (
+                                forRadio &&
+                                playbackState == Player.STATE_READY
+                            ) {
+                                previewRadioRetryCount = 0
+                            }
+                        }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            if (forRadio) {
+                                scheduleRadioReconnect()
+                            }
+                        }
+                    }
+                )
+            }
+    }
+
+    /*
+     * Algumas rádios públicas fecham a conexão por alguns segundos.
+     * Em vez de deixar o áudio parado até o cliente trocar de estação,
+     * tentamos reconectar silenciosamente algumas vezes. O buffer maior do
+     * perfil de rádio reduz os cortes quando a conexão oscila rapidamente.
+     */
+    private fun scheduleRadioReconnect() {
+        if (!radioMode || previewRadioRetryCount >= 4) return
+
+        val url = previewPlayingUrl ?: return
+        previewRadioRetryCount += 1
+
+        previewRadioRetryRunnable
+            ?.let(previewHandler::removeCallbacks)
+
+        val delay =
+            when (previewRadioRetryCount) {
+                1 -> 750L
+                2 -> 1_500L
+                3 -> 3_000L
+                else -> 5_000L
+            }
+
+        val reconnect =
+            Runnable {
+                if (!radioMode || previewPlayingUrl != url) {
+                    return@Runnable
+                }
+
+                previewPlayer?.apply {
+                    stop()
+                    clearMediaItems()
+                    setMediaItem(MediaItem.fromUri(url))
+                    prepare()
+                    playWhenReady = true
+                }
+            }
+
+        previewRadioRetryRunnable = reconnect
+        previewHandler.postDelayed(reconnect, delay)
+    }
+
+    private fun cancelRadioReconnect() {
+        previewRadioRetryRunnable
+            ?.let(previewHandler::removeCallbacks)
+        previewRadioRetryRunnable = null
+        previewRadioRetryCount = 0
+    }
+
     private fun playPreviewNow(
         entry: MediaEntry
     ) {
@@ -2322,30 +2422,25 @@ class MainActivity : AppCompatActivity() {
         cancelPendingPreview()
 
         if (
-            previewPlayingUrl ==
-                entry.url &&
-            previewPlayer !=
-                null
+            previewPlayingUrl == entry.url &&
+            previewPlayer != null &&
+            previewPlayerRadioProfile == radioMode
         ) {
-
             return
         }
 
+        cancelRadioReconnect()
+
         if (
-            previewPlayer ==
-            null
+            previewPlayer == null ||
+            previewPlayerRadioProfile != radioMode
         ) {
+            previewPlayerView?.player = null
+            previewPlayer?.release()
 
-            previewPlayer =
-                ExoPlayer
-                    .Builder(
-                        this
-                    )
-                    .build()
-
-            previewPlayerView
-                ?.player =
-                previewPlayer
+            previewPlayerRadioProfile = radioMode
+            previewPlayer = createPreviewPlayer(radioMode)
+            previewPlayerView?.player = previewPlayer
         }
 
         previewPlayingUrl =
@@ -2467,6 +2562,7 @@ class MainActivity : AppCompatActivity() {
     private fun stopPreview() {
 
         cancelPendingPreview()
+        cancelRadioReconnect()
 
         previewPlayingUrl =
             null
@@ -2483,6 +2579,7 @@ class MainActivity : AppCompatActivity() {
     private fun releasePreview() {
 
         cancelPendingPreview()
+        cancelRadioReconnect()
 
         previewPlayingUrl =
             null
@@ -2496,6 +2593,9 @@ class MainActivity : AppCompatActivity() {
 
         previewPlayer =
             null
+
+        previewPlayerRadioProfile =
+            false
     }
 
     private fun currentPreviewEntry():
@@ -2917,8 +3017,18 @@ class MainActivity : AppCompatActivity() {
                 cachedAgeMillis <= playlistRefreshIntervalMillis
             ) {
                 runOnUiThread {
+                    val cachedLive =
+                        cachedIndexes?.byType?.get(ContentType.LIVE)
+                            .orEmpty().size
+                    val cachedVod =
+                        cachedIndexes?.byType?.get(ContentType.VOD)
+                            .orEmpty().size
+                    val cachedSeries =
+                        cachedIndexes?.byType?.get(ContentType.SERIES)
+                            .orEmpty().size
+
                     b.message.text =
-                        "Lista pronta • ${cachedEntries.size} itens"
+                        "Lista pronta • $cachedLive canais • $cachedVod filmes • $cachedSeries episódios"
                 }
 
                 return@execute
@@ -2946,29 +3056,41 @@ class MainActivity : AppCompatActivity() {
             val errors =
                 mutableListOf<String>()
 
+            val seenPlaylistUrls =
+                HashSet<String>()
+
             for (
-                playlist in
-                uniquePlaylists
+                (playlistIndex, playlist) in
+                uniquePlaylists.withIndex()
             ) {
 
                 try {
 
-                    val remaining =
-                        (
-                            60_000 -
-                                all.size
-                            )
-                            .coerceAtLeast(
-                                0
-                            )
+                    val remainingCapacity =
+                        (60_000 - all.size)
+                            .coerceAtLeast(0)
 
-                    if (
-                        remaining ==
-                        0
-                    ) {
-
+                    if (remainingCapacity == 0) {
                         break
                     }
+
+                    /*
+                     * BUILD 60 - várias listas no mesmo MAC.
+                     *
+                     * A versão anterior deixava a PRIMEIRA lista consumir os
+                     * 60 mil itens e encerrava o laço. Quando TV, Filmes e
+                     * Séries estavam em URLs separadas, as duas últimas nunca
+                     * eram lidas. Agora cada URL recebe uma parte justa do
+                     * espaço ainda disponível; se uma lista for pequena, o
+                     * espaço sobra automaticamente para as seguintes.
+                     */
+                    val remainingPlaylists =
+                        (uniquePlaylists.size - playlistIndex)
+                            .coerceAtLeast(1)
+
+                    val playlistBudget =
+                        (remainingCapacity / remainingPlaylists)
+                            .coerceAtLeast(1)
 
                     val partialCallback:
                         ((List<MediaEntry>) -> Unit)? =
@@ -3015,7 +3137,7 @@ class MainActivity : AppCompatActivity() {
                     val parsed =
                         api.downloadPlaylist(
                             playlist.url,
-                            remaining,
+                            playlistBudget,
                             partialCallback
                         )
 
@@ -3028,8 +3150,16 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
 
-                    all +=
-                        parsed
+                    parsed.forEach { item ->
+                        val key =
+                            item.url
+                                .trim()
+                                .lowercase()
+
+                        if (key.isNotBlank() && seenPlaylistUrls.add(key)) {
+                            all += item
+                        }
+                    }
 
                     if (
                         playlist.xmltvUrl
@@ -3154,8 +3284,18 @@ class MainActivity : AppCompatActivity() {
                         b.message.text =
                             "Lista salva mantida • atualização do servidor incompleta"
                     } else if (errors.isEmpty()) {
+                        val liveCount =
+                            displayIndexes.byType[ContentType.LIVE]
+                                .orEmpty().size
+                        val vodCount =
+                            displayIndexes.byType[ContentType.VOD]
+                                .orEmpty().size
+                        val seriesCount =
+                            displayIndexes.byType[ContentType.SERIES]
+                                .orEmpty().size
+
                         b.message.text =
-                            "Lista pronta • ${displayEntries.size} itens"
+                            "Lista pronta • $liveCount canais • $vodCount filmes • $seriesCount episódios"
                     }
                 }
             }

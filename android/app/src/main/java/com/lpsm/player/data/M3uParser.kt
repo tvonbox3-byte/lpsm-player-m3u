@@ -244,7 +244,11 @@ object M3uParser {
             val callback = onPartial ?: return
 
             val firstReady =
-                !firstPartialEmitted && kept >= 1_500
+                !firstPartialEmitted &&
+                    (
+                        buckets.getValue(ContentType.LIVE).size >= 300 ||
+                            kept >= 500
+                    )
 
             val sectionReady =
                 changedType != ContentType.LIVE &&
@@ -475,7 +479,8 @@ object M3uParser {
                                     name = name,
                                     group = group,
                                     url = line,
-                                    episodeInfo = episodeInfo
+                                    episodeInfo = episodeInfo,
+                                    attributes = attributes
                                 )
 
                             val trailerUrl =
@@ -613,8 +618,12 @@ object M3uParser {
         return source.map { entry ->
             if (
                 entry.group.trim().lowercase() !in promotedGroups ||
-                entry.type == ContentType.SERIES
+                entry.type != ContentType.LIVE
             ) {
+                /*
+                 * VOD declarado/identificado nunca deve ser promovido para
+                 * série só porque divide uma categoria pequena com episódios.
+                 */
                 entry
             } else {
                 val episodeInfo = parseEpisodeInfo(entry.name)
@@ -636,7 +645,8 @@ object M3uParser {
         name: String,
         group: String,
         url: String,
-        episodeInfo: EpisodeInfo
+        episodeInfo: EpisodeInfo,
+        attributes: Map<String, String>
     ): ContentType {
 
         val lowerUrl =
@@ -651,14 +661,63 @@ object M3uParser {
             group.lowercase()
 
         /*
-         * PRIMEIRO usamos características
-         * fortes da URL.
+         * BUILD 60
          *
-         * Isso evita um canal chamado
-         * "Canal Filmes" ir para Filmes.
+         * Alguns fornecedores usam a mesma estrutura de URL para TV, filmes
+         * e séries. Antes, um "/live/" na URL podia classificar todo o
+         * catálogo como TV mesmo quando group-title/type dizia FILMES/SÉRIES.
+         * Primeiro respeitamos metadados explícitos e categorias fortes.
          */
-        if ("/live/" in path) {
-            return ContentType.LIVE
+        val declaredType =
+            listOf(
+                "type",
+                "stream-type",
+                "stream_type",
+                "content-type",
+                "content_type",
+                "media-type",
+                "media_type"
+            )
+                .firstNotNullOfOrNull { key ->
+                    attributes[key]
+                        ?.trim()
+                        ?.lowercase()
+                        ?.takeIf { it.isNotBlank() }
+                }
+                .orEmpty()
+
+        when {
+            containsAny(
+                declaredType,
+                listOf("series", "serie", "tvshow", "tv show", "episode")
+            ) -> return ContentType.SERIES
+
+            containsAny(
+                declaredType,
+                listOf("movie", "vod", "film", "filme", "cinema")
+            ) -> return ContentType.VOD
+
+            containsAny(
+                declaredType,
+                listOf("live", "channel", "canal", "tv")
+            ) -> return ContentType.LIVE
+        }
+
+        /* Nome/atributos de episódio são evidência mais forte que o caminho. */
+        if (
+            episodeInfo.episode != null ||
+            episodeInfo.season != null ||
+            episodeInfo.seriesName.isNotBlank()
+        ) {
+            return ContentType.SERIES
+        }
+
+        if (isClearlySeriesGroup(lowerGroup)) {
+            return ContentType.SERIES
+        }
+
+        if (isClearlyVodGroup(lowerGroup)) {
+            return ContentType.VOD
         }
 
         if (
@@ -673,141 +732,113 @@ object M3uParser {
             return ContentType.SERIES
         }
 
-        /*
-         * Nome com S01E01, T01E01,
-         * 1x01 etc. é episódio. Alguns servidores colocam esses episódios
-         * em /movie/, portanto esta evidência precisa vir antes do caminho.
-         */
         if (
-            episodeInfo.episode != null ||
-            episodeInfo.season != null ||
-            episodeInfo.seriesName.isNotBlank()
-        ) {
-            return ContentType.SERIES
-        }
-
-        if (isClearlyLiveGroup(lowerGroup)) {
-            return ContentType.LIVE
-        }
-
-        /*
-         * Categorias explicitamente
-         * de séries.
-         */
-        if (
-            containsAny(
-                lowerGroup,
-                listOf(
-                    "series",
-                    "séries",
-                    "serie",
-                    "série",
-                    "serie ",
-                    "série ",
-                    "tv show",
-                    "tv shows",
-                    "show de tv",
-                    "shows de tv",
-                    "boxset",
-                    "box set",
-                    "seriado",
-                    "seriados",
-                    "temporada",
-                    "temporadas",
-                    "season",
-                    "seasons",
-                    "episodio",
-                    "episódio",
-                    "episodios",
-                    "episódios",
-                    "novela",
-                    "novelas",
-                    "dorama",
-                    "doramas",
-                    "anime",
-                    "animes",
-                    "reality",
-                    "minisserie",
-                    "minissérie"
-                )
-            )
-        ) {
-            return ContentType.SERIES
-        }
-
-        /*
-         * Alguns fornecedores entregam episódios em MPEG-TS. O sufixo .ts
-         * só identifica TV ao vivo depois de excluir URL, nome e categoria
-         * com sinais claros de série.
-         */
-        if (path.endsWith(".ts")) {
-            return ContentType.LIVE
-        }
-
-        if (
-            "/movie/" in path
+            "/movie/" in path ||
+            "/vod/" in path ||
+            "type=movie" in lowerUrl ||
+            "type=vod" in lowerUrl ||
+            "content=movie" in lowerUrl ||
+            "content=vod" in lowerUrl
         ) {
             return ContentType.VOD
         }
 
-        /*
-         * Arquivos típicos de VOD.
-         */
         if (
             path.endsWith(".mp4") ||
             path.endsWith(".mkv") ||
             path.endsWith(".avi") ||
             path.endsWith(".mov") ||
             path.endsWith(".wmv") ||
-            path.endsWith(".webm")
+            path.endsWith(".webm") ||
+            path.endsWith(".m4v")
         ) {
             return ContentType.VOD
         }
 
-        /*
-         * Categorias claramente de
-         * televisão ao vivo.
-         */
-        /*
-         * Categorias claramente de filmes.
-         */
+        /* Só depois das evidências de VOD/Série tratamos /live/ e .ts como TV. */
         if (
-            containsAny(
-                lowerGroup,
-                listOf(
-                    "filmes",
-                    "filme ",
-                    "movies",
-                    "movie ",
-                    "cinema",
-                    "vod "
-                )
-            )
+            "/live/" in path ||
+            isClearlyLiveGroup(lowerGroup) ||
+            path.endsWith(".ts")
         ) {
-            return ContentType.VOD
+            return ContentType.LIVE
         }
 
-        /*
-         * Se não houver nenhuma evidência
-         * de VOD ou Série, consideramos
-         * TV ao vivo.
-         */
         return ContentType.LIVE
     }
 
-    private fun isClearlyLiveGroup(lowerGroup: String): Boolean =
-        containsAny(
+    private fun isClearlySeriesGroup(lowerGroup: String): Boolean {
+        if (isClearlyLiveGroup(lowerGroup)) return false
+
+        return containsAny(
             lowerGroup,
             listOf(
-                "canais",
-                "ao vivo",
-                "tv ao vivo",
-                "live tv",
-                "tv aberta",
-                "canais abertos",
-                "canais fechados"
+                "series",
+                "séries",
+                "serie",
+                "série",
+                "tv show",
+                "tv shows",
+                "show de tv",
+                "shows de tv",
+                "boxset",
+                "box set",
+                "seriado",
+                "seriados",
+                "temporada",
+                "temporadas",
+                "season",
+                "seasons",
+                "episodio",
+                "episódio",
+                "episodios",
+                "episódios",
+                "novela",
+                "novelas",
+                "dorama",
+                "doramas",
+                "anime",
+                "animes",
+                "reality",
+                "minisserie",
+                "minissérie"
             )
         )
+    }
+
+    private fun isClearlyVodGroup(lowerGroup: String): Boolean {
+        if (isClearlyLiveGroup(lowerGroup)) return false
+
+        return containsAny(
+            lowerGroup,
+            listOf(
+                "filmes",
+                "filme ",
+                " filme",
+                "movies",
+                "movie ",
+                " movie",
+                "cinema",
+                "vod ",
+                " vod",
+                "lançamentos",
+                "lancamentos"
+            )
+        )
+    }
+
+    private fun isClearlyLiveGroup(lowerGroup: String): Boolean {
+        val compact = lowerGroup.trim()
+
+        return compact.startsWith("canais") ||
+            compact.startsWith("canal ") ||
+            compact.startsWith("tv ao vivo") ||
+            compact.startsWith("ao vivo") ||
+            compact.startsWith("live tv") ||
+            compact.startsWith("tv aberta") ||
+            compact.startsWith("canais abertos") ||
+            compact.startsWith("canais fechados")
+    }
 
     private fun parseEpisodeInfo(
         name: String
