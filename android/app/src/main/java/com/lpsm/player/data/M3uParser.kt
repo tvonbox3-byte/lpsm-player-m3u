@@ -240,23 +240,6 @@ object M3uParser {
         val seriesKeyAtPosition =
             ArrayList<String>()
 
-        /*
-         * BUILD 63 - preserva também a diversidade de PASTAS de séries.
-         *
-         * Uma mesma série pode aparecer em Netflix, Ação, Lançamentos etc.
-         * Antes o equilíbrio considerava apenas o nome da série. Quando o
-         * limite era atingido, categorias que apareciam mais tarde podiam
-         * desaparecer por completo mesmo contendo títulos válidos.
-         */
-        val seriesGroupCounts =
-            linkedMapOf<String, Int>()
-
-        fun seriesGroupKey(entry: MediaEntry): String =
-            entry.group
-                .trim()
-                .lowercase(Locale.ROOT)
-                .ifBlank { "outros" }
-
         fun trackSeriesAt(
             entry: MediaEntry,
             position: Int
@@ -272,85 +255,26 @@ object M3uParser {
             } else {
                 seriesKeyAtPosition[position] = key
             }
-
-            val groupKey = seriesGroupKey(entry)
-            seriesGroupCounts[groupKey] =
-                (seriesGroupCounts[groupKey] ?: 0) + 1
-        }
-
-        fun untrackSeriesAt(position: Int) {
-            if (position !in seriesBucket.indices) return
-            if (position !in seriesKeyAtPosition.indices) return
-
-            val oldEntry = seriesBucket[position]
-            val oldKey = seriesKeyAtPosition[position]
-            val positions = seriesPositions[oldKey]
-            positions?.remove(position)
-            if (positions != null && positions.isEmpty()) {
-                seriesPositions.remove(oldKey)
-            }
-
-            val groupKey = seriesGroupKey(oldEntry)
-            val next = (seriesGroupCounts[groupKey] ?: 1) - 1
-            if (next <= 0) {
-                seriesGroupCounts.remove(groupKey)
-            } else {
-                seriesGroupCounts[groupKey] = next
-            }
-        }
-
-        fun replaceSeriesAt(
-            position: Int,
-            entry: MediaEntry
-        ): Boolean {
-            if (position !in seriesBucket.indices) return false
-            untrackSeriesAt(position)
-            seriesBucket[position] = entry
-            trackSeriesAt(entry, position)
-            return true
         }
 
         fun untrackLastSeries() {
-            if (seriesBucket.isEmpty()) return
+            if (seriesKeyAtPosition.isEmpty()) return
 
-            val position = seriesBucket.lastIndex
-            untrackSeriesAt(position)
-            seriesKeyAtPosition.removeAt(position)
-        }
+            val position = seriesKeyAtPosition.lastIndex
+            val key = seriesKeyAtPosition.removeAt(position)
+            val positions = seriesPositions[key] ?: return
 
-        fun replaceForSeriesCategoryDiversity(
-            entry: MediaEntry
-        ): Boolean {
-            if (seriesBucket.isEmpty()) return false
+            positions.remove(position)
 
-            val incomingGroup = seriesGroupKey(entry)
-            if ((seriesGroupCounts[incomingGroup] ?: 0) > 0) return false
-
-            val victimGroup =
-                seriesGroupCounts
-                    .entries
-                    .asSequence()
-                    .filter { it.key != incomingGroup && it.value > 2 }
-                    .maxByOrNull { it.value }
-                    ?.key
-                    ?: return false
-
-            val position =
-                seriesBucket.indexOfLast {
-                    seriesGroupKey(it) == victimGroup
-                }
-
-            if (position < 0) return false
-            return replaceSeriesAt(position, entry)
+            if (positions.isEmpty()) {
+                seriesPositions.remove(key)
+            }
         }
 
         fun replaceForSeriesDiversity(
             entry: MediaEntry
         ): Boolean {
             if (seriesBucket.isEmpty()) return false
-
-            /* Categoria nova tem prioridade sobre repetição de episódios. */
-            if (replaceForSeriesCategoryDiversity(entry)) return true
 
             val incomingKey = seriesRetentionKey(entry)
             val incomingCount =
@@ -378,6 +302,7 @@ object M3uParser {
                     }
                     ?: return false
 
+            val victimKey = victim.key
             val victimPositions = victim.value
 
             /* Mantém as quantidades equilibradas e evita troca sem ganho. */
@@ -385,11 +310,14 @@ object M3uParser {
             val position =
                 victimPositions.firstOrNull() ?: return false
 
-            /*
-             * replaceSeriesAt atualiza tanto o índice por título quanto a
-             * contagem por categoria, evitando categorias "fantasmas".
-             */
-            return replaceSeriesAt(position, entry)
+            victimPositions.remove(position)
+            if (victimPositions.isEmpty()) {
+                seriesPositions.remove(victimKey)
+            }
+
+            seriesBucket[position] = entry
+            trackSeriesAt(entry, position)
+            return true
         }
 
         /*
@@ -1101,12 +1029,7 @@ object M3uParser {
                 "animes",
                 "reality",
                 "minisserie",
-                "minissérie",
-                "ser |",
-                "srs |",
-                "srs -",
-                "tv series",
-                "tv séries"
+                "minissérie"
             )
         )
     }

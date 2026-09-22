@@ -2731,7 +2731,6 @@ class MainActivity : AppCompatActivity() {
             api.cachedConfig()
                 ?.let { cachedConfig ->
 
-                    openedFromCache = true
                     lastConfig = cachedConfig
 
                     /*
@@ -2763,6 +2762,7 @@ class MainActivity : AppCompatActivity() {
                             )
 
                         if (localEntries.isNotEmpty()) {
+                            openedFromCache = true
                             preloadedCacheSignature =
                                 signature
                             preloadedCachedEntries =
@@ -2787,18 +2787,21 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
 
-                    runOnUiThread {
-                        showContent(
-                            cachedConfig,
-                            0
-                        )
+                    if (preloadedCachedEntries.isNotEmpty()) {
+                        runOnUiThread {
+                            showContent(
+                                cachedConfig,
+                                0
+                            )
 
-                        b.message.text =
-                            if (preloadedCachedEntries.isNotEmpty()) {
+                            b.message.text =
                                 "Lista salva pronta • ${preloadedCachedEntries.size} itens • sincronizando servidor..."
-                            } else {
-                                "Conectando ao servidor em segundo plano..."
-                            }
+                        }
+                    } else {
+                        runOnUiThread {
+                            b.loadingLabel.text =
+                                "Preparando canais, filmes e séries..."
+                        }
                     }
                 }
 
@@ -2863,20 +2866,17 @@ class MainActivity : AppCompatActivity() {
                 config
 
             /*
-             * Se nao havia configuracao local (primeira abertura/limpeza de
-             * dados), a resposta pequena do painel ja e suficiente para
-             * liberar a HOME. A lista grande continua abaixo em background.
+             * BUILD 64 - primeira abertura só libera a HOME quando o catálogo
+             * completo já foi lido e indexado. Antes a HOME aparecia cedo, mas
+             * Filmes/Séries ficavam vazios enquanto a box ainda processava a
+             * M3U. Agora a tela de carregamento permanece até TV, VOD e Séries
+             * estarem prontos. Nas próximas aberturas o cache de 24h continua
+             * abrindo já preenchido.
              */
             if (!openedFromCache) {
                 runOnUiThread {
-                    showContent(
-                        config,
-                        0
-                    )
-                    if (entries.isEmpty()) {
-                        b.message.text =
-                            "Carregando sua lista em segundo plano..."
-                    }
+                    b.loadingLabel.text =
+                        "Preparando canais, filmes e séries..."
                 }
             }
 
@@ -3081,15 +3081,6 @@ class MainActivity : AppCompatActivity() {
             val seenPlaylistUrls =
                 HashSet<String>()
 
-            /*
-             * Publicamos no máximo uma vez por tipo durante a leitura. Isso
-             * faz Filmes/Séries aparecerem cedo mesmo quando estão na 2ª/3ª
-             * URL, sem reconstruir índices a cada pequeno lote.
-             */
-            val progressiveTypesPublished =
-                mutableSetOf<ContentType>()
-            var progressivePublishedOnce = false
-
             for (
                 (playlistIndex, playlist) in
                 uniquePlaylists.withIndex()
@@ -3123,62 +3114,15 @@ class MainActivity : AppCompatActivity() {
                         (remainingCapacity / remainingPlaylists)
                             .coerceAtLeast(1)
 
+                    /*
+                     * BUILD 64 - não reconstruímos os índices enquanto a M3U
+                     * ainda está chegando. Em boxes fracas isso fazia o parser
+                     * disputar CPU com render/agrupamento e podia deixar VOD e
+                     * Séries vazios por vários minutos. Indexamos uma única vez
+                     * depois que todas as URLs foram lidas.
+                     */
                     val partialCallback:
-                        ((List<MediaEntry>) -> Unit)? =
-                        if (cachedEntries.isEmpty()) {
-                            { partial ->
-                                val availableTypes =
-                                    partial
-                                        .asSequence()
-                                        .map { it.type }
-                                        .toSet()
-
-                                val hasNewSection =
-                                    availableTypes.any {
-                                        it !in progressiveTypesPublished
-                                    }
-
-                                if (!progressivePublishedOnce || hasNewSection) {
-                                    val progressive =
-                                        ArrayList<MediaEntry>(
-                                            all.size + partial.size
-                                        ).apply {
-                                            addAll(all)
-                                            addAll(partial)
-                                        }
-
-                                    val progressiveIndexes =
-                                        buildEntryIndexes(progressive)
-
-                                    progressiveTypesPublished += availableTypes
-                                    progressivePublishedOnce = true
-
-                                    runOnUiThread {
-                                        entries = progressive
-                                        applyEntryIndexes(progressiveIndexes)
-                                        epg = emptyMap()
-
-                                        val live =
-                                            progressiveIndexes.byType[ContentType.LIVE]
-                                                .orEmpty().size
-                                        val vod =
-                                            progressiveIndexes.byType[ContentType.VOD]
-                                                .orEmpty().size
-                                        val series =
-                                            progressiveIndexes.seriesCards.size
-
-                                        b.message.text =
-                                            "Carregando... $live canais • $vod filmes • $series séries"
-
-                                        if (b.content.visibility == View.VISIBLE) {
-                                            render()
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            null
-                        }
+                        ((List<MediaEntry>) -> Unit)? = null
 
                     val parsed =
                         api.downloadPlaylist(
@@ -7328,11 +7272,12 @@ class MainActivity : AppCompatActivity() {
             )
 
         /*
-         * BUILD 63 - uma série pode pertencer a mais de uma pasta do
-         * fornecedor (ex.: Netflix, Lançamentos, Ação). Antes cada card era
-         * colocado apenas na categoria majoritária e as demais pastas
-         * desapareciam. Agora o mesmo card pode aparecer em todas as pastas
-         * originais sem duplicar o título em "Tudo".
+         * BUILD 64 - preserva as categorias originais de Séries sem criar um
+         * groupBy gigante com todos os episódios. A Build 63 montava listas
+         * intermediárias enormes e, em TV Boxes fracas, isso podia prender a
+         * indexação a ponto de Filmes/Séries parecerem vazios. Agora fazemos
+         * uma única passagem: cada episódio apenas registra o card da sua série
+         * na pasta correspondente.
          */
         val seriesCardByKey =
             indexedSeriesCards.associateBy {
@@ -7344,23 +7289,17 @@ class MainActivity : AppCompatActivity() {
 
         byType[ContentType.SERIES]
             .orEmpty()
-            .groupBy { seriesLookupKey(it) }
-            .forEach { (seriesKeyValue, episodes) ->
-                val card = seriesCardByKey[seriesKeyValue] ?: return@forEach
+            .forEach { episode ->
+                val key = seriesLookupKey(episode)
+                val card = seriesCardByKey[key] ?: return@forEach
+                val groupName =
+                    episode.group
+                        .ifBlank { "Outros" }
+                        .trim()
+                        .ifBlank { "Outros" }
 
-                val groups =
-                    episodes
-                        .asSequence()
-                        .map { it.group.ifBlank { "Outros" }.trim() }
-                        .filter { it.isNotBlank() }
-                        .distinct()
-                        .toList()
-                        .ifEmpty { listOf("Outros") }
-
-                groups.forEach { groupName ->
-                    seriesGroupsMutable
-                        .getOrPut(groupName) { linkedMapOf() }[seriesKeyValue] = card
-                }
+                seriesGroupsMutable
+                    .getOrPut(groupName) { linkedMapOf() }[key] = card
             }
 
         val indexedSeriesCardsByGroup =

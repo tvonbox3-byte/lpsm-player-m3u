@@ -49,3 +49,7 @@ Reconhece mais formatos de categoria, evita canais ao vivo dentro de Séries, am
 
 ## Build 63
 Preserva múltiplas categorias de séries, exibe contagens do catálogo, evita canais HLS dentro de Séries e prioriza A Fazenda/Big Brother/BBB nas categorias ao vivo.
+
+## Build 64 - preload de catálogo
+
+A primeira abertura sem cache aguarda a leitura e indexação completa do catálogo antes de liberar a HOME. Com cache válido de 24 horas, o conteúdo abre já carregado. A classificação de Filmes/Séries voltou à base estável da Build 62, mantendo as correções de canais e a prioridade de realities/RS.
