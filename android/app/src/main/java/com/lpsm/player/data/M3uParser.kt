@@ -432,6 +432,7 @@ object M3uParser {
         }
 
         var metadata = ""
+        var extGroup = ""
 
         reader
             .buffered(64 * 1024)
@@ -449,6 +450,22 @@ object M3uParser {
                             true
                         ) -> {
                             metadata = line
+                            extGroup = ""
+                        }
+
+                        /*
+                         * Muitas listas (principalmente VOD grandes) colocam a
+                         * categoria em #EXTGRP em vez de group-title. Ignorar
+                         * isso fazia milhares de filmes/séries caírem em
+                         * "Outros" e dava a impressão de poucas pastas.
+                         */
+                        line.startsWith(
+                            "#EXTGRP:",
+                            true
+                        ) && metadata.isNotEmpty() -> {
+                            extGroup =
+                                line.substringAfter(':', "")
+                                    .normalizeGroupName()
                         }
 
                         line.isNotEmpty() &&
@@ -478,13 +495,23 @@ object M3uParser {
                                     }
 
                             val group =
-                                attributes[
-                                    "group-title"
-                                ]
-                                    ?.normalizeGroupName()
-                                    ?.ifBlank {
-                                        "Outros"
+                                listOf(
+                                    "group-title",
+                                    "group",
+                                    "group-name",
+                                    "group_name",
+                                    "tvg-group",
+                                    "tvg_group",
+                                    "category",
+                                    "category-name",
+                                    "category_name"
+                                )
+                                    .firstNotNullOfOrNull { key ->
+                                        attributes[key]
+                                            ?.normalizeGroupName()
+                                            ?.takeIf { it.isNotBlank() }
                                     }
+                                    ?: extGroup.takeIf { it.isNotBlank() }
                                     ?: "Outros"
 
                             val logo =
@@ -670,6 +697,7 @@ object M3uParser {
                             )
 
                             metadata = ""
+                            extGroup = ""
                         }
                     }
                 }
@@ -682,7 +710,9 @@ object M3uParser {
                 addAll(buckets.getValue(ContentType.SERIES))
             }
 
-        return normalizeSeriesGroups(keptEntries)
+        return normalizeVodGroups(
+            normalizeSeriesGroups(keptEntries)
+        )
     }
 
     /*
@@ -753,6 +783,66 @@ object M3uParser {
         }
     }
 
+    /*
+     * Alguns catálogos usam nomes de pasta genéricos (Ação, Terror, Infantil)
+     * e só parte dos itens traz um sinal inequívoco de VOD. Quando o grupo não
+     * possui transporte de TV ao vivo e já contém filmes identificados,
+     * promovemos os itens restantes do mesmo grupo para VOD. Isso preserva as
+     * pastas originais do fornecedor sem transformar canais reais em filmes.
+     */
+    private fun normalizeVodGroups(
+        source: List<MediaEntry>
+    ): List<MediaEntry> {
+        val promotedGroups =
+            source
+                .groupBy { it.group.trim().lowercase(Locale.ROOT) }
+                .filterValues { items ->
+                    val vodCount =
+                        items.count { it.type == ContentType.VOD }
+
+                    val hasSeries =
+                        items.any { it.type == ContentType.SERIES }
+
+                    val hasLiveTransport =
+                        items.any { entry ->
+                            val path =
+                                entry.url.lowercase(Locale.ROOT)
+                                    .substringBefore('?')
+                                    .substringBefore('#')
+
+                            ("/live/" in path || path.endsWith(".ts")) &&
+                                entry.tvgId.isNotBlank()
+                        }
+
+                    val clearlyLiveGroup =
+                        items.any {
+                            isClearlyLiveGroup(
+                                it.group.lowercase(Locale.ROOT)
+                            )
+                        }
+
+                    !hasSeries &&
+                        !hasLiveTransport &&
+                        !clearlyLiveGroup &&
+                        vodCount > 0 &&
+                        (items.size <= 5 || vodCount * 3 >= items.size)
+                }
+                .keys
+
+        if (promotedGroups.isEmpty()) return source
+
+        return source.map { entry ->
+            if (
+                entry.group.trim().lowercase(Locale.ROOT) in promotedGroups &&
+                entry.type == ContentType.LIVE
+            ) {
+                entry.copy(type = ContentType.VOD)
+            } else {
+                entry
+            }
+        }
+    }
+
     private fun detectType(
         name: String,
         group: String,
@@ -815,7 +905,7 @@ object M3uParser {
             ) -> return ContentType.LIVE
         }
 
-        /* Nome/atributos de episódio são evidência mais forte que o caminho. */
+        /* Nome/atributos de episódio são a evidência mais forte para Série. */
         if (
             episodeInfo.episode != null ||
             episodeInfo.season != null ||
@@ -824,14 +914,7 @@ object M3uParser {
             return ContentType.SERIES
         }
 
-        if (isClearlySeriesGroup(lowerGroup)) {
-            return ContentType.SERIES
-        }
-
-        if (isClearlyVodGroup(lowerGroup)) {
-            return ContentType.VOD
-        }
-
+        /* Caminhos explícitos de catálogo vencem nomes genéricos de pasta. */
         if (
             "/series/" in path ||
             "/serie/" in path ||
@@ -855,6 +938,39 @@ object M3uParser {
             return ContentType.VOD
         }
 
+        val liveTransport =
+            "/live/" in path || path.endsWith(".ts")
+
+        val hasTvgIdentity =
+            attributes["tvg-id"]
+                ?.trim()
+                ?.isNotBlank() == true
+
+        val channelishName =
+            Regex(
+                """(?i)^(?:canal|tv|rede|24h|24\s*horas|ao\s*vivo|live\s*[-:])\b"""
+            ).containsMatchIn(name.trim())
+
+        /*
+         * Corrige o caso relatado em que canais ao vivo da pasta "Séries"
+         * viravam capas de série. Transporte LIVE + identidade de EPG/nome de
+         * canal é suficiente para manter o item em TV ao vivo.
+         */
+        if (
+            liveTransport &&
+            (hasTvgIdentity || channelishName || isClearlyLiveGroup(lowerGroup))
+        ) {
+            return ContentType.LIVE
+        }
+
+        if (isClearlySeriesGroup(lowerGroup)) {
+            return ContentType.SERIES
+        }
+
+        if (isClearlyVodGroup(lowerGroup)) {
+            return ContentType.VOD
+        }
+
         if (
             path.endsWith(".mp4") ||
             path.endsWith(".mkv") ||
@@ -862,17 +978,14 @@ object M3uParser {
             path.endsWith(".mov") ||
             path.endsWith(".wmv") ||
             path.endsWith(".webm") ||
-            path.endsWith(".m4v")
+            path.endsWith(".m4v") ||
+            path.endsWith(".mpg") ||
+            path.endsWith(".mpeg")
         ) {
             return ContentType.VOD
         }
 
-        /* Só depois das evidências de VOD/Série tratamos /live/ e .ts como TV. */
-        if (
-            "/live/" in path ||
-            isClearlyLiveGroup(lowerGroup) ||
-            path.endsWith(".ts")
-        ) {
+        if (liveTransport) {
             return ContentType.LIVE
         }
 

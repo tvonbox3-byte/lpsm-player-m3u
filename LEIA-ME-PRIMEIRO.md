@@ -30,3 +30,8 @@ Uma alteração enviada para a branch `main` publica o backend no Render. Quando
 ## Render gratuito
 
 O servidor gratuito pode dormir depois de 15 minutos sem acesso. O cache local permite que o painel apareça imediatamente nas visitas seguintes, mas a API ainda precisa despertar. Para eliminar a espera inclusive na primeira visita, use uma instância Render que não durma ou hospede a interface separadamente como site estático.
+
+
+## Build 62 - Filmes e Séries
+
+Reconhece mais formatos de categoria, evita canais ao vivo dentro de Séries, amplia o catálogo e deixa a grade de capas mais compacta/rápida.

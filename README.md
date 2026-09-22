@@ -41,3 +41,8 @@ O serviço publicado usa Supabase quando `SUPABASE_URL` e `SUPABASE_SECRET_KEY` 
 O painel aplica HTTPS pelo Render, tokens assinados, hash scrypt para a senha, sessão administrativa temporária, limitação de tentativas, cabeçalhos de segurança e cache do painel. O APK é assinado no GitHub Actions e, a partir da versão 2.2.16, também verifica o SHA-256 da atualização antes de abrir o instalador.
 
 O plano gratuito do Render entra em repouso após um período sem acessos. Nas visitas seguintes, o navegador pode mostrar a interface armazenada enquanto o servidor desperta; a primeira visita após o repouso ainda pode levar cerca de um minuto.
+
+
+## Build 62 - Filmes e Séries
+
+Reconhece mais formatos de categoria, evita canais ao vivo dentro de Séries, amplia o catálogo e deixa a grade de capas mais compacta/rápida.

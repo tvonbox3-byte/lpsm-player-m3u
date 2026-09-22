@@ -297,12 +297,12 @@ class MainActivity : AppCompatActivity() {
             manager?.memoryClass ?: 256
 
         return when {
-            manager?.isLowRamDevice == true -> 90_000
-            memoryClass <= 128 -> 90_000
-            memoryClass <= 192 -> 110_000
-            memoryClass <= 256 -> 130_000
-            memoryClass <= 384 -> 150_000
-            else -> 180_000
+            manager?.isLowRamDevice == true -> 120_000
+            memoryClass <= 128 -> 120_000
+            memoryClass <= 192 -> 160_000
+            memoryClass <= 256 -> 200_000
+            memoryClass <= 384 -> 230_000
+            else -> 260_000
         }
     }
 
@@ -1298,20 +1298,13 @@ class MainActivity : AppCompatActivity() {
 
             ContentType.VOD,
             ContentType.SERIES -> {
-
-                b.previewTopHost.visibility =
-                    View.VISIBLE
-
-                movePreviewTo(
-                    host =
-                        b.previewTopHost,
-
-                    compact =
-                        true
-                )
-
-                b.previewSideHost.visibility =
-                    View.GONE
+                /*
+                 * BUILD 62 - visual de catálogo semelhante aos players de TV:
+                 * categorias à esquerda e grade de capas ocupando a largura.
+                 * Detalhes continuam abrindo no OK; a prévia não rouba espaço.
+                 */
+                b.previewTopHost.visibility = View.GONE
+                b.previewSideHost.visibility = View.GONE
             }
 
             else -> {
@@ -3050,11 +3043,11 @@ class MainActivity : AppCompatActivity() {
                         cachedIndexes?.byType?.get(ContentType.VOD)
                             .orEmpty().size
                     val cachedSeries =
-                        cachedIndexes?.byType?.get(ContentType.SERIES)
+                        cachedIndexes?.seriesCards
                             .orEmpty().size
 
                     b.message.text =
-                        "Lista pronta • $cachedLive canais • $cachedVod filmes • $cachedSeries episódios"
+                        "Lista pronta • $cachedLive canais • $cachedVod filmes • $cachedSeries séries"
                 }
 
                 return@execute
@@ -3087,6 +3080,15 @@ class MainActivity : AppCompatActivity() {
 
             val seenPlaylistUrls =
                 HashSet<String>()
+
+            /*
+             * Publicamos no máximo uma vez por tipo durante a leitura. Isso
+             * faz Filmes/Séries aparecerem cedo mesmo quando estão na 2ª/3ª
+             * URL, sem reconstruir índices a cada pequeno lote.
+             */
+            val progressiveTypesPublished =
+                mutableSetOf<ContentType>()
+            var progressivePublishedOnce = false
 
             for (
                 (playlistIndex, playlist) in
@@ -3123,39 +3125,54 @@ class MainActivity : AppCompatActivity() {
 
                     val partialCallback:
                         ((List<MediaEntry>) -> Unit)? =
-                        if (
-                            cachedEntries.isEmpty() &&
-                            all.isEmpty()
-                        ) {
+                        if (cachedEntries.isEmpty()) {
                             { partial ->
+                                val availableTypes =
+                                    partial
+                                        .asSequence()
+                                        .map { it.type }
+                                        .toSet()
 
-                            /*
-                             * BUILD 41: libera conteúdo parcial enquanto a
-                             * lista grande ainda está chegando/processando.
-                             * Assim uma box lenta já consegue navegar em vez
-                             * de permanecer com as seções vazias.
-                             */
-                            val progressive =
-                                ArrayList<MediaEntry>(
-                                    all.size + partial.size
-                                ).apply {
-                                    addAll(all)
-                                    addAll(partial)
-                                }
+                                val hasNewSection =
+                                    availableTypes.any {
+                                        it !in progressiveTypesPublished
+                                    }
 
-                            val progressiveIndexes =
-                                buildEntryIndexes(progressive)
+                                if (!progressivePublishedOnce || hasNewSection) {
+                                    val progressive =
+                                        ArrayList<MediaEntry>(
+                                            all.size + partial.size
+                                        ).apply {
+                                            addAll(all)
+                                            addAll(partial)
+                                        }
 
-                                runOnUiThread {
-                                    entries = progressive
-                                    applyEntryIndexes(progressiveIndexes)
-                                    epg = emptyMap()
+                                    val progressiveIndexes =
+                                        buildEntryIndexes(progressive)
 
-                                    b.message.text =
-                                        "Lista carregando... ${progressive.size} itens disponíveis"
+                                    progressiveTypesPublished += availableTypes
+                                    progressivePublishedOnce = true
 
-                                    if (b.content.visibility == View.VISIBLE) {
-                                        render()
+                                    runOnUiThread {
+                                        entries = progressive
+                                        applyEntryIndexes(progressiveIndexes)
+                                        epg = emptyMap()
+
+                                        val live =
+                                            progressiveIndexes.byType[ContentType.LIVE]
+                                                .orEmpty().size
+                                        val vod =
+                                            progressiveIndexes.byType[ContentType.VOD]
+                                                .orEmpty().size
+                                        val series =
+                                            progressiveIndexes.seriesCards.size
+
+                                        b.message.text =
+                                            "Carregando... $live canais • $vod filmes • $series séries"
+
+                                        if (b.content.visibility == View.VISIBLE) {
+                                            render()
+                                        }
                                     }
                                 }
                             }
@@ -3320,11 +3337,10 @@ class MainActivity : AppCompatActivity() {
                             displayIndexes.byType[ContentType.VOD]
                                 .orEmpty().size
                         val seriesCount =
-                            displayIndexes.byType[ContentType.SERIES]
-                                .orEmpty().size
+                            displayIndexes.seriesCards.size
 
                         b.message.text =
-                            "Lista pronta • $liveCount canais • $vodCount filmes • $seriesCount episódios"
+                            "Lista pronta • $liveCount canais • $vodCount filmes • $seriesCount séries"
                     }
                 }
             }
@@ -7185,23 +7201,23 @@ class MainActivity : AppCompatActivity() {
 
                 screenHeightDp() <=
                     380 ->
-                    112
+                    104
 
                 screenHeightDp() <=
-                    520 ->
-                    145
+                    600 ->
+                    128
 
                 else ->
-                    190
+                    156
             }
 
         return (
             availableWidth /
-                (targetCardWidth + 10)
+                (targetCardWidth + 8)
             )
             .coerceIn(
-                2,
-                6
+                3,
+                7
             )
     }
 
