@@ -339,14 +339,14 @@ object M3uParser {
             val firstReady =
                 !firstPartialEmitted &&
                     (
-                        buckets.getValue(ContentType.LIVE).size >= 300 ||
-                            kept >= 500
+                        buckets.getValue(ContentType.LIVE).size >= 80 ||
+                            kept >= 120
                     )
 
             val sectionReady =
                 changedType != ContentType.LIVE &&
                     changedType !in readyTypePartials &&
-                    buckets.getValue(changedType).size >= 200
+                    buckets.getValue(changedType).size >= 120
 
             if (!firstReady && !sectionReady) return
 

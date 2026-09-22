@@ -1,15 +1,14 @@
-LPSM PLAYER 2.2.35 - BUILD 64
+LPSM PLAYER 2.2.35 - BUILD 65
 
-CORRECAO PRINCIPAL
-- Filmes e Series voltam ao parser estavel da Build 62.
-- Mantem os canais que ja estavam funcionando bem.
-- A HOME so aparece depois que TV, Filmes e Series estiverem prontos quando nao houver cache.
-- Com cache valido de 24 horas, abre ja carregado.
-- Series preservam mais categorias com indexacao leve em uma unica passagem.
-- A Fazenda, Big Brother/BBB, Jogos de Hoje e RS/RBS continuam priorizados.
+CORREÇÃO PRINCIPAL
+- Remove o loading infinito da Build 64.
+- Abre a interface assim que chega a primeira parte da lista.
+- Canais aparecem primeiro e Filmes/Séries entram progressivamente.
+- O catálogo completo continua carregando em segundo plano.
+- Cache de 24 horas continua abrindo instantaneamente quando disponível.
 
 PARA PUBLICAR
-1. Extraia este ZIP e envie o conteudo de lpsm-player-m3u-main para o repositorio lpsm-player-m3u (Add file > Upload files).
+1. Extraia este ZIP e envie o conteúdo da pasta lpsm-player-m3u-main para o repositório lpsm-player-m3u (Add file > Upload files).
 2. Commit direto na main com o nome:
-   LPSM 2.2.35 Build 64 - preload filmes series e canais estaveis
+   LPSM 2.2.35 Build 65 - abertura rapida sem loading infinito
 3. Aguarde a aba Actions gerar o APK.

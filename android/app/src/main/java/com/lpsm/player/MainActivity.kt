@@ -2866,17 +2866,16 @@ class MainActivity : AppCompatActivity() {
                 config
 
             /*
-             * BUILD 64 - primeira abertura só libera a HOME quando o catálogo
-             * completo já foi lido e indexado. Antes a HOME aparecia cedo, mas
-             * Filmes/Séries ficavam vazios enquanto a box ainda processava a
-             * M3U. Agora a tela de carregamento permanece até TV, VOD e Séries
-             * estarem prontos. Nas próximas aberturas o cache de 24h continua
-             * abrindo já preenchido.
+             * BUILD 65 - sem loading infinito.
+             * Se não houver cache, mostramos apenas um loading curto até a
+             * primeira amostra da M3U. A HOME então abre e o catálogo completo
+             * continua sendo montado em segundo plano. Com cache de 24h, abre
+             * imediatamente já preenchido.
              */
             if (!openedFromCache) {
                 runOnUiThread {
                     b.loadingLabel.text =
-                        "Preparando canais, filmes e séries..."
+                        "Carregando primeira parte da lista..."
                 }
             }
 
@@ -3115,14 +3114,97 @@ class MainActivity : AppCompatActivity() {
                             .coerceAtLeast(1)
 
                     /*
-                     * BUILD 64 - não reconstruímos os índices enquanto a M3U
-                     * ainda está chegando. Em boxes fracas isso fazia o parser
-                     * disputar CPU com render/agrupamento e podia deixar VOD e
-                     * Séries vazios por vários minutos. Indexamos uma única vez
-                     * depois que todas as URLs foram lidas.
+                     * BUILD 65 - abertura em poucos segundos.
+                     *
+                     * A Build 64 esperava a lista inteira (que pode ter mais de
+                     * 200 mil itens) antes de sair do loading. Em listas grandes
+                     * isso podia levar minutos. O parser já sabe entregar apenas
+                     * alguns marcos progressivos; usamos esses marcos para abrir
+                     * a HOME assim que houver conteúdo suficiente e deixamos o
+                     * catálogo completo terminar em segundo plano.
+                     *
+                     * São poucas entregas (primeira amostra + VOD + Séries),
+                     * portanto não voltamos ao problema antigo de reconstruir os
+                     * índices centenas de vezes enquanto a M3U chega.
                      */
+                    val previousListsSnapshot = all.toList()
+
                     val partialCallback:
-                        ((List<MediaEntry>) -> Unit)? = null
+                        ((List<MediaEntry>) -> Unit)? = { currentPartial ->
+
+                            if (currentPartial.isNotEmpty()) {
+
+                                /*
+                                 * A amostra usada para ABRIR a interface é
+                                 * propositalmente pequena. Indexar 100-200 mil
+                                 * itens dentro do callback progressivo faria o
+                                 * parser parar novamente. O catálogo integral
+                                 * continua abaixo e substitui esta amostra ao
+                                 * terminar.
+                                 */
+                                val progressive = ArrayList<MediaEntry>(9_500)
+                                val progressiveSeen = HashSet<String>()
+                                val progressiveCounts = mutableMapOf(
+                                    ContentType.LIVE to 0,
+                                    ContentType.VOD to 0,
+                                    ContentType.SERIES to 0
+                                )
+                                val progressiveLimits = mapOf(
+                                    ContentType.LIVE to 2_500,
+                                    ContentType.VOD to 4_000,
+                                    ContentType.SERIES to 3_000
+                                )
+
+                                fun appendQuickSample(items: List<MediaEntry>) {
+                                    items.forEach { item ->
+                                        val used = progressiveCounts[item.type] ?: 0
+                                        val typeLimit = progressiveLimits[item.type] ?: 0
+                                        if (used >= typeLimit) return@forEach
+
+                                        val key = item.url.trim().lowercase()
+                                        if (key.isNotBlank() && progressiveSeen.add(key)) {
+                                            progressive += item
+                                            progressiveCounts[item.type] = used + 1
+                                        }
+                                    }
+                                }
+
+                                appendQuickSample(previousListsSnapshot)
+                                appendQuickSample(currentPartial)
+
+                                if (progressive.isNotEmpty()) {
+                                    val progressiveIndexes =
+                                        buildEntryIndexes(progressive)
+
+                                    runOnUiThread {
+                                        entries = progressive
+                                        applyEntryIndexes(progressiveIndexes)
+                                        epg = emptyMap()
+
+                                        val wasBrowsing =
+                                            b.content.visibility == View.VISIBLE
+
+                                        if (wasBrowsing) {
+                                            render()
+                                        } else {
+                                            showContent(config, errors.size)
+                                        }
+
+                                        val liveNow =
+                                            progressiveIndexes.byType[ContentType.LIVE]
+                                                .orEmpty().size
+                                        val vodNow =
+                                            progressiveIndexes.byType[ContentType.VOD]
+                                                .orEmpty().size
+                                        val seriesNow =
+                                            progressiveIndexes.seriesCards.size
+
+                                        b.message.text =
+                                            "Abrindo rápido • $liveNow canais • $vodNow filmes • $seriesNow séries • completando catálogo..."
+                                    }
+                                }
+                            }
+                        }
 
                     val parsed =
                         api.downloadPlaylist(
