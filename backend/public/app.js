@@ -1288,49 +1288,87 @@ async function load() {
 
 
 /*
- * Atualiza ONLINE/OFFLINE automaticamente.
- * Formulários abertos não são interrompidos.
+ * Atualiza SOMENTE presença/"assistindo agora".
+ *
+ * Antes o painel baixava /api/admin/state inteiro a cada 2 segundos e
+ * reconstruía clientes, listas, aparência e auditoria. Em um servidor
+ * pequeno isso podia disputar recursos com o APK. Agora o estado completo
+ * é carregado somente quando necessário; a presença usa um endpoint leve.
  */
-setInterval(
-  async () => {
+async function refreshPresence() {
+
+  if (
+    !sessionStorage.lpsmToken ||
+    document.hidden ||
+    presenceRefreshInFlight ||
+    document.querySelector(
+      'dialog[open]'
+    )
+  ) {
+    return;
+  }
+
+  presenceRefreshInFlight =
+    true;
+
+  try {
+    const presence =
+      await request(
+        '/api/admin/presence'
+      );
+
+    const byId =
+      new Map(
+        (presence.clients || [])
+          .map(
+            client => [
+              String(client.id),
+              client
+            ]
+          )
+      );
+
+    state.clients =
+      state.clients.map(
+        client => ({
+          ...client,
+          ...(byId.get(String(client.id)) || {})
+        })
+      );
+
+    renderClientList();
+    renderSummary();
+
+  } catch (error) {
 
     if (
-      !sessionStorage.lpsmToken ||
-      document.hidden ||
-      presenceRefreshInFlight ||
-      document.querySelector(
-        'dialog[open]'
-      )
+      error.status !==
+      401
     ) {
-      return;
-    }
-
-    presenceRefreshInFlight =
-      true;
-
-    try {
-      await load();
-    } catch (error) {
-
-      if (
-        error.status ===
-        401
-      ) {
-        return;
-      }
-
       console.debug(
         'Presença temporariamente indisponível',
         error.message
       );
-
-    } finally {
-
-      presenceRefreshInFlight =
-        false;
     }
-  },
-  2_000
+
+  } finally {
+    presenceRefreshInFlight =
+      false;
+  }
+}
+
+setInterval(
+  refreshPresence,
+  5_000
+);
+
+document.addEventListener(
+  'visibilitychange',
+  () => {
+    if (!document.hidden) {
+      refreshPresence();
+    }
+  }
 );
 
 function clientAuthorizationMarkup(
@@ -1759,13 +1797,7 @@ function renderClientList() {
    RENDER
    ============================== */
 
-function render() {
-
-  ensureExtraStyles();
-  ensurePendingArea();
-  ensureClientSourceWarning();
-  ensureMacHelp();
-
+function renderSummary() {
   const activeClients =
     state.clients.filter(
       client =>
@@ -1787,12 +1819,23 @@ function render() {
         true
     ).length;
 
-  $('#summary')
-    .textContent =
+  const summary = $('#summary');
+  if (summary) {
+    summary.textContent =
       `${activeClients} clientes ativos · ` +
       `${onlineClients} online agora · ` +
       `${activeSources} fontes ativas · ` +
       `${state.pendingDevices.length} MAC(s) aguardando`;
+  }
+}
+
+function render() {
+
+  ensureExtraStyles();
+  ensurePendingArea();
+  ensureClientSourceWarning();
+  ensureMacHelp();
+  renderSummary();
 
   $('#pendingList')
     .innerHTML =

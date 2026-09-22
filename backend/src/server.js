@@ -2238,6 +2238,44 @@ async function api(
 
   /*
    * ========================================
+   * PRESENÇA LEVE DO PAINEL
+   * ========================================
+   * O painel não deve recarregar clientes, fontes, aparência e auditoria
+   * a cada poucos segundos. Em hospedagem pequena isso disputa CPU/rede
+   * com os aparelhos. Este endpoint retorna somente o estado volátil de
+   * presença/reprodução necessário para atualizar ONLINE/OFFLINE.
+   */
+  if (
+    req.method ===
+      'GET' &&
+
+    path ===
+      '/api/admin/presence'
+  ) {
+
+    return json(
+      res,
+      200,
+      {
+        clients:
+          store.data.clients
+            .map(
+              client => ({
+                id: client.id,
+                ...presenceForClient(client)
+              })
+            ),
+
+        presenceWindowSeconds:
+          DEVICE_ONLINE_WINDOW_MS /
+          1000
+      }
+    );
+  }
+
+
+  /*
+   * ========================================
    * MONITOR - MESMO STREAM DO CLIENTE
    * ========================================
    * Retorna a URL somente quando o administrador
