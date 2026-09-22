@@ -283,9 +283,9 @@ class PlaylistCache(
     }
 
     private companion object {
-        // v7 força uma nova leitura após as correções de Filmes/Séries da Build 60.
-        const val FORMAT_VERSION = 7
-        const val MAX_ENTRIES = 60_000
+        // v8 força uma nova leitura para o catálogo ampliado/adaptativo da Build 61.
+        const val FORMAT_VERSION = 8
+        const val MAX_ENTRIES = 180_000
         const val MAX_STRING_BYTES = 256 * 1024
     }
 }

@@ -1,16 +1,14 @@
-LPSM PLAYER 2.2.35 - BUILD 60
+LPSM PLAYER 2.2.35 - BUILD 61
 
-CORRECOES
-- Filmes e Series: parser mais robusto e cache antigo invalidado.
-- Varias listas: TV, Filmes e Series recebem espaco para carregar.
-- Canais: liberacao inicial mais rapida e previa abre mais cedo.
-- Radios: buffer maior e reconexao automatica para reduzir cortes.
-- Mantem a correcao da Build 59: aplicativo nao depende do painel aberto.
+CORRECAO PRINCIPAL
+- Catalogo de Filmes e Series ampliado.
+- Mais categorias preservadas em listas grandes.
+- Limite adaptativo conforme a memoria da TV Box/celular.
+- Cache v8, valido por 24 horas apos a primeira carga.
+- Mantem correcoes anteriores de painel independente, radios e canais rapidos.
 
 PARA PUBLICAR
-1. Extraia este ZIP.
-2. No repositorio tvonbox3-byte/lpsm-player-m3u use Add file > Upload files.
-3. Envie TODO o conteudo desta pasta para a raiz do repositorio.
-4. Commit direto na main com o nome:
-   LPSM 2.2.35 Build 60 - filmes series radios e canais rapidos
-5. Abra Actions e aguarde o APK ser gerado.
+1. Envie todo o conteudo desta pasta para o repositorio lpsm-player-m3u (Add file > Upload files).
+2. Commit direto na main com o nome:
+   LPSM 2.2.35 Build 61 - catalogo completo filmes e series
+3. Aguarde a aba Actions gerar o APK automaticamente.

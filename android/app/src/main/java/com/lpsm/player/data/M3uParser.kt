@@ -77,7 +77,8 @@ object M3uParser {
             """(?i)\b(?:ep|epis[oó]dio|episode|cap(?:[ií]tulo)?)\s*\.?\s*(\d{1,3})\b"""
         )
 
-    private const val SERIES_DIVERSITY_EPISODES = 4
+    private const val SERIES_DIVERSITY_EPISODES = 6
+    private const val VOD_CATEGORY_MIN_ITEMS = 2
 
     private val seriesDiacriticsPattern =
         Regex("""\p{M}+""")
@@ -101,7 +102,7 @@ object M3uParser {
 
     fun parse(
         reader: Reader,
-        limit: Int = 60_000,
+        limit: Int = 180_000,
         onPartial: ((List<MediaEntry>) -> Unit)? = null
     ): List<MediaEntry> {
 
@@ -120,9 +121,9 @@ object M3uParser {
 
         val reserved =
             mapOf(
-                ContentType.LIVE to (limit * 12 / 100),
-                ContentType.VOD to (limit * 45 / 100),
-                ContentType.SERIES to (limit * 43 / 100)
+                ContentType.LIVE to (limit * 5 / 100),
+                ContentType.VOD to (limit * 48 / 100),
+                ContentType.SERIES to (limit * 47 / 100)
             )
 
         var kept = 0
@@ -138,6 +139,98 @@ object M3uParser {
          * e séries/categorias encontradas mais tarde também ganham espaço. Os
          * canais e filmes permanecem com o comportamento já aprovado.
          */
+        val vodBucket =
+            buckets.getValue(ContentType.VOD)
+
+        val vodGroupCounts =
+            linkedMapOf<String, Int>()
+
+        fun vodGroupKey(entry: MediaEntry): String =
+            entry.group
+                .trim()
+                .lowercase(Locale.ROOT)
+                .ifBlank { "outros" }
+
+        fun trackVod(entry: MediaEntry) {
+            val key = vodGroupKey(entry)
+            vodGroupCounts[key] = (vodGroupCounts[key] ?: 0) + 1
+        }
+
+        fun untrackVod(entry: MediaEntry) {
+            val key = vodGroupKey(entry)
+            val next = (vodGroupCounts[key] ?: 1) - 1
+            if (next <= 0) {
+                vodGroupCounts.remove(key)
+            } else {
+                vodGroupCounts[key] = next
+            }
+        }
+
+        /*
+         * Quando o teto de filmes é alcançado, uma categoria que aparece no
+         * fim da M3U não pode simplesmente desaparecer. Se for uma categoria
+         * ainda não representada, trocamos um item de uma categoria muito
+         * repetida por esse primeiro filme. Isso preserva a variedade de
+         * pastas sem aumentar o consumo de memória da box.
+         */
+        fun removeVodVictimPreservingCategories(): Boolean {
+            if (vodBucket.isEmpty()) return false
+
+            val victimKey =
+                vodGroupCounts
+                    .entries
+                    .asSequence()
+                    .filter { it.value > VOD_CATEGORY_MIN_ITEMS }
+                    .maxByOrNull { it.value }
+                    ?.key
+                    ?: vodGroupCounts
+                        .maxByOrNull { it.value }
+                        ?.key
+                    ?: return false
+
+            val position =
+                vodBucket.indexOfLast {
+                    vodGroupKey(it) == victimKey
+                }
+
+            if (position < 0) return false
+
+            val removed = vodBucket.removeAt(position)
+            untrackVod(removed)
+            return true
+        }
+
+        fun replaceForVodCategoryDiversity(
+            entry: MediaEntry
+        ): Boolean {
+            if (vodBucket.isEmpty()) return false
+
+            val incomingKey = vodGroupKey(entry)
+            if ((vodGroupCounts[incomingKey] ?: 0) > 0) return false
+
+            val victimKey =
+                vodGroupCounts
+                    .entries
+                    .asSequence()
+                    .filter { it.key != incomingKey && it.value > VOD_CATEGORY_MIN_ITEMS }
+                    .maxByOrNull { it.value }
+                    ?.key
+                    ?: return false
+
+            val position =
+                vodBucket.indexOfLast {
+                    vodGroupKey(it) == victimKey
+                }
+
+            if (position < 0) return false
+
+            val removed = vodBucket[position]
+            untrackVod(removed)
+            vodBucket[position] = entry
+            trackVod(entry)
+            return true
+        }
+
         val seriesBucket =
             buckets.getValue(ContentType.SERIES)
 
@@ -278,6 +371,8 @@ object M3uParser {
                 target += entry
                 if (entry.type == ContentType.SERIES) {
                     trackSeriesAt(entry, position)
+                } else if (entry.type == ContentType.VOD) {
+                    trackVod(entry)
                 }
                 kept += 1
                 emitPartialIfNeeded(entry.type)
@@ -286,10 +381,19 @@ object M3uParser {
 
             val targetReserve = reserved.getValue(entry.type)
             if (target.size >= targetReserve) {
-                if (
-                    entry.type == ContentType.SERIES &&
-                    replaceForSeriesDiversity(entry)
-                ) {
+                val diversified =
+                    when (entry.type) {
+                        ContentType.SERIES ->
+                            replaceForSeriesDiversity(entry)
+
+                        ContentType.VOD ->
+                            replaceForVodCategoryDiversity(entry)
+
+                        else ->
+                            false
+                    }
+
+                if (diversified) {
                     emitPartialIfNeeded(entry.type)
                 }
                 return
@@ -308,13 +412,21 @@ object M3uParser {
 
             if (victim.key == ContentType.SERIES) {
                 untrackLastSeries()
+                victim.value.removeAt(victim.value.lastIndex)
+            } else if (victim.key == ContentType.VOD) {
+                if (!removeVodVictimPreservingCategories()) {
+                    victim.value.removeAt(victim.value.lastIndex)
+                }
+            } else {
+                victim.value.removeAt(victim.value.lastIndex)
             }
-            victim.value.removeAt(victim.value.lastIndex)
 
             val position = target.size
             target += entry
             if (entry.type == ContentType.SERIES) {
                 trackSeriesAt(entry, position)
+            } else if (entry.type == ContentType.VOD) {
+                trackVod(entry)
             }
             emitPartialIfNeeded(entry.type)
         }

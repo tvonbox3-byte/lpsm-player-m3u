@@ -280,6 +280,32 @@ class MainActivity : AppCompatActivity() {
             (manager?.memoryClass ?: 256) <= 128
     }
 
+    /*
+     * BUILD 61 - catálogo adaptativo.
+     *
+     * O teto fixo de 60 mil itens fazia categorias de Filmes e Séries
+     * desaparecerem em listas grandes. Agora o limite cresce conforme a
+     * memória disponível no aparelho. Boxes fracas continuam protegidas
+     * contra falta de memória, enquanto celulares/boxes melhores recebem
+     * um catálogo bem maior.
+     */
+    private fun playlistItemLimit(): Int {
+        val manager =
+            getSystemService(ACTIVITY_SERVICE) as? ActivityManager
+
+        val memoryClass =
+            manager?.memoryClass ?: 256
+
+        return when {
+            manager?.isLowRamDevice == true -> 90_000
+            memoryClass <= 128 -> 90_000
+            memoryClass <= 192 -> 110_000
+            memoryClass <= 256 -> 130_000
+            memoryClass <= 384 -> 150_000
+            else -> 180_000
+        }
+    }
+
     override fun onCreate(
         savedInstanceState: Bundle?
     ) {
@@ -3045,9 +3071,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            val catalogLimit =
+                playlistItemLimit()
+
             val all =
                 ArrayList<MediaEntry>(
-                    8_192
+                    minOf(catalogLimit, 16_384)
                 )
 
             val xmltvUrls =
@@ -3067,7 +3096,7 @@ class MainActivity : AppCompatActivity() {
                 try {
 
                     val remainingCapacity =
-                        (60_000 - all.size)
+                        (catalogLimit - all.size)
                             .coerceAtLeast(0)
 
                     if (remainingCapacity == 0) {
