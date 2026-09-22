@@ -516,6 +516,22 @@
                 </LinearLayout>
 
 
+                <!-- Contagem visível no estilo Tudo(32632). -->
+                <TextView
+                    android:id="@+id/catalogSummary"
+                    android:layout_width="170dp"
+                    android:layout_height="66dp"
+                    android:gravity="end|center_vertical"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    android:focusable="false"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="10dp"
+                    android:text="Tudo (0)"
+                    android:textColor="@color/text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
                 <!--
                     Filmes e séries NÃO reservam espaço aqui.
 

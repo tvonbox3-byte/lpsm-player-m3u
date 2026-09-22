@@ -283,9 +283,9 @@ class PlaylistCache(
     }
 
     private companion object {
-        // v9 força uma leitura limpa: Build 62 reconhece mais formatos de grupos
-        // e separa melhor canais ao vivo de séries/filmes.
-        const val FORMAT_VERSION = 9
+        // v10 força uma leitura limpa: Build 63 preserva múltiplas categorias
+        // de séries e corrige canais HLS que estavam caindo em Séries.
+        const val FORMAT_VERSION = 10
         const val MAX_ENTRIES = 260_000
         const val MAX_STRING_BYTES = 256 * 1024
     }

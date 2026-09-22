@@ -46,3 +46,6 @@ O plano gratuito do Render entra em repouso após um período sem acessos. Nas v
 ## Build 62 - Filmes e Séries
 
 Reconhece mais formatos de categoria, evita canais ao vivo dentro de Séries, amplia o catálogo e deixa a grade de capas mais compacta/rápida.
+
+## Build 63
+Preserva múltiplas categorias de séries, exibe contagens do catálogo, evita canais HLS dentro de Séries e prioriza A Fazenda/Big Brother/BBB nas categorias ao vivo.

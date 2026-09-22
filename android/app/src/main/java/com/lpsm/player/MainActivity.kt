@@ -5005,6 +5005,29 @@ class MainActivity : AppCompatActivity() {
             ) ->
                 1000
 
+            /*
+             * BUILD 63 - realities/eventos temporários ficam no topo sempre
+             * que existirem, como solicitado para A Fazenda e Big Brother.
+             */
+            "fazenda" in value ->
+                -120
+
+            listOf(
+                "big brother brasil",
+                "bigbrother",
+                "big brother"
+            ).any { it in value } ||
+                Regex("""(^|[^a-z0-9])bbb([^a-z0-9]|$)""")
+                    .containsMatchIn(value) ->
+                -115
+
+            listOf(
+                "jogos de hoje",
+                "jogos hoje",
+                "jogo de hoje"
+            ).any { it in value } ->
+                -100
+
             listOf(
                 "rio grande do sul",
                 "rio grande",
@@ -5019,7 +5042,7 @@ class MainActivity : AppCompatActivity() {
                 it in
                     value
             } ->
-                -30
+                -90
 
             listOf(
                 "canais abertos",
@@ -5030,14 +5053,7 @@ class MainActivity : AppCompatActivity() {
                 it in
                     value
             } ->
-                -20
-
-            listOf(
-                "jogos de hoje",
-                "jogos hoje",
-                "jogo de hoje"
-            ).any { it in value } ->
-                -10
+                -80
 
             "globo" in
                 value ->
@@ -5365,6 +5381,17 @@ class MainActivity : AppCompatActivity() {
                     adultOkay &&
                     queryOkay
             }
+
+        val summaryLabel =
+            when {
+                continueOnly -> "Continuar"
+                favoritesOnly -> "Favoritos"
+                selectedGroup != null -> selectedGroup ?: "Tudo"
+                else -> "Tudo"
+            }
+
+        b.catalogSummary.text =
+            "$summaryLabel (${filtered.size})"
 
         updatePreviewPosition()
 
@@ -5753,6 +5780,9 @@ class MainActivity : AppCompatActivity() {
             seriesEpisodes(
                 name
             )
+
+        b.catalogSummary.text =
+            "Episódios (${allEpisodes.size})"
 
         val seasons =
             allEpisodes
@@ -7297,12 +7327,46 @@ class MainActivity : AppCompatActivity() {
                     .orEmpty()
             )
 
+        /*
+         * BUILD 63 - uma série pode pertencer a mais de uma pasta do
+         * fornecedor (ex.: Netflix, Lançamentos, Ação). Antes cada card era
+         * colocado apenas na categoria majoritária e as demais pastas
+         * desapareciam. Agora o mesmo card pode aparecer em todas as pastas
+         * originais sem duplicar o título em "Tudo".
+         */
+        val seriesCardByKey =
+            indexedSeriesCards.associateBy {
+                seriesLookupKey(it)
+            }
+
+        val seriesGroupsMutable =
+            linkedMapOf<String, LinkedHashMap<String, MediaEntry>>()
+
+        byType[ContentType.SERIES]
+            .orEmpty()
+            .groupBy { seriesLookupKey(it) }
+            .forEach { (seriesKeyValue, episodes) ->
+                val card = seriesCardByKey[seriesKeyValue] ?: return@forEach
+
+                val groups =
+                    episodes
+                        .asSequence()
+                        .map { it.group.ifBlank { "Outros" }.trim() }
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .toList()
+                        .ifEmpty { listOf("Outros") }
+
+                groups.forEach { groupName ->
+                    seriesGroupsMutable
+                        .getOrPut(groupName) { linkedMapOf() }[seriesKeyValue] = card
+                }
+            }
+
         val indexedSeriesCardsByGroup =
-            indexedSeriesCards
-                .groupBy { card ->
-                    card.group.ifBlank {
-                        "Outros"
-                    }
+            seriesGroupsMutable
+                .mapValues { (_, cardsByKey) ->
+                    cardsByKey.values.toList()
                 }
 
         return EntryIndexes(

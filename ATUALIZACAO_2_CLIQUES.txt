@@ -1,14 +1,16 @@
-LPSM PLAYER 2.2.35 - BUILD 62
+LPSM PLAYER 2.2.35 - BUILD 63
 
-CORRECOES
-- Filmes e Series aparecem mais cedo durante o carregamento.
-- Reconhece #EXTGRP/category/group para trazer mais pastas.
-- Canais ao vivo nao entram mais como capas de Series.
-- Catalogo ampliado e grade de capas mais compacta.
-- Primeira abertura refaz o cache; depois volta ao cache de 24h.
+CORREÇÕES
+- Mais categorias de Séries preservadas.
+- Série pode aparecer em todas as pastas originais sem duplicar em Tudo.
+- Contagem visível de filmes/séries/categoria no topo.
+- Canais HLS não caem indevidamente em Séries.
+- A Fazenda e Big Brother/BBB ficam no topo das categorias ao vivo quando existirem.
+- Mantidas as correções anteriores de painel, cache, rádios, filmes, navegação e PIN adulto.
 
 PARA PUBLICAR
-1. Envie o CONTEUDO desta pasta no repositorio lpsm-player-m3u (Add file > Upload files).
-2. Commit direto na main com o nome:
-   LPSM 2.2.35 Build 62 - filmes series completos e grade rapida
-3. Aguarde a aba Actions gerar o APK.
+1. Extraia este ZIP.
+2. Envie TODO o conteúdo de dentro da pasta lpsm-player-m3u-main para o repositório lpsm-player-m3u em Add file > Upload files.
+3. Commit direto na main com o nome:
+   LPSM 2.2.35 Build 63 - categorias series contagens e realities
+4. Abra Actions e aguarde o APK ficar verde.
