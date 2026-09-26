@@ -1282,7 +1282,8 @@ class LpsmApi(
                     M3uParser.parse(
                         it,
                         limit,
-                        onPartial
+                        onPartial,
+                        liveOnly = true
                     )
 
 
@@ -1291,7 +1292,7 @@ class LpsmApi(
                 ) {
 
                     throw IllegalStateException(
-                        "A URL respondeu, mas nenhum canal, filme ou episódio M3U foi encontrado."
+                        "A URL respondeu, mas nenhum canal ao vivo M3U foi encontrado."
                     )
                 }
 

@@ -103,7 +103,8 @@ object M3uParser {
     fun parse(
         reader: Reader,
         limit: Int = 180_000,
-        onPartial: ((List<MediaEntry>) -> Unit)? = null
+        onPartial: ((List<MediaEntry>) -> Unit)? = null,
+        liveOnly: Boolean = false
     ): List<MediaEntry> {
 
         /*
@@ -363,6 +364,7 @@ object M3uParser {
 
         fun keep(entry: MediaEntry) {
             if (limit <= 0) return
+            if (liveOnly && entry.type != ContentType.LIVE) return
 
             val target = buckets.getValue(entry.type)
 
@@ -709,6 +711,10 @@ object M3uParser {
                 addAll(buckets.getValue(ContentType.VOD))
                 addAll(buckets.getValue(ContentType.SERIES))
             }
+
+        if (liveOnly) {
+            return buckets.getValue(ContentType.LIVE).toList()
+        }
 
         return normalizeVodGroups(
             normalizeSeriesGroups(keptEntries)

@@ -289,6 +289,7 @@
 
                     <Button
                         android:id="@+id/homeVod"
+                        android:visibility="gone"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_margin="4dp"
@@ -301,6 +302,7 @@
 
                     <Button
                         android:id="@+id/homeSeries"
+                        android:visibility="gone"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_margin="4dp"
@@ -313,6 +315,7 @@
 
                     <Button
                         android:id="@+id/homeRadio"
+                        android:visibility="gone"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_margin="4dp"
@@ -325,6 +328,7 @@
 
                     <Button
                         android:id="@+id/homeAccount"
+                        android:visibility="gone"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_margin="4dp"
@@ -397,7 +401,7 @@
                         android:background="@drawable/tv_search_background"
                         android:focusable="true"
                         android:focusableInTouchMode="true"
-                        android:hint="Buscar canais, filmes, séries e rádios"
+                        android:hint="Buscar canais"
                         android:paddingStart="10dp"
                         android:paddingEnd="10dp"
                         android:singleLine="true"
@@ -435,12 +439,13 @@
                                 android:focusable="true"
                                 android:focusableInTouchMode="false"
                                 android:padding="0dp"
-                                android:text="TUDO"
+                                android:text="CANAIS"
                                 android:textColor="@color/text"
                                 android:textSize="9sp" />
 
                             <Button
                                 android:id="@+id/live"
+                        android:visibility="gone"
                                 android:layout_width="74dp"
                                 android:layout_height="30dp"
                                 android:layout_marginStart="2dp"
@@ -455,6 +460,7 @@
 
                             <Button
                                 android:id="@+id/vod"
+                        android:visibility="gone"
                                 android:layout_width="72dp"
                                 android:layout_height="30dp"
                                 android:layout_marginStart="2dp"
@@ -469,6 +475,7 @@
 
                             <Button
                                 android:id="@+id/series"
+                        android:visibility="gone"
                                 android:layout_width="72dp"
                                 android:layout_height="30dp"
                                 android:layout_marginStart="2dp"
@@ -483,6 +490,7 @@
 
                             <Button
                                 android:id="@+id/radio"
+                        android:visibility="gone"
                                 android:layout_width="72dp"
                                 android:layout_height="30dp"
                                 android:layout_marginStart="2dp"

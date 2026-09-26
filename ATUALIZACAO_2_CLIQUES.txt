@@ -1,14 +1,13 @@
-LPSM PLAYER 2.2.35 - BUILD 65
+LPSM PLAYER 2.2.35 - BUILD 67
 
-CORREÇÃO PRINCIPAL
-- Remove o loading infinito da Build 64.
-- Abre a interface assim que chega a primeira parte da lista.
-- Canais aparecem primeiro e Filmes/Séries entram progressivamente.
-- O catálogo completo continua carregando em segundo plano.
-- Cache de 24 horas continua abrindo instantaneamente quando disponível.
+MODO SOMENTE CANAIS
+- Abre direto em TV AO VIVO.
+- Filmes, séries e rádios não aparecem mais.
+- Mantém favoritos, busca, categorias, adultos PIN 0202 e prioridades de canais.
+- Mantém painel leve e app independente.
 
 PARA PUBLICAR
-1. Extraia este ZIP e envie o conteúdo da pasta lpsm-player-m3u-main para o repositório lpsm-player-m3u (Add file > Upload files).
+1. Envie o conteúdo desta pasta no repositório lpsm-player-m3u (Add file > Upload files).
 2. Commit direto na main com o nome:
-   LPSM 2.2.35 Build 65 - abertura rapida sem loading infinito
-3. Aguarde a aba Actions gerar o APK.
+   LPSM 2.2.35 Build 67 - somente canais
+3. Aguarde Actions gerar o APK.

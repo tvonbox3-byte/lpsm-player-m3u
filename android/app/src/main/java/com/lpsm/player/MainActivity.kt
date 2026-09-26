@@ -56,6 +56,7 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
 
     private val defaultAdultPin = "0202"
+    private val channelsOnlyMode = true
     private val unknownSeriesSeason = -1
     private val playlistRefreshIntervalMillis =
         24L * 60L * 60L * 1000L
@@ -377,6 +378,20 @@ class MainActivity : AppCompatActivity() {
 
         preparePreviewPlayerView()
         configureTvSearchKeyboard()
+
+        /* BUILD 67 - LPSM somente canais ao vivo. */
+        if (channelsOnlyMode) {
+            b.homeVod.visibility = View.GONE
+            b.homeSeries.visibility = View.GONE
+            b.homeRadio.visibility = View.GONE
+            b.homeAccount.visibility = View.GONE
+            b.vod.visibility = View.GONE
+            b.series.visibility = View.GONE
+            b.radio.visibility = View.GONE
+            b.live.visibility = View.GONE
+            b.all.text = "CANAIS"
+            b.search.hint = "Buscar canais"
+        }
 
         /*
          * LISTA PRINCIPAL
@@ -738,6 +753,18 @@ class MainActivity : AppCompatActivity() {
 
         b.previewWatch.isFocusableInTouchMode =
             false
+
+        if (channelsOnlyMode) {
+            b.all.nextFocusLeftId = b.favorites.id
+            b.all.nextFocusRightId = b.favorites.id
+            b.all.nextFocusUpId = b.search.id
+            b.all.nextFocusDownId = b.list.id
+
+            b.favorites.nextFocusLeftId = b.all.id
+            b.favorites.nextFocusRightId = b.all.id
+            b.favorites.nextFocusUpId = b.search.id
+            b.favorites.nextFocusDownId = b.list.id
+        }
     }
 
     /*
@@ -909,6 +936,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun preferredTopFilter():
         View {
+
+        if (channelsOnlyMode) {
+            return if (favoritesOnly) b.favorites else b.all
+        }
 
         return when {
 
@@ -3038,15 +3069,8 @@ class MainActivity : AppCompatActivity() {
                     val cachedLive =
                         cachedIndexes?.byType?.get(ContentType.LIVE)
                             .orEmpty().size
-                    val cachedVod =
-                        cachedIndexes?.byType?.get(ContentType.VOD)
-                            .orEmpty().size
-                    val cachedSeries =
-                        cachedIndexes?.seriesCards
-                            .orEmpty().size
-
                     b.message.text =
-                        "Lista pronta • $cachedLive canais • $cachedVod filmes • $cachedSeries séries"
+                        "Lista pronta • $cachedLive canais"
                 }
 
                 return@execute
@@ -3142,17 +3166,13 @@ class MainActivity : AppCompatActivity() {
                                  * continua abaixo e substitui esta amostra ao
                                  * terminar.
                                  */
-                                val progressive = ArrayList<MediaEntry>(9_500)
+                                val progressive = ArrayList<MediaEntry>(4_000)
                                 val progressiveSeen = HashSet<String>()
                                 val progressiveCounts = mutableMapOf(
-                                    ContentType.LIVE to 0,
-                                    ContentType.VOD to 0,
-                                    ContentType.SERIES to 0
+                                    ContentType.LIVE to 0
                                 )
                                 val progressiveLimits = mapOf(
-                                    ContentType.LIVE to 2_500,
-                                    ContentType.VOD to 4_000,
-                                    ContentType.SERIES to 3_000
+                                    ContentType.LIVE to 4_000
                                 )
 
                                 fun appendQuickSample(items: List<MediaEntry>) {
@@ -3193,14 +3213,8 @@ class MainActivity : AppCompatActivity() {
                                         val liveNow =
                                             progressiveIndexes.byType[ContentType.LIVE]
                                                 .orEmpty().size
-                                        val vodNow =
-                                            progressiveIndexes.byType[ContentType.VOD]
-                                                .orEmpty().size
-                                        val seriesNow =
-                                            progressiveIndexes.seriesCards.size
-
                                         b.message.text =
-                                            "Abrindo rápido • $liveNow canais • $vodNow filmes • $seriesNow séries • completando catálogo..."
+                                            "Abrindo canais • $liveNow disponíveis • completando lista..."
                                     }
                                 }
                             }
@@ -3359,14 +3373,8 @@ class MainActivity : AppCompatActivity() {
                         val liveCount =
                             displayIndexes.byType[ContentType.LIVE]
                                 .orEmpty().size
-                        val vodCount =
-                            displayIndexes.byType[ContentType.VOD]
-                                .orEmpty().size
-                        val seriesCount =
-                            displayIndexes.seriesCards.size
-
                         b.message.text =
-                            "Lista pronta • $liveCount canais • $vodCount filmes • $seriesCount séries"
+                            "Lista pronta • $liveCount canais"
                     }
                 }
             }
@@ -4783,8 +4791,14 @@ class MainActivity : AppCompatActivity() {
                     }
             }
 
-        b.homeLive
-            .requestFocus()
+        if (channelsOnlyMode) {
+            showBrowser(
+                ContentType.LIVE
+            )
+        } else {
+            b.homeLive
+                .requestFocus()
+        }
     }
 
     /*
@@ -4798,7 +4812,11 @@ class MainActivity : AppCompatActivity() {
         b.all
             .setOnClickListener {
 
-                showHome()
+                if (channelsOnlyMode) {
+                    showBrowser(ContentType.LIVE)
+                } else {
+                    showHome()
+                }
             }
 
         b.live
@@ -7296,6 +7314,25 @@ class MainActivity : AppCompatActivity() {
         source: List<MediaEntry>
     ): EntryIndexes {
 
+        if (channelsOnlyMode) {
+            val liveEntries =
+                source.filter { it.type == ContentType.LIVE }
+
+            val liveGroups =
+                liveEntries.groupBy {
+                    it.group.ifBlank { "Outros" }
+                }
+
+            return EntryIndexes(
+                byType = mapOf(ContentType.LIVE to liveEntries),
+                allGroups = emptyMap(),
+                groupsByType = mapOf(ContentType.LIVE to liveGroups),
+                seriesEpisodesByName = emptyMap(),
+                seriesCards = emptyList(),
+                seriesCardsByGroup = emptyMap()
+            )
+        }
+
         val rawByType =
             source.groupBy {
 
@@ -7501,6 +7538,11 @@ class MainActivity : AppCompatActivity() {
      */
 
     private fun showHome() {
+
+        if (channelsOnlyMode) {
+            showBrowser(ContentType.LIVE)
+            return
+        }
 
         releasePreview()
 
@@ -7889,7 +7931,11 @@ class MainActivity : AppCompatActivity() {
             View.VISIBLE
         ) {
 
-            showHome()
+            if (channelsOnlyMode) {
+                finish()
+            } else {
+                showHome()
+            }
 
             return
         }

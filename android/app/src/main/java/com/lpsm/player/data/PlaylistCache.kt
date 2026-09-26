@@ -285,7 +285,7 @@ class PlaylistCache(
     private companion object {
         // v11 força uma leitura limpa: Build 64 remove o equilíbrio agressivo
         // que podia prender Filmes/Séries e volta ao parser estável da Build 62.
-        const val FORMAT_VERSION = 11
+        const val FORMAT_VERSION = 12
         const val MAX_ENTRIES = 260_000
         const val MAX_STRING_BYTES = 256 * 1024
     }
