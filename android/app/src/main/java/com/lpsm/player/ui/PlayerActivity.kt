@@ -28,6 +28,7 @@ import com.lpsm.player.LpsmApplication
 import com.lpsm.player.data.SecureStore
 import com.lpsm.player.model.ContentType
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityPlayerBinding
