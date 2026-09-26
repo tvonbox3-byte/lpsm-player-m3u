@@ -14,14 +14,31 @@ android {
         minSdk = 21
         targetSdk = 35
 
-        versionCode = 65
-        versionName = "2.2.35"
+        versionCode = 67
+        versionName = "2.2.36"
 
         buildConfigField(
             "String",
             "API_BASE_URL",
             "\"https://lpsm-player-backend.onrender.com\""
         )
+    }
+
+    flavorDimensions += "catalog"
+    productFlavors {
+        create("live") {
+            dimension = "catalog"
+            buildConfigField("boolean", "CINEMA", "false")
+            resValue("string", "app_name", "LPSM")
+        }
+        create("cinema") {
+            dimension = "catalog"
+            applicationId = "com.lpsm.cinema"
+            versionCode = 1
+            versionName = "1.0.0"
+            buildConfigField("boolean", "CINEMA", "true")
+            resValue("string", "app_name", "LPSM Filmes e Séries")
+        }
     }
 
     buildFeatures {
@@ -60,7 +77,7 @@ android {
         release {
 
             signingConfig =
-                signingConfigs.getByName("release")
+                if (providers.gradleProperty("unsignedForVerification").orNull == "true") null else signingConfigs.getByName("release")
 
             isMinifyEnabled = false
 
@@ -87,6 +104,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
 
     implementation(
         "androidx.core:core-ktx:1.15.0"
