@@ -57,3 +57,7 @@ A primeira abertura sem cache aguarda a leitura e indexação completa do catál
 ## Build 65 - abertura rápida progressiva
 
 A interface é liberada com uma amostra pequena da M3U e o catálogo completo termina em segundo plano, evitando loading infinito em TV Boxes.
+
+
+## Build 68
+Modo enxuto com TV ao vivo + Rádios. A primeira leitura prioriza carregar praticamente todo o bloco de canais antes de abrir; cache válido por 24h continua abrindo imediatamente.

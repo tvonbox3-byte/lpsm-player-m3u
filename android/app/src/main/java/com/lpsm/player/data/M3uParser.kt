@@ -436,6 +436,20 @@ object M3uParser {
         var metadata = ""
         var extGroup = ""
 
+        /*
+         * BUILD 68 - modo TV AO VIVO rápido.
+         * A maioria das listas IPTV grandes vem em blocos: canais primeiro,
+         * depois filmes e séries. Quando o app está em liveOnly não faz sentido
+         * percorrer mais 100/200 mil VODs depois de o bloco LIVE terminar.
+         * Mantemos uma margem de 4.000 entradas não-LIVE consecutivas para não
+         * cortar pequenas misturas do fornecedor; depois disso encerramos a
+         * leitura. Na prática preserva praticamente todos os canais e reduz
+         * muito o tempo da primeira abertura.
+         */
+        var liveSeenForFastStop = 0
+        var consecutiveNonLiveAfterChannels = 0
+        val nonLiveSafetyWindow = 4_000
+
         reader
             .buffered(64 * 1024)
             .useLines { lines ->
@@ -623,6 +637,26 @@ object M3uParser {
                                     episodeInfo = episodeInfo,
                                     attributes = attributes
                                 )
+
+                            if (liveOnly) {
+                                if (type == ContentType.LIVE) {
+                                    liveSeenForFastStop += 1
+                                    consecutiveNonLiveAfterChannels = 0
+                                } else {
+                                    consecutiveNonLiveAfterChannels += 1
+                                    metadata = ""
+                                    extGroup = ""
+
+                                    if (
+                                        liveSeenForFastStop >= 100 &&
+                                        consecutiveNonLiveAfterChannels >= nonLiveSafetyWindow
+                                    ) {
+                                        break
+                                    }
+
+                                    continue
+                                }
+                            }
 
                             val trailerUrl =
                                 listOf(

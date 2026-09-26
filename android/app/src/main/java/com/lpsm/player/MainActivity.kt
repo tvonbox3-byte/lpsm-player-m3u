@@ -379,17 +379,21 @@ class MainActivity : AppCompatActivity() {
         preparePreviewPlayerView()
         configureTvSearchKeyboard()
 
-        /* BUILD 67 - LPSM somente canais ao vivo. */
+        /*
+         * BUILD 68 - LPSM focado em TV AO VIVO + RÁDIOS.
+         * Filmes/Séries continuam fora para manter as boxes leves, mas a
+         * seção de rádios volta a ficar disponível no próprio player.
+         */
         if (channelsOnlyMode) {
             b.homeVod.visibility = View.GONE
             b.homeSeries.visibility = View.GONE
-            b.homeRadio.visibility = View.GONE
+            b.homeRadio.visibility = View.VISIBLE
             b.homeAccount.visibility = View.GONE
             b.vod.visibility = View.GONE
             b.series.visibility = View.GONE
-            b.radio.visibility = View.GONE
+            b.radio.visibility = View.VISIBLE
             b.live.visibility = View.GONE
-            b.all.text = "CANAIS"
+            b.all.text = "TV AO VIVO"
             b.search.hint = "Buscar canais"
         }
 
@@ -756,11 +760,16 @@ class MainActivity : AppCompatActivity() {
 
         if (channelsOnlyMode) {
             b.all.nextFocusLeftId = b.favorites.id
-            b.all.nextFocusRightId = b.favorites.id
+            b.all.nextFocusRightId = b.radio.id
             b.all.nextFocusUpId = b.search.id
             b.all.nextFocusDownId = b.list.id
 
-            b.favorites.nextFocusLeftId = b.all.id
+            b.radio.nextFocusLeftId = b.all.id
+            b.radio.nextFocusRightId = b.favorites.id
+            b.radio.nextFocusUpId = b.search.id
+            b.radio.nextFocusDownId = b.list.id
+
+            b.favorites.nextFocusLeftId = b.radio.id
             b.favorites.nextFocusRightId = b.all.id
             b.favorites.nextFocusUpId = b.search.id
             b.favorites.nextFocusDownId = b.list.id
@@ -938,7 +947,11 @@ class MainActivity : AppCompatActivity() {
         View {
 
         if (channelsOnlyMode) {
-            return if (favoritesOnly) b.favorites else b.all
+            return when {
+                favoritesOnly -> b.favorites
+                radioMode -> b.radio
+                else -> b.all
+            }
         }
 
         return when {
@@ -2897,16 +2910,19 @@ class MainActivity : AppCompatActivity() {
                 config
 
             /*
-             * BUILD 65 - sem loading infinito.
-             * Se não houver cache, mostramos apenas um loading curto até a
-             * primeira amostra da M3U. A HOME então abre e o catálogo completo
-             * continua sendo montado em segundo plano. Com cache de 24h, abre
-             * imediatamente já preenchido.
+             * BUILD 68 - pré-carga de TV ao vivo.
+             * Sem cache, não abrimos com 80/120 itens como na Build 65.
+             * O app mantém a tela de preparação enquanto percorre o bloco de
+             * canais da M3U e só libera a navegação quando a leitura LIVE está
+             * praticamente completa. Em playlists padrão (TV -> VOD -> séries)
+             * o parser encerra após uma margem grande sem novos canais, evitando
+             * varrer centenas de milhares de filmes/séries desnecessariamente.
+             * Com cache válido de 24h continua abrindo imediatamente.
              */
             if (!openedFromCache) {
                 runOnUiThread {
                     b.loadingLabel.text =
-                        "Carregando primeira parte da lista..."
+                        "Preparando TV ao vivo • carregando 98% dos canais..."
                 }
             }
 
@@ -3138,83 +3154,30 @@ class MainActivity : AppCompatActivity() {
                             .coerceAtLeast(1)
 
                     /*
-                     * BUILD 65 - abertura em poucos segundos.
-                     *
-                     * A Build 64 esperava a lista inteira (que pode ter mais de
-                     * 200 mil itens) antes de sair do loading. Em listas grandes
-                     * isso podia levar minutos. O parser já sabe entregar apenas
-                     * alguns marcos progressivos; usamos esses marcos para abrir
-                     * a HOME assim que houver conteúdo suficiente e deixamos o
-                     * catálogo completo terminar em segundo plano.
-                     *
-                     * São poucas entregas (primeira amostra + VOD + Séries),
-                     * portanto não voltamos ao problema antigo de reconstruir os
-                     * índices centenas de vezes enquanto a M3U chega.
+                     * BUILD 68 - não abrir com amostra pequena.
+                     * O callback agora serve apenas para informar que a lista
+                     * está sendo encontrada; a tela de canais só é liberada
+                     * quando downloadPlaylist() devolve o bloco LIVE completo
+                     * (ou praticamente completo pelo corte seguro do parser).
                      */
                     val previousListsSnapshot = all.toList()
 
                     val partialCallback:
                         ((List<MediaEntry>) -> Unit)? = { currentPartial ->
 
-                            if (currentPartial.isNotEmpty()) {
+                            if (!openedFromCache && currentPartial.isNotEmpty()) {
+                                val liveNow =
+                                    (previousListsSnapshot.asSequence() + currentPartial.asSequence())
+                                        .filter { it.type == ContentType.LIVE }
+                                        .map { it.url.trim().lowercase() }
+                                        .filter { it.isNotBlank() }
+                                        .distinct()
+                                        .count()
 
-                                /*
-                                 * A amostra usada para ABRIR a interface é
-                                 * propositalmente pequena. Indexar 100-200 mil
-                                 * itens dentro do callback progressivo faria o
-                                 * parser parar novamente. O catálogo integral
-                                 * continua abaixo e substitui esta amostra ao
-                                 * terminar.
-                                 */
-                                val progressive = ArrayList<MediaEntry>(4_000)
-                                val progressiveSeen = HashSet<String>()
-                                val progressiveCounts = mutableMapOf(
-                                    ContentType.LIVE to 0
-                                )
-                                val progressiveLimits = mapOf(
-                                    ContentType.LIVE to 4_000
-                                )
-
-                                fun appendQuickSample(items: List<MediaEntry>) {
-                                    items.forEach { item ->
-                                        val used = progressiveCounts[item.type] ?: 0
-                                        val typeLimit = progressiveLimits[item.type] ?: 0
-                                        if (used >= typeLimit) return@forEach
-
-                                        val key = item.url.trim().lowercase()
-                                        if (key.isNotBlank() && progressiveSeen.add(key)) {
-                                            progressive += item
-                                            progressiveCounts[item.type] = used + 1
-                                        }
-                                    }
-                                }
-
-                                appendQuickSample(previousListsSnapshot)
-                                appendQuickSample(currentPartial)
-
-                                if (progressive.isNotEmpty()) {
-                                    val progressiveIndexes =
-                                        buildEntryIndexes(progressive)
-
-                                    runOnUiThread {
-                                        entries = progressive
-                                        applyEntryIndexes(progressiveIndexes)
-                                        epg = emptyMap()
-
-                                        val wasBrowsing =
-                                            b.content.visibility == View.VISIBLE
-
-                                        if (wasBrowsing) {
-                                            render()
-                                        } else {
-                                            showContent(config, errors.size)
-                                        }
-
-                                        val liveNow =
-                                            progressiveIndexes.byType[ContentType.LIVE]
-                                                .orEmpty().size
-                                        b.message.text =
-                                            "Abrindo canais • $liveNow disponíveis • completando lista..."
+                                runOnUiThread {
+                                    if (b.loadingState.visibility == View.VISIBLE) {
+                                        b.loadingLabel.text =
+                                            "Preparando TV ao vivo • $liveNow canais encontrados • 98% antes de abrir"
                                     }
                                 }
                             }
@@ -7932,7 +7895,11 @@ class MainActivity : AppCompatActivity() {
         ) {
 
             if (channelsOnlyMode) {
-                finish()
+                if (radioMode) {
+                    showBrowser(ContentType.LIVE)
+                } else {
+                    finish()
+                }
             } else {
                 showHome()
             }

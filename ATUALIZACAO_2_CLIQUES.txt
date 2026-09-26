@@ -1,13 +1,16 @@
-LPSM PLAYER 2.2.35 - BUILD 67
+LPSM PLAYER 2.2.35 - BUILD 68
 
-MODO SOMENTE CANAIS
+MODO TV AO VIVO + RÁDIOS
 - Abre direto em TV AO VIVO.
-- Filmes, séries e rádios não aparecem mais.
-- Mantém favoritos, busca, categorias, adultos PIN 0202 e prioridades de canais.
-- Mantém painel leve e app independente.
+- Filmes e Séries continuam removidos para manter o app leve.
+- Rádios voltaram e continuam dentro do próprio LPSM.
+- Sem cache, prepara praticamente todo o bloco de canais (meta 98%+) antes de liberar a navegação.
+- Em listas padrão, para de varrer o catálogo após uma margem de 4.000 itens não-LIVE depois do bloco de canais, evitando perder tempo lendo filmes/séries.
+- Com cache válido de 24h, abre imediatamente com a lista salva.
+- Mantém favoritos, busca, categorias, adultos PIN 0202, prioridades A Fazenda/BBB/Jogos/RS, painel leve e app independente.
 
 PARA PUBLICAR
 1. Envie o conteúdo desta pasta no repositório lpsm-player-m3u (Add file > Upload files).
 2. Commit direto na main com o nome:
-   LPSM 2.2.35 Build 67 - somente canais
+   LPSM 2.2.35 Build 68 - TV ao vivo radios e preload 98
 3. Aguarde Actions gerar o APK.
