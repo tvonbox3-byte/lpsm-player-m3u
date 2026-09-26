@@ -39,6 +39,8 @@ class LpsmApplication :
     private var visibleActivities =
         0
 
+    private val heartbeatInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private var heartbeatRunning =
         false
 
@@ -102,7 +104,7 @@ class LpsmApplication :
                 }
 
                 if (
-                    !store.token.isNullOrBlank()
+                    !store.token.isNullOrBlank() && heartbeatInFlight.compareAndSet(false, true)
                 ) {
 
                     executor.execute {
@@ -115,6 +117,8 @@ class LpsmApplication :
                             )
                         } catch (_: Exception) {
                             // A presença é informativa e nunca pode fechar o app.
+                        } finally {
+                            heartbeatInFlight.set(false)
                         }
                     }
                 }
@@ -247,7 +251,9 @@ class LpsmApplication :
     override fun onActivityCreated(
         activity: Activity,
         savedInstanceState: Bundle?
-    ) = Unit
+    ) {
+        activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
 
     override fun onActivityResumed(
         activity: Activity

@@ -53,6 +53,7 @@ import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.Executors
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class MainActivity : AppCompatActivity() {
 
     private val defaultAdultPin = "0202"
@@ -79,6 +80,9 @@ class MainActivity : AppCompatActivity() {
             if (isLowRamDevice()) 2 else 4
         )
     }
+
+    private var catalogLoading = false
+    private var resumePreviewEntry: MediaEntry? = null
 
     private var entries =
         listOf<MediaEntry>()
@@ -2689,12 +2693,15 @@ class MainActivity : AppCompatActivity() {
      */
 
     private fun loadConfig() {
+        if (catalogLoading || isDestroyed) return
+        catalogLoading = true
 
         showLoading(
             "Abrindo LPSM..."
         )
 
         pool.execute {
+          try {
 
             /*
              * TV Boxes mais simples demoram muito mais que celulares para
@@ -3405,12 +3412,7 @@ class MainActivity : AppCompatActivity() {
                             try {
 
                                 guides +=
-                                    XmlTvParser
-                                        .current(
-                                            api.download(
-                                                url
-                                            )
-                                        )
+                                    api.downloadGuide(url)
 
                             } catch (_: Throwable) {
                             }
@@ -3428,6 +3430,12 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+          } catch (e: Exception) {
+              android.util.Log.w("LPSM", "Falha ao carregar catálogo: " + e.javaClass.simpleName)
+              runOnUiThread { if (!isDestroyed && !isFinishing && entries.isEmpty()) showFailure(lastConfig, "Falha ao carregar a lista. Tente novamente.") }
+          } finally {
+              runOnUiThread { catalogLoading = false }
+          }
         }
     }
 
@@ -4783,8 +4791,8 @@ class MainActivity : AppCompatActivity() {
                     }
             }
 
-        b.homeLive
-            .requestFocus()
+        applyCatalogScope()
+        (if (BuildConfig.CINEMA) b.homeVod else b.homeLive).requestFocus()
     }
 
     /*
@@ -4792,6 +4800,22 @@ class MainActivity : AppCompatActivity() {
      * FILTROS SUPERIORES
      * =====================================================
      */
+
+    private fun applyCatalogScope() {
+        val hidden = if (BuildConfig.CINEMA) listOf(b.homeLive, b.homeRadio, b.live, b.radio)
+                     else listOf(b.homeVod, b.homeSeries, b.vod, b.series)
+        hidden.forEach { it.visibility = View.GONE }
+        fun connect(buttons: List<View>) {
+            buttons.forEachIndexed { index, view ->
+                view.nextFocusLeftId = buttons[(index + buttons.size - 1) % buttons.size].id
+                view.nextFocusRightId = buttons[(index + 1) % buttons.size].id
+            }
+        }
+        connect(if (BuildConfig.CINEMA) listOf(b.homeVod, b.homeSeries, b.homeAccount)
+                else listOf(b.homeLive, b.homeRadio, b.homeAccount))
+        connect(if (BuildConfig.CINEMA) listOf(b.all, b.vod, b.series, b.favorites)
+                else listOf(b.all, b.live, b.radio, b.favorites))
+    }
 
     private fun bindFilters() {
 
@@ -7297,7 +7321,7 @@ class MainActivity : AppCompatActivity() {
     ): EntryIndexes {
 
         val rawByType =
-            source.groupBy {
+            source.filter { CatalogScope.allows(it.type) }.groupBy {
 
                 it.type
             }
@@ -7543,8 +7567,8 @@ class MainActivity : AppCompatActivity() {
         b.previewSideHost.visibility =
             View.GONE
 
-        b.homeLive
-            .requestFocus()
+        applyCatalogScope()
+        (if (BuildConfig.CINEMA) b.homeVod else b.homeLive).requestFocus()
     }
 
     private fun showBrowser(
@@ -7552,6 +7576,7 @@ class MainActivity : AppCompatActivity() {
         radios: Boolean = false,
         focusContent: Boolean = false
     ) {
+        if (!CatalogScope.allows(type) || (BuildConfig.CINEMA && radios)) return
 
         releasePreview()
 
@@ -8012,6 +8037,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyCatalogScope()
+        if (::store.isInitialized && !store.token.isNullOrBlank() && entries.isEmpty() && !catalogLoading) loadConfig()
+        val previous = resumePreviewEntry
+        resumePreviewEntry = null
+        if (previous != null && b.content.visibility == View.VISIBLE) playPreviewNow(previous)
 
         checkForAppUpdate()
 
@@ -8057,6 +8087,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        resumePreviewEntry = if (previewPlayer?.playWhenReady == true) currentPreviewEntry() else null
 
         releasePreview()
 
