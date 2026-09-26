@@ -21,10 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 object AppUpdateChecker {
 
     private val updateJsonUrls =
-        listOf(
-            BuildConfig.API_BASE_URL.trimEnd('/') + "/api/app/update",
-            "https://github.com/tvonbox3-byte/lpsm-player-m3u/releases/latest/download/update.json"
-        )
+        com.lpsm.player.data.CatalogScope.updateUrls
 
     private val executor = Executors.newSingleThreadExecutor()
     private val checking = AtomicBoolean(false)

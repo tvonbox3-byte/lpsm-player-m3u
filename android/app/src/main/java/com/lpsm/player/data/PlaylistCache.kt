@@ -137,7 +137,7 @@ class PlaylistCache(
                             )
                         )
                     }
-                }
+                }.filter { CatalogScope.allows(it.type) }
             }
 
         } catch (_: Throwable) {

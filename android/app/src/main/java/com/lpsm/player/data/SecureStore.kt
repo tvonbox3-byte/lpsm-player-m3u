@@ -53,7 +53,12 @@ class SecureStore(context: Context) {
         } catch (_: Exception) {
             // Uma atualizacao/restauracao do emulador pode deixar o arquivo cifrado
             // incompatível com a chave. Recriamos antes de usar o fallback local.
-            appContext.deleteSharedPreferences("lpsm_secure_mac")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                appContext.deleteSharedPreferences("lpsm_secure_mac")
+            } else {
+                appContext.getSharedPreferences("lpsm_secure_mac", Context.MODE_PRIVATE)
+                    .edit().clear().commit()
+            }
             try {
                 encrypted()
             } catch (_: Exception) {

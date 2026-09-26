@@ -103,7 +103,8 @@ object M3uParser {
     fun parse(
         reader: Reader,
         limit: Int = 180_000,
-        onPartial: ((List<MediaEntry>) -> Unit)? = null
+        onPartial: ((List<MediaEntry>) -> Unit)? = null,
+        allowedTypes: Set<ContentType> = ContentType.entries.toSet()
     ): List<MediaEntry> {
 
         /*
@@ -362,7 +363,7 @@ object M3uParser {
         }
 
         fun keep(entry: MediaEntry) {
-            if (limit <= 0) return
+            if (limit <= 0 || entry.type !in allowedTypes) return
 
             val target = buckets.getValue(entry.type)
 

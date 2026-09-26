@@ -969,6 +969,16 @@ class LpsmApi(
      * =====================================================
      */
 
+    fun downloadGuide(url: String): Map<String, String> {
+        val connection = openGet(url, "application/xml,text/xml", PLAYLIST_CONNECT_TIMEOUT, PLAYLIST_READ_TIMEOUT)
+        try {
+            check(connection.responseCode in 200..299) { "EPG indisponível" }
+            return responseStream(connection, true).bufferedReader(responseCharset(connection)).use {
+                XmlTvParser.current(it)
+            }
+        } finally { connection.disconnect() }
+    }
+
     fun download(
         url: String
     ): String {
@@ -1282,7 +1292,8 @@ class LpsmApi(
                     M3uParser.parse(
                         it,
                         limit,
-                        onPartial
+                        onPartial,
+                        CatalogScope.allowedTypes
                     )
 
 
